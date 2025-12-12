@@ -20,7 +20,7 @@ export function TimeEntryList() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
-  
+
   const [editProjectId, setEditProjectId] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDate, setEditDate] = useState('');
@@ -136,8 +136,8 @@ export function TimeEntryList() {
 
   return (
     <>
-      <Card className="shadow-md border-t-4" style={{ borderTopColor: '#F59E0B' }}>
-        <CardHeader style={{ backgroundColor: '#F1F5F9' }} className="border-b">
+      <Card className="shadow-md border-t-4 flex flex-col" style={{ borderTopColor: '#F59E0B', height: '700px' }}>
+        <CardHeader style={{ backgroundColor: '#F1F5F9' }} className="border-b flex-shrink-0">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <CardTitle className="flex items-center gap-2" style={{ color: '#1F4E78' }}>
@@ -161,90 +161,105 @@ export function TimeEntryList() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="pt-6">
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedEntries.length === filteredEntries.length && filteredEntries.length > 0}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Hours</TableHead>
-                  <TableHead className="w-24">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEntries.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-slate-500 py-8">
-                      No time entries found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredEntries.map(entry => (
-                    <TableRow key={entry.id} className="hover:bg-slate-50">
-                      <TableCell>
+        <CardContent className="pt-6 flex-1 overflow-hidden p-0">
+          <div className="h-full flex flex-col">
+            <div className="flex-1 overflow-y-auto px-6">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-white z-10">
+                    <TableRow>
+                      <TableHead className="w-12">
                         <Checkbox
-                          checked={selectedEntries.includes(entry.id)}
-                          onCheckedChange={() => toggleSelectEntry(entry.id)}
+                          checked={selectedEntries.length === filteredEntries.length && filteredEntries.length > 0}
+                          onCheckedChange={toggleSelectAll}
                         />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <Calendar className="w-4 h-4" />
-                          {new Date(entry.date).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <Badge style={{ backgroundColor: entry.projectColor }}>
-                            {entry.projectName}
-                          </Badge>
-                          <span className="text-xs text-slate-500 font-mono">{entry.projectCode}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {entry.description}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Clock className="w-4 h-4 text-slate-500" />
-                          <span>{entry.hours}h</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(entry)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(entry.id)}
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      </TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Project</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead className="w-24">Actions</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredEntries.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-slate-500 py-8">
+                          No time entries found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredEntries.map(entry => (
+                        <TableRow key={entry.id} className="hover:bg-slate-50">
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedEntries.includes(entry.id)}
+                              onCheckedChange={() => toggleSelectEntry(entry.id)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 text-slate-600">
+                              <Calendar className="w-4 h-4" />
+                              {new Date(entry.date).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <Badge style={{ backgroundColor: entry.projectColor }}>
+                                {entry.projectName}
+                              </Badge>
+                              <span className="text-xs text-slate-500 font-mono">{entry.projectCode}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {entry.description}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Clock className="w-4 h-4 text-slate-500" />
+                              <span>{entry.hours}h</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(entry)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(entry.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            {/* Панель с информацией внизу */}
+            <div className="border-t bg-slate-50 px-6 py-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-slate-600">
+                  Showing {filteredEntries.length} of {entries.length} entries
+                </div>
+                <div className="text-sm font-medium text-slate-700">
+                  Total hours: <span className="text-blue-600">{totalHours.toFixed(1)}h</span>
+                </div>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -266,8 +281,8 @@ export function TimeEntryList() {
                   {projects.map(project => (
                     <SelectItem key={project.id} value={project.id}>
                       <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
+                        <div
+                          className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: project.color }}
                         />
                         <span className="font-mono text-xs text-slate-500">{project.code}</span>

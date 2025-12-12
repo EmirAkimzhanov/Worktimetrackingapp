@@ -7,87 +7,138 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { Switch } from './ui/switch';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { Plus, Calendar as CalendarIcon, CalendarRange } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner@2.0.3';
 
 type InputMode = 'single' | 'range';
 
+// Предопределенные задачи
+const TASK_OPTIONS = [
+  { value: 'bug_fixing', label: 'Bug Fixing' },
+  { value: 'feature_development', label: 'Feature Development' },
+  { value: 'code_review', label: 'Code Review' },
+  { value: 'testing', label: 'Testing' },
+  { value: 'documentation', label: 'Documentation' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'planning', label: 'Planning' },
+  { value: 'refactoring', label: 'Refactoring' },
+  { value: 'research', label: 'Research' },
+  { value: 'deployment', label: 'Deployment' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'support', label: 'Support' },
+  { value: 'training', label: 'Training' },
+  { value: 'analysis', label: 'Analysis' },
+  { value: 'design', label: 'Design' },
+];
+
 export function TimeEntryForm() {
-  const { addEntry, projects } = useTimeTracker();
+  const { addMultipleEntries, projects } = useTimeTracker();
   const [inputMode, setInputMode] = useState<InputMode>('single');
   const [projectId, setProjectId] = useState('');
+  const [task, setTask] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [hours, setHours] = useState('8');
   const [includeWeekends, setIncludeWeekends] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    if (!projectId || !description || !hours) {
+    if (!projectId || !task || !description || !hours) {
       toast.error('Please fill in all required fields');
+      setIsSubmitting(false);
       return;
     }
 
     const project = projects.find(p => p.id === projectId);
-    if (!project) return;
+    if (!project) {
+      setIsSubmitting(false);
+      return;
+    }
 
     const hoursNum = parseFloat(hours);
     if (isNaN(hoursNum) || hoursNum < 0.5 || hoursNum > 24) {
       toast.error('Hours must be between 0.5 and 24');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const selectedTask = TASK_OPTIONS.find(t => t.value === task);
+    if (!selectedTask) {
+      toast.error('Please select a valid task');
+      setIsSubmitting(false);
       return;
     }
 
     if (inputMode === 'single') {
-      addEntry({
+      const entry = {
         projectId: project.id,
         projectName: project.name,
         projectColor: project.color,
         projectCode: project.code,
+        task: selectedTask.label,
         description,
         date,
         hours: hoursNum,
-      });
+      };
+
+      addMultipleEntries([entry]);
       toast.success('Time entry added successfully');
     } else {
       const start = new Date(startDate);
       const end = new Date(endDate);
-      
+
       if (start > end) {
         toast.error('Start date must be before end date');
+        setIsSubmitting(false);
         return;
       }
 
-      let currentDate = new Date(start);
-      let count = 0;
+      const entriesToAdd = [];
+      const currentDate = new Date(start);
 
-      while (currentDate <= end) {
-        const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
-        
+      // Добавляем один день для корректного сравнения дат
+      const endDateForLoop = new Date(end);
+      endDateForLoop.setDate(endDateForLoop.getDate() + 1);
+
+      while (currentDate < endDateForLoop) {
+        const dayOfWeek = currentDate.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
         if (includeWeekends || !isWeekend) {
-          addEntry({
+          entriesToAdd.push({
             projectId: project.id,
             projectName: project.name,
             projectColor: project.color,
             projectCode: project.code,
+            task: selectedTask.label,
             description,
             date: currentDate.toISOString().split('T')[0],
             hours: hoursNum,
           });
-          count++;
         }
-        
+
+        // Переходим к следующему дню
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      
-      toast.success(`Added ${count} time entries`);
+
+      if (entriesToAdd.length > 0) {
+        addMultipleEntries(entriesToAdd);
+        toast.success(`Added ${entriesToAdd.length} time entries for the period ${startDate} to ${endDate}`);
+      } else {
+        toast.warning('No time entries were added. Check your date range and weekend settings.');
+      }
     }
 
+    setTask('');
     setDescription('');
     setHours('8');
+    setIsSubmitting(false);
   };
 
   return (
@@ -103,8 +154,8 @@ export function TimeEntryForm() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Input Mode</Label>
-            <ToggleGroup 
-              type="single" 
+            <ToggleGroup
+              type="single"
               value={inputMode}
               onValueChange={(value) => value && setInputMode(value as InputMode)}
               className="justify-start"
@@ -130,13 +181,32 @@ export function TimeEntryForm() {
                 {projects.map(project => (
                   <SelectItem key={project.id} value={project.id}>
                     <div className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
+                      <div
+                        className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: project.color }}
                       />
                       <span className="font-mono text-xs text-slate-500">{project.code}</span>
                       <span>{project.name}</span>
                     </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="task">Task *</Label>
+            <Select value={task} onValueChange={setTask}>
+              <SelectTrigger id="task" className="w-full">
+                <div className="flex items-center">
+                  <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
+                  <SelectValue placeholder="Select a task type" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {TASK_OPTIONS.map(taskOption => (
+                  <SelectItem key={taskOption.value} value={taskOption.value}>
+                    {taskOption.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -212,16 +282,32 @@ export function TimeEntryForm() {
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What did you work on?"
+              placeholder="Detailed description of the work done"
               rows={3}
               required
             />
           </div>
 
-          <Button type="submit" className="w-full" style={{ backgroundColor: '#1F4E78' }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Time Entry
-          </Button>
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-sm text-gray-500">
+              Fields marked with * are required
+            </div>
+            <Button
+              type="submit"
+              style={{ backgroundColor: '#1F4E78' }}
+              disabled={isSubmitting}
+              className="px-6"
+            >
+              {isSubmitting ? (
+                'Adding...'
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Time Entry{inputMode === 'range' ? 's' : ''}
+                </>
+              )}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>
