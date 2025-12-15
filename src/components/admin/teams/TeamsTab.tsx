@@ -1,1406 +1,1287 @@
 // src/components/admin/TeamsTab.tsx
-import React, { useState, useMemo, ChangeEvent } from 'react';
+import React, { useState, useEffect, forwardRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
+import { Badge } from '../../ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
+import { Plus, Edit, Trash2, X, Users, Building, Search, Check, UserPlus, Crown, MoreVertical, AlertCircle, Key, Briefcase } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
-import { Badge } from '../../ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../../ui/alert-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
-import { Textarea } from '../../ui/textarea';
-import { Switch } from '../../ui/switch';
-import { Plus, Edit, Trash2, Users, UserCog, Building, Search, Mail, Phone, Calendar, Briefcase, UserPlus, Crown, X } from 'lucide-react';
-import { User, Department, Position, TeamMember } from '../../../types/types';
+import { toast } from 'sonner';
 
-interface TeamsTabProps {
-    departments: Department[];
-    positions: Position[];
-    users: User[];
-    teamMembers: TeamMember[];
-    onAddDepartment: (department: Omit<Department, 'id'>) => void;
-    onUpdateDepartment: (department: Department) => void;
-    onDeleteDepartment: (id: number) => void;
-    onAddUser: (user: Omit<User, 'id'>) => void;
-    onUpdateUser: (user: User) => void;
-    onDeleteUser: (id: number) => void;
-    onAssignToDepartment: (userId: number, departmentId: number, role: TeamMember['role']) => void;
-    onRemoveFromDepartment: (userId: number, departmentId: number) => void;
-    onAddUsersToDepartment: (userIds: number[], departmentId: number) => void;
-    onSetDepartmentManager: (departmentId: number, managerId: number | null) => void;
+interface OrganizationMember {
+    id: number;
+    name: string;
+    department: string;
+    role?: string;
+    email?: string;
+    phone?: string;
+    status: 'active' | 'inactive' | 'pending';
+    employeeId?: string;
 }
 
-export function TeamsTab({
-    departments,
-    positions,
-    users,
-    teamMembers,
-    onAddDepartment,
-    onUpdateDepartment,
-    onDeleteDepartment,
-    onAddUser,
-    onUpdateUser,
-    onDeleteUser,
-    onAssignToDepartment,
-    onRemoveFromDepartment,
-    onAddUsersToDepartment,
-    onSetDepartmentManager
-}: TeamsTabProps) {
-    const [activeTab, setActiveTab] = useState('departments');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [departmentDialogOpen, setDepartmentDialogOpen] = useState(false);
-    const [userDialogOpen, setUserDialogOpen] = useState(false);
-    const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-    const [assignMultipleDialogOpen, setAssignMultipleDialogOpen] = useState(false);
-    const [managerDialogOpen, setManagerDialogOpen] = useState(false);
-    const [deleteDeptDialogOpen, setDeleteDeptDialogOpen] = useState(false);
-    const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false);
+interface DepartmentGroup {
+    id: number;
+    name: string;
+    code: string;
+    manager?: string;
+    managerId?: number;
+    members: OrganizationMember[];
+}
 
-    const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
-    const [editingUser, setEditingUser] = useState<User | null>(null);
-    const [assigningUser, setAssigningUser] = useState<User | null>(null);
-    const [assigningToDept, setAssigningToDept] = useState<Department | null>(null);
-    const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
-    const [managingDept, setManagingDept] = useState<Department | null>(null);
-    const [deptToDelete, setDeptToDelete] = useState<number | null>(null);
-    const [userToDelete, setUserToDelete] = useState<number | null>(null);
+interface BusinessUnit {
+    id: number;
+    name: string;
+    departments: DepartmentGroup[];
+}
 
-    // Формы
-    const [deptName, setDeptName] = useState('');
-    const [deptCode, setDeptCode] = useState('');
-    const [deptDescription, setDeptDescription] = useState('');
+interface Employee {
+    id: number;
+    name: string;
+    department?: string;
+    role?: string;
+    email?: string;
+    status: 'active' | 'inactive';
+}
 
-    const [userEmail, setUserEmail] = useState('');
-    const [userFirstName, setUserFirstName] = useState('');
-    const [userLastName, setUserLastName] = useState('');
-    const [userRole, setUserRole] = useState<User['role']>('user');
-    const [userPositionId, setUserPositionId] = useState<string>('');
-    const [userDepartmentId, setUserDepartmentId] = useState<string>('');
-    const [userIsActive, setUserIsActive] = useState(true);
-    const [userDateJoined, setUserDateJoined] = useState(new Date().toISOString().split('T')[0]);
-    const [userLeaveDate, setUserLeaveDate] = useState('');
-    const [userPassword, setUserPassword] = useState('');
+interface Role {
+    id: number;
+    name: string;
+    description?: string;
+}
 
-    const [selectedDeptForAssign, setSelectedDeptForAssign] = useState<string>('');
-    const [assignRole, setAssignRole] = useState<TeamMember['role']>('member');
+// Интерфейс для уведомлений
+interface Notification {
+    id: number;
+    message: string;
+    type: 'success' | 'error' | 'info';
+}
+
+// Компонент модального окна добавления сотрудника
+const AddMemberModal = ({
+    department,
+    allEmployees,
+    businessUnits,
+    roles,
+    onClose,
+    onAdd
+}: {
+    department: DepartmentGroup;
+    allEmployees: Employee[];
+    businessUnits: BusinessUnit[];
+    roles: Role[];
+    onClose: () => void;
+    onAdd: (member: OrganizationMember) => void;
+}) => {
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+    const [employeeRole, setEmployeeRole] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState<string>('');
+
+    // Получить доступных сотрудников для отдела
+    const getAvailableEmployees = () => {
+        const currentDepartment = businessUnits[0].departments.find(d => d.id === department.id);
+        if (!currentDepartment) return allEmployees;
+
+        const assignedEmployeeIds = currentDepartment.members.map(m => m.employeeId);
+
+        return allEmployees.filter(emp =>
+            (emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                emp.email?.toLowerCase().includes(searchQuery.toLowerCase())) &&
+            !assignedEmployeeIds.includes(emp.id.toString()) &&
+            emp.status === 'active'
+        );
+    };
+
+    const availableEmployees = getAvailableEmployees();
+    const selectedEmployee = allEmployees.find(e => e.id.toString() === selectedEmployeeId);
+
+    // Обработчик клавиши Escape
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+
+        document.addEventListener('keydown', handleEscape);
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [onClose]);
+
+    const handleAdd = () => {
+        if (!selectedEmployee) return;
+
+        const newMember: OrganizationMember = {
+            id: Date.now(),
+            name: selectedEmployee.name,
+            department: department.name,
+            role: employeeRole || selectedEmployee.role || '',
+            email: selectedEmployee.email || '',
+            status: 'active',
+            employeeId: selectedEmployee.id.toString()
+        };
+
+        onAdd(newMember);
+        onClose();
+    };
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose();
+            }}
+        >
+            <div className="bg-background rounded-lg shadow-lg border w-full max-w-2xl flex flex-col" style={{ width: '40%', height: '600px' }}>
+                {/* Заголовок */}
+                <div className="flex items-center justify-between p-4 border-b shrink-0">
+                    <div>
+                        <h2 className="text-lg font-semibold">Add Member to {department.name}</h2>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Select an employee to add to this department
+                        </p>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onClose}
+                        className="h-8 w-8"
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
+
+                {/* Основной контент с фиксированной высотой и скроллом */}
+                <div className="flex-1 overflow-hidden flex flex-col p-4">
+                    {/* Поиск и роль */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 shrink-0">
+                        <div className="space-y-2">
+                            <Label htmlFor="modal-search-employees" className="text-sm font-medium">
+                                Search Employees
+                            </Label>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Input
+                                    id="modal-search-employees"
+                                    placeholder="Type to search..."
+                                    className="pl-10 h-9"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="modal-employee-role" className="text-sm font-medium">
+                                Role
+                            </Label>
+                            <Select value={employeeRole} onValueChange={setEmployeeRole}>
+                                <SelectTrigger id="modal-employee-role" className="h-9">
+                                    <SelectValue placeholder="Select a role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="no-role">No role</SelectItem>
+                                    {roles.map(role => (
+                                        <SelectItem key={role.id} value={role.name}>
+                                            {role.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    {/* Заголовок списка */}
+                    <div className="shrink-0 mb-2">
+                        <Label className="text-sm font-medium">
+                            Available Employees ({availableEmployees.length})
+                        </Label>
+                    </div>
+
+                    {/* Список сотрудников с фиксированной высотой и скроллом */}
+                    <div className="flex-1 min-h-0 border rounded-lg overflow-hidden">
+                        {availableEmployees.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center p-6">
+                                <Users className="w-10 h-10 text-gray-300 mb-3" />
+                                <p className="text-gray-500 text-sm text-center">
+                                    No available employees found
+                                </p>
+                                {searchQuery && (
+                                    <p className="text-gray-400 text-xs mt-1">
+                                        Try a different search term
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="h-full overflow-y-auto">
+                                <div className="divide-y">
+                                    {availableEmployees.map((employee) => (
+                                        <div
+                                            key={employee.id}
+                                            className={`p-3 cursor-pointer transition-colors ${selectedEmployeeId === employee.id.toString()
+                                                ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500'
+                                                : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'
+                                                }`}
+                                            onClick={() => setSelectedEmployeeId(employee.id.toString())}
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="font-medium text-sm">{employee.name}</div>
+                                                    <div className="text-xs text-gray-500 mt-0.5">
+                                                        {employee.email}
+                                                    </div>
+                                                    {employee.department && (
+                                                        <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                                                            <Building className="w-3 h-3" />
+                                                            {employee.department}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {selectedEmployeeId === employee.id.toString() && (
+                                                    <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Выбранный сотрудник */}
+                    {selectedEmployee && (
+                        <div className="mt-4 shrink-0">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                                <div className="flex items-start gap-2">
+                                    <Check className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <div className="text-sm flex-1">
+                                        <div className="font-medium text-sm">Selected Employee</div>
+                                        <div className="mt-1">
+                                            <div className="font-medium">
+                                                {selectedEmployee.name}
+                                            </div>
+                                            {employeeRole && employeeRole !== 'no-role' && (
+                                                <div className="mt-1 flex items-center gap-2">
+                                                    <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                                        {employeeRole}
+                                                    </Badge>
+                                                    <span className="text-xs text-gray-500">will be assigned as this role</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Футер */}
+                <div className="border-t p-4 shrink-0">
+                    <div className="flex items-center justify-end gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={onClose}
+                            className="h-9"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleAdd}
+                            disabled={!selectedEmployeeId}
+                            className="h-9"
+                        >
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Add to Department
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Компонент модального окна добавления отдела
+const AddDepartmentModal = ({
+    onClose,
+    onAdd,
+    businessUnits,
+    roles,
+    allEmployees
+}: {
+    onClose: () => void;
+    onAdd: (department: DepartmentGroup) => void;
+    businessUnits: BusinessUnit[];
+    roles: Role[];
+    allEmployees: Employee[];
+}) => {
+    const [departmentName, setDepartmentName] = useState('');
+    const [departmentCode, setDepartmentCode] = useState('');
     const [selectedManagerId, setSelectedManagerId] = useState<string>('');
 
-    // Фильтрация и группировка данных
-    const filteredDepartments = useMemo(() => {
-        return departments.filter(dept =>
-            dept.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (dept.code && dept.code.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-    }, [departments, searchQuery]);
+    const handleAdd = () => {
+        if (!departmentName.trim()) return;
 
-    const filteredUsers = useMemo(() => {
-        return users.filter(user =>
-            user.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            user.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            user.email.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [users, searchQuery]);
-
-    const getDepartmentUsers = (deptId: number) => {
-        const memberIds = teamMembers
-            .filter(member => member.departmentId === deptId)
-            .map(member => member.userId);
-
-        return users.filter(user => memberIds.includes(user.id));
-    };
-
-    const getDepartmentManager = (deptId: number) => {
-        const deptUsers = getDepartmentUsers(deptId);
-        return deptUsers.find(user =>
-            teamMembers.some(m =>
-                m.userId === user.id &&
-                m.departmentId === deptId &&
-                m.role === 'manager'
-            )
-        ) || null;
-    };
-
-    const getAvailableUsersForDepartment = (deptId: number) => {
-        const deptUserIds = teamMembers
-            .filter(member => member.departmentId === deptId)
-            .map(member => member.userId);
-
-        return users.filter(user => !deptUserIds.includes(user.id) && user.is_active);
-    };
-
-    const getUnassignedUsers = () => {
-        const assignedUserIds = teamMembers.map(member => member.userId);
-        return users.filter(user => !assignedUserIds.includes(user.id) && user.is_active);
-    };
-
-    const getUserDepartment = (userId: number) => {
-        const member = teamMembers.find(m => m.userId === userId);
-        if (!member) return null;
-        return departments.find(d => d.id === member.departmentId);
-    };
-
-    const getUserPosition = (userId: number) => {
-        const user = users.find(u => u.id === userId);
-        if (!user) return null;
-        return positions.find(p => p.id === user.position_id);
-    };
-
-    const getUserRoleInDepartment = (userId: number) => {
-        const member = teamMembers.find(m => m.userId === userId);
-        return member?.role || null;
-    };
-
-    const handleAddDepartment = () => {
-        const newDept: Omit<Department, 'id'> = {
-            name: deptName,
-            code: deptCode || '',
-            description: deptDescription || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            teamSize: 0
+        const newDepartment: DepartmentGroup = {
+            id: Date.now(),
+            name: departmentName,
+            code: departmentCode || departmentName.substring(0, 3).toUpperCase(),
+            members: []
         };
 
-        onAddDepartment(newDept);
-        resetDepartmentForm();
-        setDepartmentDialogOpen(false);
-    };
-
-    const handleUpdateDepartment = () => {
-        if (!editingDepartment) return;
-
-        const updatedDept: Department = {
-            ...editingDepartment,
-            name: deptName,
-            code: deptCode || '',
-            description: deptDescription || '',
-            updatedAt: new Date().toISOString()
-        };
-
-        onUpdateDepartment(updatedDept);
-        resetDepartmentForm();
-        setDepartmentDialogOpen(false);
-    };
-
-    const handleAddUser = () => {
-        const newUser: Omit<User, 'id'> = {
-            email: userEmail,
-            first_name: userFirstName,
-            last_name: userLastName,
-            date_joined: userDateJoined,
-            leave_date: userLeaveDate || undefined,
-            is_active: userIsActive,
-            position_id: userPositionId ? parseInt(userPositionId) : 0,
-            department_id: userDepartmentId ? parseInt(userDepartmentId) : 0,
-            role: userRole
-        };
-
-        onAddUser(newUser);
-        resetUserForm();
-        setUserDialogOpen(false);
-    };
-
-    const handleUpdateUser = () => {
-        if (!editingUser) return;
-
-        const updatedUser: User = {
-            ...editingUser,
-            email: userEmail,
-            first_name: userFirstName,
-            last_name: userLastName,
-            date_joined: userDateJoined,
-            leave_date: userLeaveDate || undefined,
-            is_active: userIsActive,
-            position_id: userPositionId ? parseInt(userPositionId) : 0,
-            department_id: userDepartmentId ? parseInt(userDepartmentId) : 0,
-            role: userRole
-        };
-
-        onUpdateUser(updatedUser);
-        resetUserForm();
-        setUserDialogOpen(false);
-    };
-
-    const handleAssignUser = () => {
-        if (!assigningUser || !selectedDeptForAssign) return;
-
-        onAssignToDepartment(
-            assigningUser.id,
-            parseInt(selectedDeptForAssign),
-            assignRole
-        );
-
-        setAssigningUser(null);
-        setSelectedDeptForAssign('');
-        setAssignRole('member');
-        setAssignDialogOpen(false);
-    };
-
-    const handleAssignMultipleUsers = () => {
-        if (!assigningToDept || selectedUsers.length === 0) return;
-
-        onAddUsersToDepartment(selectedUsers, assigningToDept.id);
-
-        setAssigningToDept(null);
-        setSelectedUsers([]);
-        setAssignMultipleDialogOpen(false);
-    };
-
-    const handleSetManager = () => {
-        if (!managingDept) return;
-
-        const managerId = selectedManagerId && selectedManagerId !== "no-manager"
-            ? parseInt(selectedManagerId)
-            : null;
-
-        onSetDepartmentManager(managingDept.id, managerId);
-
-        // Также назначаем пользователю роль manager в команде
-        if (managerId) {
-            const existingMember = teamMembers.find(
-                m => m.userId === managerId && m.departmentId === managingDept.id
-            );
-
-            if (existingMember) {
-                onAssignToDepartment(managerId, managingDept.id, 'manager');
-            } else {
-                onAssignToDepartment(managerId, managingDept.id, 'manager');
+        if (selectedManagerId && selectedManagerId !== 'no-manager') {
+            const manager = allEmployees.find(e => e.id.toString() === selectedManagerId);
+            if (manager) {
+                newDepartment.manager = manager.name;
+                newDepartment.managerId = manager.id;
             }
         }
 
-        setManagingDept(null);
-        setSelectedManagerId('');
-        setManagerDialogOpen(false);
+        onAdd(newDepartment);
+        onClose();
     };
 
-    const handleEditDepartment = (dept: Department) => {
-        setEditingDepartment(dept);
-        setDeptName(dept.name);
-        setDeptCode(dept.code || '');
-        setDeptDescription(dept.description || '');
-        setDepartmentDialogOpen(true);
+    return (
+        <Dialog open={true} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Add New Department</DialogTitle>
+                    <DialogDescription>
+                        Create a new department for your organization
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                        <Label htmlFor="department-name">Department Name *</Label>
+                        <Input
+                            id="department-name"
+                            value={departmentName}
+                            onChange={(e) => setDepartmentName(e.target.value)}
+                            placeholder="e.g., Engineering"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="department-code">Code (Optional)</Label>
+                        <Input
+                            id="department-code"
+                            value={departmentCode}
+                            onChange={(e) => setDepartmentCode(e.target.value)}
+                            placeholder="e.g., ENG"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="department-manager">Manager (Optional)</Label>
+                        <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
+                            <SelectTrigger id="department-manager">
+                                <SelectValue placeholder="Select a manager" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="no-manager">No manager</SelectItem>
+                                {allEmployees.map(employee => (
+                                    <SelectItem key={employee.id} value={employee.id.toString()}>
+                                        {employee.name} ({employee.email})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button onClick={handleAdd} disabled={!departmentName.trim()}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Department
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// Компонент модального окна создания роли
+const CreateRoleModal = ({
+    onClose,
+    onAdd
+}: {
+    onClose: () => void;
+    onAdd: (role: Role) => void;
+}) => {
+    const [roleName, setRoleName] = useState('');
+    const [roleDescription, setRoleDescription] = useState('');
+
+    const handleAdd = () => {
+        if (!roleName.trim()) return;
+
+        const newRole: Role = {
+            id: Date.now(),
+            name: roleName,
+            description: roleDescription || undefined
+        };
+
+        onAdd(newRole);
+        onClose();
     };
 
-    const handleEditUser = (user: User) => {
-        setEditingUser(user);
-        setUserEmail(user.email);
-        setUserFirstName(user.first_name);
-        setUserLastName(user.last_name);
-        setUserRole(user.role);
-        setUserPositionId(user.position_id.toString());
-        setUserDepartmentId(user.department_id.toString());
-        setUserIsActive(user.is_active);
-        setUserDateJoined(user.date_joined.split('T')[0]);
-        setUserLeaveDate(user.leave_date?.split('T')[0] || '');
-        setUserDialogOpen(true);
-    };
+    return (
+        <Dialog open={true} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Create New Role</DialogTitle>
+                    <DialogDescription>
+                        Add a new role that can be assigned to employees
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                        <Label htmlFor="role-name">Role Name *</Label>
+                        <Input
+                            id="role-name"
+                            value={roleName}
+                            onChange={(e) => setRoleName(e.target.value)}
+                            placeholder="e.g., Senior Developer"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="role-description">Description (Optional)</Label>
+                        <Input
+                            id="role-description"
+                            value={roleDescription}
+                            onChange={(e) => setRoleDescription(e.target.value)}
+                            placeholder="Describe the role responsibilities..."
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button onClick={handleAdd} disabled={!roleName.trim()}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Role
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
 
-    const handleAssignClick = (user: User) => {
-        setAssigningUser(user);
-        setAssignDialogOpen(true);
-    };
+// Компонент уведомления
+const NotificationToast = ({ notification, onClose }: { notification: Notification, onClose: () => void }) => {
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            onClose();
+        }, 3000);
 
-    const handleAddUsersClick = (dept: Department) => {
-        setAssigningToDept(dept);
-        setAssignMultipleDialogOpen(true);
-    };
+        return () => clearTimeout(timer);
+    }, [onClose]);
 
-    const handleSetManagerClick = (dept: Department) => {
-        setManagingDept(dept);
-        const currentManager = getDepartmentManager(dept.id);
-        setSelectedManagerId(currentManager?.id.toString() || 'no-manager');
-        setManagerDialogOpen(true);
-    };
+    const bgColor = notification.type === 'success'
+        ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'
+        : notification.type === 'error'
+            ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+            : 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800';
 
-    const handleRemoveManager = (dept: Department) => {
-        onSetDepartmentManager(dept.id, null);
-    };
+    const textColor = notification.type === 'success'
+        ? 'text-green-800 dark:text-green-300'
+        : notification.type === 'error'
+            ? 'text-red-800 dark:text-red-300'
+            : 'text-blue-800 dark:text-blue-300';
 
-    const handleDeleteDepartment = (id: number) => {
-        setDeptToDelete(id);
-        setDeleteDeptDialogOpen(true);
-    };
+    const iconColor = notification.type === 'success'
+        ? 'text-green-600 dark:text-green-400'
+        : notification.type === 'error'
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-blue-600 dark:text-blue-400';
 
-    const handleDeleteUser = (id: number) => {
-        setUserToDelete(id);
-        setDeleteUserDialogOpen(true);
-    };
+    return (
+        <div className={`fixed top-4 right-4 z-50 w-80 ${bgColor} border rounded-lg shadow-lg p-4 animate-in slide-in-from-right-5`}>
+            <div className="flex items-start gap-3">
+                <div className={`${iconColor} flex-shrink-0`}>
+                    {notification.type === 'success' ? (
+                        <Check className="h-5 w-5" />
+                    ) : notification.type === 'error' ? (
+                        <AlertCircle className="h-5 w-5" />
+                    ) : (
+                        <AlertCircle className="h-5 w-5" />
+                    )}
+                </div>
+                <div className="flex-1">
+                    <p className={`text-sm font-medium ${textColor}`}>
+                        {notification.message}
+                    </p>
+                </div>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onClose}
+                    className="h-6 w-6 -mt-1 -mr-1"
+                >
+                    <X className="h-3 w-3" />
+                </Button>
+            </div>
+        </div>
+    );
+};
 
-    const confirmDeleteDepartment = () => {
-        if (deptToDelete) {
-            onDeleteDepartment(deptToDelete);
+export function TeamsTab() {
+    // Полный список всех сотрудников в компании
+    const [allEmployees, setAllEmployees] = useState<Employee[]>([
+        { id: 1, name: 'Emile A. Montgomery', department: 'COHS', role: 'Developer', email: 'emile@company.com', status: 'active' },
+        { id: 2, name: 'Terry Eisenberg', department: 'COHS', role: 'Designer', email: 'terry@company.com', status: 'active' },
+        { id: 3, name: 'Turgut Drinksteller', department: 'COHS', role: 'Manager', email: 'turgut@company.com', status: 'active' },
+        { id: 4, name: 'Agertin Eckalena', department: 'Admin', role: 'Manager', email: 'agertin@company.com', status: 'active' },
+        { id: 5, name: 'Adolf Grynkysse', department: 'Admin', email: 'adolf@company.com', status: 'active' },
+        { id: 6, name: 'Ching\'s Unladayer', department: 'Admin', email: 'ching@company.com', status: 'active' },
+        { id: 7, name: 'Dyreusen Ynutzova', department: 'Admin', email: 'dyreusen@company.com', status: 'active' },
+        { id: 8, name: 'Karisa Zakirova', department: 'Admin', email: 'karisa@company.com', status: 'active' },
+        { id: 9, name: 'Luna Alpilova', department: 'Admin', email: 'luna@company.com', status: 'active' },
+        { id: 10, name: 'Nesmula Kostyuk', department: 'Admin', email: 'nesmula@company.com', status: 'active' },
+        { id: 11, name: 'Susan Kazantseva', department: 'Admin', email: 'susan@company.com', status: 'active' },
+        { id: 12, name: 'Vita Khador', department: 'Admin', email: 'vita@company.com', status: 'active' },
+        { id: 13, name: 'Zhangbak Shamputarov', department: 'Admin', email: 'zhangbak@company.com', status: 'active' },
+        { id: 14, name: 'Adl Elsyaber', department: 'Audit', role: 'Manager', email: 'adl@company.com', status: 'active' },
+        { id: 15, name: 'Allan Omedelma', department: 'Audit', email: 'allan@company.com', status: 'active' },
+        { id: 16, name: 'Alan Lundholm', department: 'Audit', email: 'alan@company.com', status: 'active' },
+        { id: 17, name: 'Adele Kalmyza', department: 'Audit', email: 'adele@company.com', status: 'active' },
+        { id: 18, name: 'Ajayas Kapfereggeev', department: 'Audit', email: 'ajayas@company.com', status: 'active' },
+        { id: 19, name: 'Abbasan Mustarev', department: 'Audit', email: 'abbasan@company.com', status: 'active' },
+        { id: 20, name: 'Ahmed Ryosny', department: 'Audit', email: 'ahmed@company.com', status: 'active' },
+        { id: 21, name: 'Alan', department: 'Audit', email: 'alan2@company.com', status: 'active' },
+        { id: 22, name: 'Alyana Trudaleva', department: 'Audit', email: 'alyana@company.com', status: 'active' },
+        { id: 23, name: 'Adolf Kotolakova', department: 'Audit', email: 'adolfk@company.com', status: 'active' },
+        { id: 24, name: 'Ayana Dubina', department: 'Audit', email: 'ayana@company.com', status: 'active' },
+        { id: 25, name: 'Bashan Novopolska', department: 'Audit', email: 'bashan@company.com', status: 'active' },
+        { id: 26, name: 'Barbara Juhnfeier', department: 'Audit', email: 'barbara@company.com', status: 'active' },
+        { id: 27, name: 'Bernet Zhiegheva', department: 'Audit', email: 'bernet@company.com', status: 'active' },
+        { id: 28, name: 'Burdiati Rastotanov', department: 'Audit', email: 'burdiati@company.com', status: 'active' },
+        { id: 29, name: 'Diana Kazantseva', department: 'Audit', email: 'diana@company.com', status: 'active' },
+        { id: 30, name: 'Rafaela Baddenov', department: 'Audit', email: 'rafaela@company.com', status: 'active' },
+    ]);
+
+    // Список ролей
+    const [roles, setRoles] = useState<Role[]>([
+        { id: 1, name: 'Developer', description: 'Software development' },
+        { id: 2, name: 'Designer', description: 'UI/UX design' },
+        { id: 3, name: 'Manager', description: 'Team management' },
+        { id: 4, name: 'Analyst', description: 'Business analysis' },
+        { id: 5, name: 'Tester', description: 'Quality assurance' },
+    ]);
+
+    // Исходные данные структуры
+    const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([
+        {
+            id: 1,
+            name: 'Business Unit (EU)',
+            departments: [
+                {
+                    id: 1,
+                    name: 'COHS',
+                    code: 'COHS',
+                    manager: 'Dagger Dodgers',
+                    members: [
+                        { id: 1, name: 'Emile A. Montgomery', department: 'COHS', role: 'Developer', status: 'active', employeeId: '1' },
+                        { id: 2, name: 'Terry Eisenberg', department: 'COHS', role: 'Designer', status: 'active', employeeId: '2' },
+                        { id: 3, name: 'Turgut Drinksteller', department: 'COHS', role: 'Manager', status: 'active', employeeId: '3' },
+                    ]
+                },
+                {
+                    id: 2,
+                    name: 'Admin',
+                    code: 'ADM',
+                    manager: 'Agertin Eckalena',
+                    members: [
+                        { id: 4, name: 'Adolf Grynkysse', department: 'Admin', status: 'active', employeeId: '5' },
+                        { id: 5, name: 'Ching\'s Unladayer', department: 'Admin', status: 'active', employeeId: '6' },
+                        { id: 6, name: 'Dyreusen Ynutzova', department: 'Admin', status: 'active', employeeId: '7' },
+                        { id: 7, name: 'Karisa Zakirova', department: 'Admin', status: 'active', employeeId: '8' },
+                        { id: 8, name: 'Luna Alpilova', department: 'Admin', status: 'active', employeeId: '9' },
+                        { id: 9, name: 'Nesmula Kostyuk', department: 'Admin', status: 'active', employeeId: '10' },
+                        { id: 10, name: 'Susan Kazantseva', department: 'Admin', status: 'active', employeeId: '11' },
+                        { id: 11, name: 'Vita Khador', department: 'Admin', status: 'active', employeeId: '12' },
+                        { id: 12, name: 'Zhangbak Shamputarov', department: 'Admin', status: 'active', employeeId: '13' },
+                    ]
+                },
+                {
+                    id: 3,
+                    name: 'Audit',
+                    code: 'AUD',
+                    manager: 'Adl Elsyaber',
+                    members: [
+                        { id: 13, name: 'Allan Omedelma', department: 'Audit', status: 'active', employeeId: '15' },
+                        { id: 14, name: 'Alan Lundholm', department: 'Audit', status: 'active', employeeId: '16' },
+                        { id: 15, name: 'Adele Kalmyza', department: 'Audit', status: 'active', employeeId: '17' },
+                        { id: 16, name: 'Ajayas Kapfereggeev', department: 'Audit', status: 'active', employeeId: '18' },
+                        { id: 17, name: 'Abbasan Mustarev', department: 'Audit', status: 'active', employeeId: '19' },
+                        { id: 18, name: 'Ahmed Ryosny', department: 'Audit', status: 'active', employeeId: '20' },
+                        { id: 19, name: 'Alan', department: 'Audit', status: 'active', employeeId: '21' },
+                        { id: 20, name: 'Alyana Trudaleva', department: 'Audit', status: 'active', employeeId: '22' },
+                        { id: 21, name: 'Adolf Kotolakova', department: 'Audit', status: 'active', employeeId: '23' },
+                        { id: 22, name: 'Ayana Dubina', department: 'Audit', status: 'active', employeeId: '24' },
+                        { id: 23, name: 'Bashan Novopolska', department: 'Audit', status: 'active', employeeId: '25' },
+                        { id: 24, name: 'Barbara Juhnfeier', department: 'Audit', status: 'active', employeeId: '26' },
+                        { id: 25, name: 'Bernet Zhiegheva', department: 'Audit', status: 'active', employeeId: '27' },
+                        { id: 26, name: 'Burdiati Rastotanov', department: 'Audit', status: 'active', employeeId: '28' },
+                        { id: 27, name: 'Diana Kazantseva', department: 'Audit', status: 'active', employeeId: '29' },
+                        { id: 28, name: 'Rafaela Baddenov', department: 'Audit', status: 'active', employeeId: '30' },
+                    ]
+                }
+            ]
         }
-        setDeleteDeptDialogOpen(false);
-        setDeptToDelete(null);
+    ]);
+
+    // Состояния для редактирования
+    const [editingCell, setEditingCell] = useState<{
+        type: 'department' | 'member' | 'manager';
+        departmentId?: number;
+        memberId?: number;
+        field: string;
+        value: string;
+    } | null>(null);
+
+    const [tempValue, setTempValue] = useState('');
+    const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+    const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
+    const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
+    const [selectedDepartment, setSelectedDepartment] = useState<DepartmentGroup | null>(null);
+
+    // Состояния для уведомлений
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+
+    // Добавить уведомление
+    const addNotification = (message: string, type: 'success' | 'error' | 'info') => {
+        const id = Date.now();
+        setNotifications(prev => [...prev, { id, message, type }]);
     };
 
-    const confirmDeleteUser = () => {
-        if (userToDelete) {
-            onDeleteUser(userToDelete);
+    // Удалить уведомление
+    const removeNotification = (id: number) => {
+        setNotifications(prev => prev.filter(notification => notification.id !== id));
+    };
+
+    // Начать редактирование ячейки
+    const startEditing = (
+        type: 'department' | 'member' | 'manager',
+        departmentId?: number,
+        memberId?: number,
+        field: string,
+        currentValue: string
+    ) => {
+        // Преобразуем значение для редактирования
+        let editingValue = currentValue;
+        if (field === 'role' && currentValue === '') {
+            editingValue = 'no-role';
+        } else if (field === 'manager' && currentValue === '') {
+            editingValue = 'no-manager';
         }
-        setDeleteUserDialogOpen(false);
-        setUserToDelete(null);
+
+        setEditingCell({ type, departmentId, memberId, field, value: editingValue });
+        setTempValue(editingValue);
     };
 
-    const resetDepartmentForm = () => {
-        setDeptName('');
-        setDeptCode('');
-        setDeptDescription('');
-        setEditingDepartment(null);
+    // Конвертировать значение для отображения
+    const convertForDisplay = (value: string): string => {
+        if (value === 'no-role') return '';
+        if (value === 'no-manager') return '';
+        return value;
     };
 
-    const resetUserForm = () => {
-        setUserEmail('');
-        setUserFirstName('');
-        setUserLastName('');
-        setUserRole('user');
-        setUserPositionId('');
-        setUserDepartmentId('');
-        setUserIsActive(true);
-        setUserDateJoined(new Date().toISOString().split('T')[0]);
-        setUserLeaveDate('');
-        setUserPassword('');
-        setEditingUser(null);
-    };
+    // Рендер редактируемой ячейки с выпадающим списком (автосохранение)
+    const renderEditableSelectCell = (
+        value: string,
+        type: 'department' | 'member' | 'manager',
+        departmentId?: number,
+        memberId?: number,
+        field: string = 'name',
+        options: { value: string; label: string }[] = []
+    ) => {
+        const isEditing = editingCell?.type === type &&
+            editingCell?.departmentId === departmentId &&
+            editingCell?.memberId === memberId &&
+            editingCell?.field === field;
 
-    const toggleUserSelection = (userId: number) => {
-        setSelectedUsers(prev =>
-            prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
+        const handleSelectChange = (newValue: string) => {
+            // Сохраняем изменения сразу при выборе значения
+            if (!departmentId) return;
+
+            let finalValue = newValue;
+
+            // Конвертируем специальные значения в пустую строку для хранения
+            if (newValue === 'no-role' || newValue === 'no-manager') {
+                finalValue = '';
+            }
+
+            if (type === 'member' && memberId) {
+                // Редактирование сотрудника
+                setBusinessUnits(prev => {
+                    const updated = [...prev];
+                    const department = updated[0].departments.find(d => d.id === departmentId);
+                    if (department) {
+                        const member = department.members.find(m => m.id === memberId);
+                        if (member) {
+                            const oldValue = field === 'role' ? member.role : '';
+                            if (field === 'role') {
+                                member.role = finalValue || undefined;
+                                if (oldValue !== finalValue) {
+                                    toast.success(
+                                        `Role for "${member.name}" has been updated to "${finalValue || 'No role'}"`,
+                                        // 'success'
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    return updated;
+                });
+            } else if (type === 'manager') {
+                // Редактирование менеджера отдела
+                setBusinessUnits(prev => {
+                    const updated = [...prev];
+                    const department = updated[0].departments.find(d => d.id === departmentId);
+                    if (department) {
+                        const oldValue = department.manager || '';
+                        department.manager = finalValue || undefined;
+                        if (!finalValue) {
+                            department.managerId = undefined;
+                        }
+                        if (oldValue !== finalValue) {
+                            toast.success(
+                                `Manager for "${department.name}" has been updated`,
+                                // 'success'
+                            );
+                        }
+                    }
+                    return updated;
+                });
+            }
+
+            // Закрываем режим редактирования
+            setEditingCell(null);
+            setTempValue('');
+        };
+
+        if (isEditing) {
+            const selectValue = tempValue || (value === '' ? 'no-role' : value);
+
+            return (
+                <div className="flex items-center gap-1">
+                    <Select
+                        value={selectValue}
+                        onValueChange={handleSelectChange}
+                        autoFocus
+                    >
+                        <SelectTrigger className="h-7 text-sm">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {options.map(option => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button size="icon" variant="ghost" onClick={() => {
+                        setEditingCell(null);
+                        setTempValue('');
+                    }} className="h-6 w-6">
+                        <X className="h-3 w-3" />
+                    </Button>
+                </div>
+            );
+        }
+
+        const displayValue = convertForDisplay(value);
+
+        return (
+            <div
+                className="group flex items-center gap-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 px-1 py-0.5 rounded"
+                onClick={() => {
+                    startEditing(type, departmentId, memberId, field, value);
+                }}
+            >
+                <span className="text-sm">{displayValue || '-'}</span>
+                <Edit className="h-3 w-3 opacity-0 group-hover:opacity-50 text-gray-400" />
+            </div>
         );
     };
 
-    const roleColors: Record<User['role'], string> = {
-        user: 'bg-blue-100 text-blue-800',
-        manager: 'bg-green-100 text-green-800',
-        admin: 'bg-purple-100 text-purple-800'
+    // Рендер редактируемой ячейки с инпутом
+    const renderEditableInputCell = (
+        value: string,
+        type: 'department' | 'member' | 'manager',
+        departmentId?: number,
+        memberId?: number,
+        field: string = 'name'
+    ) => {
+        const isEditing = editingCell?.type === type &&
+            editingCell?.departmentId === departmentId &&
+            editingCell?.memberId === memberId &&
+            editingCell?.field === field;
+
+        const handleSave = () => {
+            if (!editingCell || !tempValue.trim()) return;
+
+            const { type, departmentId, memberId, field } = editingCell;
+
+            if (type === 'department' && departmentId) {
+                // Редактирование отдела
+                setBusinessUnits(prev => {
+                    const updated = [...prev];
+                    const department = updated[0].departments.find(d => d.id === departmentId);
+                    if (department) {
+                        if (field === 'name') {
+                            const oldValue = department.name;
+                            department.name = tempValue;
+                            if (oldValue !== tempValue) {
+                                toast.success(
+                                    `Department name has been updated to "${tempValue}"`,
+                                    // 'success'
+                                );
+                            }
+                        }
+                        if (field === 'code') {
+                            const oldValue = department.code;
+                            department.code = tempValue;
+                            if (oldValue !== tempValue) {
+                                toast.success(
+                                    `Department code has been updated to "${tempValue}"`,
+                                    // 'success'
+                                );
+                            }
+                        }
+                    }
+                    return updated;
+                });
+            } else if (type === 'member' && departmentId && memberId) {
+                // Редактирование сотрудника
+                setBusinessUnits(prev => {
+                    const updated = [...prev];
+                    const department = updated[0].departments.find(d => d.id === departmentId);
+                    if (department) {
+                        const member = department.members.find(m => m.id === memberId);
+                        if (member) {
+                            const oldValue = member[field as keyof OrganizationMember];
+                            if (field === 'name') member.name = tempValue;
+                            if (field === 'email') member.email = tempValue;
+
+                            if (oldValue !== tempValue) {
+                                toast.success(
+                                    `Employee "${member.name}" has been updated successfully`,
+                                    // 'success'
+                                );
+                            }
+                        }
+                    }
+                    return updated;
+                });
+            }
+
+            setEditingCell(null);
+            setTempValue('');
+        };
+
+        const handleKeyDown = (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                handleSave();
+            }
+            if (e.key === 'Escape') {
+                setEditingCell(null);
+                setTempValue('');
+            }
+        };
+
+        if (isEditing) {
+            return (
+                <div className="flex items-center gap-1">
+                    <Input
+                        value={tempValue}
+                        onChange={(e) => setTempValue(e.target.value)}
+                        className="h-7 text-sm"
+                        autoFocus
+                        onKeyDown={handleKeyDown}
+                    />
+                    <div className="flex gap-0.5">
+                        <Button size="icon" variant="ghost" onClick={handleSave} className="h-6 w-6">
+                            <Check className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => {
+                            setEditingCell(null);
+                            setTempValue('');
+                        }} className="h-6 w-6">
+                            <X className="h-3 w-3" />
+                        </Button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div
+                className="group flex items-center gap-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 px-1 py-0.5 rounded"
+                onClick={() => startEditing(type, departmentId, memberId, field, value)}
+            >
+                <span className="text-sm">{value || '-'}</span>
+                <Edit className="h-3 w-3 opacity-0 group-hover:opacity-50 text-gray-400" />
+            </div>
+        );
     };
 
-    const statusColors: Record<'active' | 'inactive', string> = {
-        active: 'bg-green-100 text-green-800',
-        inactive: 'bg-gray-100 text-gray-800'
+    // Отменить редактирование
+    const cancelEdit = () => {
+        setEditingCell(null);
+        setTempValue('');
     };
 
-    const teamRoleColors: Record<TeamMember['role'], string> = {
-        member: 'bg-blue-100 text-blue-800',
-        lead: 'bg-yellow-100 text-yellow-800',
-        manager: 'bg-green-100 text-green-800'
+    // Добавить сотрудника в отдел с уведомлением
+    const addMemberToDepartment = (newMember: OrganizationMember) => {
+        if (!selectedDepartment) return;
+
+        setBusinessUnits(prev => {
+            const updated = [...prev];
+            const department = updated[0].departments.find(d => d.id === selectedDepartment.id);
+            if (department) {
+                department.members.push(newMember);
+
+                // Уведомление об успешном добавлении
+                toast.success(
+                    `Employee "${newMember.name}" has been added to ${department.name} department`,
+                    // 'success'
+                );
+            }
+            return updated;
+        });
+
+        // Закрыть модальное окно
+        setShowAddMemberModal(false);
+        setSelectedDepartment(null);
     };
 
-    // Обработчики с правильными типами
-    const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setSearchQuery(e.target.value);
+    // Добавить отдел с уведомлением
+    const addDepartment = (newDepartment: DepartmentGroup) => {
+        setBusinessUnits(prev => {
+            const updated = [...prev];
+            updated[0].departments.push(newDepartment);
+            return updated;
+        });
+
+        // Уведомление об успешном создании
+        toast.success(
+            `Department "${newDepartment.name}" has been created successfully`,
+            // 'success'
+        );
+
+        setShowAddDepartmentModal(false);
     };
 
-    const handleDeptNameChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setDeptName(e.target.value);
+    // Добавить роль с уведомлением
+    const addRole = (newRole: Role) => {
+        setRoles(prev => [...prev, newRole]);
+
+        // Уведомление об успешном создании
+        toast.success(
+            `Role "${newRole.name}" has been created successfully`,
+            // 'success'
+        );
+
+        setShowCreateRoleModal(false);
     };
 
-    const handleDeptCodeChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setDeptCode(e.target.value);
+    // Удалить сотрудника из отдела с уведомлением
+    const removeMemberFromDepartment = (departmentId: number, memberId: number) => {
+        let memberName = '';
+
+        setBusinessUnits(prev => {
+            const updated = [...prev];
+            const department = updated[0].departments.find(d => d.id === departmentId);
+            if (department) {
+                const member = department.members.find(m => m.id === memberId);
+                if (member) {
+                    memberName = member.name;
+                }
+                department.members = department.members.filter(m => m.id !== memberId);
+            }
+            return updated;
+        });
+
+        // Уведомление об успешном удалении
+        if (memberName) {
+            toast.success(
+                `Employee "${memberName}" has been removed from department`,
+                // 'success'
+            );
+        }
     };
 
-    const handleDeptDescriptionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-        setDeptDescription(e.target.value);
+    // Удалить отдел с уведомлением
+    const removeDepartment = (departmentId: number) => {
+        let departmentName = '';
+
+        setBusinessUnits(prev => {
+            const updated = [...prev];
+            const department = updated[0].departments.find(d => d.id === departmentId);
+            if (department) {
+                departmentName = department.name;
+                updated[0].departments = updated[0].departments.filter(d => d.id !== departmentId);
+            }
+            return updated;
+        });
+
+        // Уведомление об успешном удалении
+        if (departmentName) {
+            toast.success(
+                `Department "${departmentName}" has been deleted`,
+                // 'success'
+            );
+        }
     };
 
-    const handleUserEmailChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setUserEmail(e.target.value);
+    const getAvailableManagers = (departmentId: number) => {
+        const department = businessUnits[0].departments.find(d => d.id === departmentId);
+        if (!department) return [];
+
+        const options = allEmployees.map(employee => ({
+            value: employee.name,
+            label: `${employee.name} (${employee.email})`
+        }));
+
+        return [{ value: 'no-manager', label: 'No manager' }, ...options];
     };
 
-    const handleUserFirstNameChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setUserFirstName(e.target.value);
-    };
-
-    const handleUserLastNameChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setUserLastName(e.target.value);
-    };
-
-    const handleUserPasswordChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setUserPassword(e.target.value);
-    };
-
-    const handleUserDateJoinedChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setUserDateJoined(e.target.value);
-    };
-
-    const handleUserLeaveDateChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setUserLeaveDate(e.target.value);
-    };
-
-    const handleUserRoleChange = (value: User['role']) => {
-        setUserRole(value);
-    };
-
-    const handleUserPositionChange = (value: string) => {
-        setUserPositionId(value);
-    };
-
-    const handleUserDepartmentChange = (value: string) => {
-        setUserDepartmentId(value);
-    };
-
-    const handleAssignDeptChange = (value: string) => {
-        setSelectedDeptForAssign(value);
-    };
-
-    const handleAssignRoleChange = (value: TeamMember['role']) => {
-        setAssignRole(value);
-    };
-
-    const handleManagerChange = (value: string) => {
-        setSelectedManagerId(value);
-    };
-
-    const handleUserIsActiveChange = (checked: boolean) => {
-        setUserIsActive(checked);
+    // Получить опции для ролей
+    const getRoleOptions = () => {
+        return [{ value: 'no-role', label: 'No role' }, ...roles.map(r => ({ value: r.name, label: r.name }))];
     };
 
     return (
         <div className="space-y-6">
+            {/* Уведомления */}
+            {notifications.map((notification) => (
+                <NotificationToast
+                    key={notification.id}
+                    notification={notification}
+                    onClose={() => removeNotification(notification.id)}
+                />
+            ))}
+
+            {/* Заголовок и управление */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Team Management</h2>
-                    <p className="text-muted-foreground">Manage departments, positions and user assignments</p>
+                    <h2 className="text-2xl font-bold tracking-tight">Organization Structure</h2>
+                    <p className="text-muted-foreground">Edit departments and team members</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search departments, users..."
-                            className="pl-10 w-80 bg-background"
-                            value={searchQuery}
-                            onChange={handleSearchChange}
-                        />
-                    </div>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => setShowCreateRoleModal(true)}
+                        size="sm"
+                        variant="outline"
+                    >
+                        <Key className="w-4 h-4 mr-2" />
+                        Create Role
+                    </Button>
+                    <Button
+                        onClick={() => setShowAddDepartmentModal(true)}
+                        size="sm"
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Department
+                    </Button>
                 </div>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-3 w-full max-w-md">
-                    <TabsTrigger value="departments" className="flex items-center gap-2">
-                        <Building className="w-4 h-4" />
-                        Departments
-                    </TabsTrigger>
-                    <TabsTrigger value="users" className="flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        Users
-                    </TabsTrigger>
-                    <TabsTrigger value="assignments" className="flex items-center gap-2">
-                        <UserCog className="w-4 h-4" />
-                        Assignments
-                    </TabsTrigger>
-                </TabsList>
+            {/* Карточка с организационной структурой */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-xl">
+                        <div className="text-xl font-bold">Business Unit (EU)</div>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-8">
+                        {/* Members Section */}
+                        <div className="space-y-6">
+                            <h3 className="text-lg font-semibold flex items-center gap-2">
+                                <Users className="w-5 h-5" />
+                                Members
+                            </h3>
 
-                {/* Departments Tab */}
-                <TabsContent value="departments" className="space-y-4 mt-4">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                            <div>
-                                <CardTitle className="text-xl">Departments</CardTitle>
-                                <p className="text-sm text-muted-foreground">
-                                    Manage your organization's departments and teams
-                                </p>
-                            </div>
-                            <Button onClick={() => { resetDepartmentForm(); setDepartmentDialogOpen(true); }}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Add Department
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                            {filteredDepartments.length === 0 ? (
-                                <div className="text-center py-12 border rounded-lg">
-                                    <Building className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-                                    <h3 className="text-lg font-medium mb-1">No departments found</h3>
-                                    <p className="text-muted-foreground mb-4">
-                                        {searchQuery ? 'Try a different search' : 'Get started by creating a department'}
-                                    </p>
-                                    <Button onClick={() => { resetDepartmentForm(); setDepartmentDialogOpen(true); }}>
-                                        <Plus className="w-4 h-4 mr-2" />
-                                        Create Department
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="rounded-md border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="w-20">ID</TableHead>
-                                                <TableHead>Name</TableHead>
-                                                <TableHead className="w-32">Code</TableHead>
-                                                <TableHead>Manager</TableHead>
-                                                <TableHead className="w-32">Team Size</TableHead>
-                                                <TableHead className="w-36 text-right">Actions</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredDepartments.map(dept => {
-                                                const manager = getDepartmentManager(dept.id);
-                                                const deptUsers = getDepartmentUsers(dept.id);
-                                                const position = manager ? getUserPosition(manager.id) : null;
-
-                                                return (
-                                                    <TableRow key={dept.id} className="hover:bg-muted/50">
-                                                        <TableCell className="font-mono text-sm">{dept.id}</TableCell>
-                                                        <TableCell className="font-medium">{dept.name}</TableCell>
-                                                        <TableCell>
-                                                            {dept.code ? (
-                                                                <Badge variant="outline" className="font-mono">{dept.code}</Badge>
-                                                            ) : (
-                                                                <span className="text-muted-foreground text-sm">-</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {manager ? (
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                                                                            <span className="text-sm font-medium text-green-800 dark:text-green-300">
-                                                                                {manager.first_name[0]}{manager.last_name[0]}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="font-medium text-sm">{manager.first_name} {manager.last_name}</div>
-                                                                            <div className="text-xs text-muted-foreground">
-                                                                                {position?.name || 'No position'}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
-                                                                        onClick={() => handleRemoveManager(dept)}
-                                                                        title="Remove manager"
-                                                                    >
-                                                                        <X className="w-3 h-3" />
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleSetManagerClick(dept)}
-                                                                    className="flex items-center gap-1"
-                                                                >
-                                                                    <Crown className="w-3 h-3" />
-                                                                    Set Manager
-                                                                </Button>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-2">
-                                                                <Users className="w-4 h-4 text-muted-foreground" />
-                                                                <span className="font-medium">{deptUsers.length}</span>
-                                                                <span className="text-sm text-muted-foreground">members</span>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex gap-1 justify-end">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleEditDepartment(dept)}
-                                                                    title="Edit department"
-                                                                >
-                                                                    <Edit className="w-4 h-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleAddUsersClick(dept)}
-                                                                    title="Add users to department"
-                                                                >
-                                                                    <UserPlus className="w-4 h-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleSetManagerClick(dept)}
-                                                                    title="Set department manager"
-                                                                >
-                                                                    <Crown className="w-4 h-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleDeleteDepartment(dept.id)}
-                                                                    title="Delete department"
-                                                                    className="hover:bg-destructive/10 hover:text-destructive"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Users Tab */}
-                <TabsContent value="users" className="space-y-4 mt-4">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                            <div>
-                                <CardTitle className="text-xl">Users</CardTitle>
-                                <p className="text-sm text-muted-foreground">
-                                    Manage user accounts and their roles
-                                </p>
-                            </div>
-                            <Button onClick={() => { resetUserForm(); setUserDialogOpen(true); }}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Add User
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                            {filteredUsers.length === 0 ? (
-                                <div className="text-center py-12 border rounded-lg">
-                                    <Users className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-                                    <h3 className="text-lg font-medium mb-1">No users found</h3>
-                                    <p className="text-muted-foreground mb-4">
-                                        {searchQuery ? 'Try a different search' : 'Get started by creating a user'}
-                                    </p>
-                                    <Button onClick={() => { resetUserForm(); setUserDialogOpen(true); }}>
-                                        <Plus className="w-4 h-4 mr-2" />
-                                        Create User
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="rounded-md border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>User</TableHead>
-                                                <TableHead>Contact</TableHead>
-                                                <TableHead>Position</TableHead>
-                                                <TableHead>Department</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead className="w-24 text-right">Actions</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredUsers.map(user => {
-                                                const department = departments.find(d => d.id === user.department_id);
-                                                const position = positions.find(p => p.id === user.position_id);
-                                                const userDepartment = getUserDepartment(user.id);
-                                                const userRoleInDept = getUserRoleInDepartment(user.id);
-
-                                                return (
-                                                    <TableRow key={user.id} className="hover:bg-muted/50">
-                                                        <TableCell>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                                                    <span className="font-medium text-blue-800 dark:text-blue-300">
-                                                                        {user.first_name[0]}{user.last_name[0]}
-                                                                    </span>
-                                                                </div>
-                                                                <div>
-                                                                    <div className="font-medium">{user.first_name} {user.last_name}</div>
-                                                                    <Badge className={`mt-1 ${roleColors[user.role]}`}>
-                                                                        {user.role}
-                                                                    </Badge>
-                                                                </div>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="space-y-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    <Mail className="w-3 h-3 text-muted-foreground" />
-                                                                    <span className="text-sm">{user.email}</span>
-                                                                </div>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {position ? (
-                                                                <div className="flex items-center gap-2">
-                                                                    <Briefcase className="w-3 h-3 text-muted-foreground" />
-                                                                    <span>{position.name}</span>
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-muted-foreground">No position</span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {department ? (
-                                                                <div>
-                                                                    <div className="font-medium">{department.name}</div>
-                                                                    {userDepartment && userRoleInDept && (
-                                                                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                                                            <Badge variant="outline" size="sm" className={teamRoleColors[userRoleInDept]}>
-                                                                                {userRoleInDept}
-                                                                            </Badge>
-                                                                            <span>(Team Assignment)</span>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ) : userDepartment ? (
-                                                                <div>
-                                                                    <div className="font-medium">{userDepartment.name}</div>
-                                                                    {userRoleInDept && (
-                                                                        <div className="text-xs text-muted-foreground">
-                                                                            <Badge variant="outline" size="sm" className={teamRoleColors[userRoleInDept]}>
-                                                                                {userRoleInDept}
-                                                                            </Badge>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleAssignClick(user)}
-                                                                >
-                                                                    Assign to Team
-                                                                </Button>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge className={statusColors[user.is_active ? 'active' : 'inactive']}>
-                                                                {user.is_active ? 'Active' : 'Inactive'}
-                                                            </Badge>
-                                                            <div className="text-xs text-muted-foreground mt-1">
-                                                                Joined: {new Date(user.date_joined).toLocaleDateString()}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <div className="flex gap-1 justify-end">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleEditUser(user)}
-                                                                    title="Edit user"
-                                                                >
-                                                                    <Edit className="w-4 h-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleDeleteUser(user.id)}
-                                                                    title="Delete user"
-                                                                    className="hover:bg-destructive/10 hover:text-destructive"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </TableCell>
-                                                    </TableRow>
-                                                );
-                                            })}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* Assignments Tab */}
-                <TabsContent value="assignments" className="space-y-4 mt-4">
-                    <Card>
-                        <CardHeader className="space-y-0 pb-4">
-                            <CardTitle className="text-xl">Team Assignments</CardTitle>
-                            <p className="text-sm text-muted-foreground">Manage user assignments to departments</p>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Unassigned Users */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2">
-                                            <Users className="w-4 h-4" />
-                                            Unassigned Users
-                                        </h3>
-                                        <Badge variant="outline" className="font-mono">
-                                            {getUnassignedUsers().length}
-                                        </Badge>
-                                    </div>
-                                    {getUnassignedUsers().length === 0 ? (
-                                        <div className="text-center py-8 border rounded-lg">
-                                            <Users className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                                            <p className="text-muted-foreground">All users are assigned to teams</p>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {getUnassignedUsers().map(user => (
-                                                <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                                                            <span className="text-sm font-medium">
-                                                                {user.first_name[0]}{user.last_name[0]}
-                                                            </span>
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-medium">{user.first_name} {user.last_name}</div>
-                                                            <div className="text-xs text-muted-foreground">{user.email}</div>
-                                                        </div>
-                                                    </div>
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => handleAssignClick(user)}
-                                                    >
-                                                        Assign to Team
-                                                    </Button>
+                            {businessUnits[0].departments.map((department) => (
+                                <div key={department.id} className="space-y-4">
+                                    {/* Заголовок отдела */}
+                                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <Building className="w-5 h-5 text-gray-500" />
+                                            <div className="space-y-1">
+                                                <div className="font-semibold text-base">
+                                                    {renderEditableInputCell(department.name, 'department', department.id, undefined, 'name')}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Department Teams */}
-                                <div className="space-y-4">
-                                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                                        <Building className="w-4 h-4" />
-                                        Department Teams
-                                    </h3>
-                                    <div className="space-y-4">
-                                        {departments.map(dept => {
-                                            const deptUsers = getDepartmentUsers(dept.id);
-                                            const manager = getDepartmentManager(dept.id);
-
-                                            if (deptUsers.length === 0) {
-                                                return (
-                                                    <div key={dept.id} className="border rounded-lg p-4">
-                                                        <div className="flex items-center justify-between mb-3">
-                                                            <div>
-                                                                <h4 className="font-semibold">{dept.name}</h4>
-                                                                {dept.code && (
-                                                                    <p className="text-sm text-muted-foreground">Code: {dept.code}</p>
-                                                                )}
-                                                            </div>
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => handleAddUsersClick(dept)}
-                                                            >
-                                                                <UserPlus className="w-4 h-4 mr-1" />
-                                                                Add Users
-                                                            </Button>
-                                                        </div>
-                                                        <div className="text-center py-6 text-muted-foreground">
-                                                            No users assigned to this department
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-
-                                            return (
-                                                <div key={dept.id} className="border rounded-lg p-4">
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <div>
-                                                            <h4 className="font-semibold">{dept.name}</h4>
-                                                            {dept.code && (
-                                                                <p className="text-sm text-muted-foreground">Code: {dept.code}</p>
-                                                            )}
-                                                            {manager && (
-                                                                <div className="flex items-center gap-1 mt-1">
-                                                                    <Crown className="w-3 h-3 text-yellow-500" />
-                                                                    <span className="text-sm text-muted-foreground">
-                                                                        Manager: {manager.first_name} {manager.last_name}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <Badge variant="outline">{deptUsers.length} members</Badge>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() => handleAddUsersClick(dept)}
-                                                                title="Add more users"
-                                                            >
-                                                                <UserPlus className="w-4 h-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-2">
-                                                        {deptUsers.map(user => {
-                                                            const memberRole = teamMembers.find(m =>
-                                                                m.userId === user.id && m.departmentId === dept.id
-                                                            )?.role;
-                                                            const position = positions.find(p => p.id === user.position_id);
-                                                            const isManager = manager?.id === user.id;
-
-                                                            return (
-                                                                <div key={user.id} className={`flex items-center justify-between p-2 hover:bg-muted/50 rounded transition-colors ${isManager ? 'bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-l-yellow-400' : ''}`}>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isManager ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
-                                                                            <span className="text-sm font-medium">
-                                                                                {user.first_name[0]}{user.last_name[0]}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className="font-medium text-sm flex items-center gap-1">
-                                                                                {user.first_name} {user.last_name}
-                                                                                {isManager && <Crown className="w-3 h-3 text-yellow-500" />}
-                                                                            </div>
-                                                                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                                                {memberRole && (
-                                                                                    <Badge variant="outline" size="sm" className={teamRoleColors[memberRole]}>
-                                                                                        {memberRole}
-                                                                                    </Badge>
-                                                                                )}
-                                                                                {position?.name}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1">
-                                                                        {!isManager && (
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="sm"
-                                                                                onClick={() => onRemoveFromDepartment(user.id, dept.id)}
-                                                                                className="hover:bg-destructive/10 hover:text-destructive"
-                                                                            >
-                                                                                Remove
-                                                                            </Button>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-
-            {/* Department Dialog */}
-            <Dialog open={departmentDialogOpen} onOpenChange={setDepartmentDialogOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {editingDepartment ? 'Edit Department' : 'Create Department'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {editingDepartment
-                                ? 'Update department information below'
-                                : 'Add a new department to your organization'
-                            }
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="dept-name">Name *</Label>
-                            <Input
-                                id="dept-name"
-                                value={deptName}
-                                onChange={handleDeptNameChange}
-                                placeholder="e.g., Engineering"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="dept-code">Code (Optional)</Label>
-                                <Input
-                                    id="dept-code"
-                                    value={deptCode}
-                                    onChange={handleDeptCodeChange}
-                                    placeholder="e.g., ENG"
-                                    maxLength={10}
-                                />
-                                <p className="text-xs text-muted-foreground">Short department identifier</p>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="dept-description">Description (Optional)</Label>
-                            <Textarea
-                                id="dept-description"
-                                value={deptDescription}
-                                onChange={handleDeptDescriptionChange}
-                                placeholder="Describe the department's purpose and responsibilities..."
-                                rows={3}
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setDepartmentDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={editingDepartment ? handleUpdateDepartment : handleAddDepartment}>
-                            {editingDepartment ? 'Update Department' : 'Create Department'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* User Dialog */}
-            <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-                <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {editingUser ? 'Edit User' : 'Create User'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {editingUser
-                                ? 'Update user information below'
-                                : 'Create a new user account for your organization'
-                            }
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="user-first-name">First Name *</Label>
-                                <Input
-                                    id="user-first-name"
-                                    value={userFirstName}
-                                    onChange={handleUserFirstNameChange}
-                                    placeholder="John"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="user-last-name">Last Name *</Label>
-                                <Input
-                                    id="user-last-name"
-                                    value={userLastName}
-                                    onChange={handleUserLastNameChange}
-                                    placeholder="Doe"
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="user-email">Email *</Label>
-                            <Input
-                                id="user-email"
-                                type="email"
-                                value={userEmail}
-                                onChange={handleUserEmailChange}
-                                placeholder="john.doe@company.com"
-                            />
-                        </div>
-                        {!editingUser && (
-                            <div className="space-y-2">
-                                <Label htmlFor="user-password">Password *</Label>
-                                <Input
-                                    id="user-password"
-                                    type="password"
-                                    value={userPassword}
-                                    onChange={handleUserPasswordChange}
-                                    placeholder="Create a secure password"
-                                />
-                                <p className="text-xs text-muted-foreground">User will be able to change this later</p>
-                            </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="user-role">Role *</Label>
-                                <Select value={userRole} onValueChange={handleUserRoleChange}>
-                                    <SelectTrigger id="user-role">
-                                        <SelectValue placeholder="Select role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="user">User</SelectItem>
-                                        <SelectItem value="manager">Manager</SelectItem>
-                                        <SelectItem value="admin">Administrator</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="user-position">Position *</Label>
-                                <Select value={userPositionId} onValueChange={handleUserPositionChange}>
-                                    <SelectTrigger id="user-position">
-                                        <SelectValue placeholder="Select position" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {positions.map(position => (
-                                            <SelectItem key={position.id} value={position.id.toString()}>
-                                                {position.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="user-department">Department *</Label>
-                                <Select value={userDepartmentId} onValueChange={handleUserDepartmentChange}>
-                                    <SelectTrigger id="user-department">
-                                        <SelectValue placeholder="Select department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {departments.map(dept => (
-                                            <SelectItem key={dept.id} value={dept.id.toString()}>
-                                                {dept.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="user-date-joined">Date Joined *</Label>
-                                <Input
-                                    id="user-date-joined"
-                                    type="date"
-                                    value={userDateJoined}
-                                    onChange={handleUserDateJoinedChange}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="user-leave-date">Leave Date (Optional)</Label>
-                            <Input
-                                id="user-leave-date"
-                                type="date"
-                                value={userLeaveDate}
-                                onChange={handleUserLeaveDateChange}
-                            />
-                        </div>
-                        <div className="flex items-center space-x-2 pt-2">
-                            <Switch
-                                id="user-active"
-                                checked={userIsActive}
-                                onCheckedChange={handleUserIsActiveChange}
-                            />
-                            <Label htmlFor="user-active" className="cursor-pointer">
-                                Active user account
-                            </Label>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setUserDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={editingUser ? handleUpdateUser : handleAddUser}>
-                            {editingUser ? 'Update User' : 'Create User'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Assign User Dialog */}
-            <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Assign User to Team</DialogTitle>
-                        <DialogDescription>
-                            Assign {assigningUser?.first_name} {assigningUser?.last_name} to a department team
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="assign-dept">Department *</Label>
-                            <Select value={selectedDeptForAssign} onValueChange={handleAssignDeptChange}>
-                                <SelectTrigger id="assign-dept">
-                                    <SelectValue placeholder="Select a department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map(dept => (
-                                        <SelectItem key={dept.id} value={dept.id.toString()}>
-                                            {dept.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="assign-role">Team Role *</Label>
-                            <Select value={assignRole} onValueChange={handleAssignRoleChange}>
-                                <SelectTrigger id="assign-role">
-                                    <SelectValue placeholder="Select role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="member">Team Member</SelectItem>
-                                    <SelectItem value="lead">Team Lead</SelectItem>
-                                    <SelectItem value="manager">Team Manager</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                                Team Managers can manage team assignments and view team reports
-                            </p>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleAssignUser} disabled={!selectedDeptForAssign}>
-                            Assign to Team
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Add Multiple Users to Department Dialog */}
-            <Dialog open={assignMultipleDialogOpen} onOpenChange={setAssignMultipleDialogOpen}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Add Users to Team</DialogTitle>
-                        <DialogDescription>
-                            Select users to add to the {assigningToDept?.name} department team
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="border rounded-lg p-4 max-h-96 overflow-y-auto">
-                            {assigningToDept && getAvailableUsersForDepartment(assigningToDept.id).length === 0 ? (
-                                <div className="text-center py-8">
-                                    <Users className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                                    <p className="text-muted-foreground">No available users to add to this department</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    {assigningToDept && getAvailableUsersForDepartment(assigningToDept.id).map(user => (
-                                        <div
-                                            key={user.id}
-                                            className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${selectedUsers.includes(user.id) ? 'bg-primary/5 border-primary' : 'hover:bg-muted/50'
-                                                }`}
-                                            onClick={() => toggleUserSelection(user.id)}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                                                    <span className="text-sm font-medium">
-                                                        {user.first_name[0]}{user.last_name[0]}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium">{user.first_name} {user.last_name}</div>
-                                                    <div className="text-sm text-muted-foreground">{user.email}</div>
+                                                <div className="text-sm text-gray-500">
+                                                    Code: {renderEditableInputCell(department.code, 'department', department.id, undefined, 'code')}
                                                 </div>
                                             </div>
-                                            <div className={`text-sm ${selectedUsers.includes(user.id) ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                                                {selectedUsers.includes(user.id) ? 'Selected' : 'Click to select'}
-                                            </div>
                                         </div>
-                                    ))}
+
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                                                <Users className="w-3 h-3" />
+                                                {department.members.length}
+                                            </Badge>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setSelectedDepartment(department);
+                                                    setShowAddMemberModal(true);
+                                                }}
+                                            >
+                                                <UserPlus className="w-4 h-4 mr-1" />
+                                                Add
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => removeDepartment(department.id)}
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* Менеджер отдела */}
+                                    <div className="ml-6 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Crown className="w-4 h-4 text-yellow-500" />
+                                            <span className="font-medium text-sm">Manager:</span>
+                                            {renderEditableSelectCell(
+                                                department.manager || '',
+                                                'manager',
+                                                department.id,
+                                                undefined,
+                                                'manager',
+                                                getAvailableManagers(department.id)
+                                            )}
+                                        </div>
+
+                                        {/* Таблица сотрудников отдела */}
+                                        <div className="rounded-md border">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="w-[35%] py-2">Name</TableHead>
+                                                        <TableHead className="w-[25%] py-2">Role</TableHead>
+                                                        <TableHead className="w-[30%] py-2">Email</TableHead>
+                                                        <TableHead className="w-[10%] py-2 text-right">Actions</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {department.members.map((member) => (
+                                                        <TableRow key={member.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                                                            <TableCell className="py-2">
+                                                                <div className="text-sm font-medium">
+                                                                    {renderEditableInputCell(member.name, 'member', department.id, member.id, 'name')}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="py-2">
+                                                                <div className="text-sm">
+                                                                    {renderEditableSelectCell(
+                                                                        member.role || '',
+                                                                        'member',
+                                                                        department.id,
+                                                                        member.id,
+                                                                        'role',
+                                                                        getRoleOptions()
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="py-2">
+                                                                <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                                    {renderEditableInputCell(member.email || '', 'member', department.id, member.id, 'email')}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="py-2 text-right">
+                                                                <DropdownMenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                                            <MoreVertical className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end" className="w-40">
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => {
+                                                                                startEditing('member', department.id, member.id, 'name', member.name);
+                                                                            }}
+                                                                        >
+                                                                            <Edit className="h-3 w-3 mr-2" />
+                                                                            Edit Name
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => {
+                                                                                startEditing('member', department.id, member.id, 'role', member.role || '');
+                                                                            }}
+                                                                        >
+                                                                            <Edit className="h-3 w-3 mr-2" />
+                                                                            Edit Role
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuItem className="text-red-600"
+                                                                            onClick={() => removeMemberFromDepartment(department.id, member.id)}
+                                                                        >
+                                                                            <Trash2 className="h-3 w-3 mr-2" />
+                                                                            Remove
+                                                                        </DropdownMenuItem>
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
+                            ))}
                         </div>
-                        {selectedUsers.length > 0 && (
-                            <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
-                                <div className="flex items-center justify-between">
-                                    <span>Selected {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''}</span>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setSelectedUsers([])}
-                                        className="h-7 text-xs"
-                                    >
-                                        Clear all
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setAssignMultipleDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleAssignMultipleUsers}
-                            disabled={selectedUsers.length === 0}
-                        >
-                            Add {selectedUsers.length > 0 ? `${selectedUsers.length} Users` : 'Users'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                </CardContent>
+            </Card>
 
-            {/* Set Manager Dialog */}
-            <Dialog open={managerDialogOpen} onOpenChange={setManagerDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Set Department Manager</DialogTitle>
-                        <DialogDescription>
-                            Assign a manager for the {managingDept?.name} department
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="select-manager">Select Manager</Label>
-                            <Select value={selectedManagerId} onValueChange={handleManagerChange}>
-                                <SelectTrigger id="select-manager">
-                                    <SelectValue placeholder="Select a manager" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="no-manager">No Manager</SelectItem>
-                                    {managingDept && getDepartmentUsers(managingDept.id).map(user => (
-                                        <SelectItem key={user.id} value={user.id.toString()}>
-                                            {user.first_name} {user.last_name} ({user.email})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {selectedManagerId && selectedManagerId !== "no-manager" && (
-                            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                                <p className="text-sm text-blue-700 dark:text-blue-300">
-                                    The selected user will be assigned as the team manager and will receive manager permissions for this department.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setManagerDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleSetManager}>
-                            {selectedManagerId === "no-manager" ? 'Remove Manager' : 'Set as Manager'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {/* Модальное окно для добавления сотрудника */}
+            {showAddMemberModal && selectedDepartment && (
+                <AddMemberModal
+                    department={selectedDepartment}
+                    allEmployees={allEmployees}
+                    businessUnits={businessUnits}
+                    roles={roles}
+                    onClose={() => {
+                        setShowAddMemberModal(false);
+                        setSelectedDepartment(null);
+                    }}
+                    onAdd={addMemberToDepartment}
+                />
+            )}
 
-            {/* Delete Department Dialog */}
-            <AlertDialog open={deleteDeptDialogOpen} onOpenChange={setDeleteDeptDialogOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Department</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the department and remove all team assignments.
-                            Users assigned to this department team will become unassigned.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={confirmDeleteDepartment}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Delete Department
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            {/* Модальное окно для добавления отдела */}
+            {showAddDepartmentModal && (
+                <AddDepartmentModal
+                    onClose={() => setShowAddDepartmentModal(false)}
+                    onAdd={addDepartment}
+                    businessUnits={businessUnits}
+                    roles={roles}
+                    allEmployees={allEmployees}
+                />
+            )}
 
-            {/* Delete User Dialog */}
-            <AlertDialog open={deleteUserDialogOpen} onOpenChange={setDeleteUserDialogOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete User</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the user account and remove all their:
-                            <ul className="list-disc list-inside mt-2 text-sm">
-                                <li>Team assignments</li>
-                                <li>Time entries</li>
-                                <li>Reports and data</li>
-                            </ul>
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={confirmDeleteUser}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Delete User
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            {/* Модальное окно для создания роли */}
+            {showCreateRoleModal && (
+                <CreateRoleModal
+                    onClose={() => setShowCreateRoleModal(false)}
+                    onAdd={addRole}
+                />
+            )}
         </div>
     );
 }
