@@ -4,8 +4,8 @@ import { Button } from '../ui/button';
 import { Settings, Plus, Calendar } from 'lucide-react';
 
 interface AdminPanelHeaderProps {
-    activeTab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams';
-    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams') => void;
+    activeTab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'settings';
+    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'settings') => void;
     onAddClick: () => void;
 }
 
@@ -15,8 +15,10 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
             case 'projects': return 'Project';
             case 'users': return 'User';
             case 'clients': return 'Client';
-            case 'calendar': return 'Holiday';
+            case 'settings': return 'Settings';
             case 'teams': return 'Team';
+            case 'department': return 'Tasks';
+            case 'reprots': return 'Reports'
             default: return 'Item';
         }
     };
@@ -25,8 +27,12 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
         { id: 'projects', label: 'Projects' },
         { id: 'users', label: 'Users' },
         { id: 'clients', label: 'Clients' },
-        { id: 'calendar', label: 'Calendar', icon: <Calendar className="w-4 h-4 mr-2" /> },
-        { id: 'teams', label: 'Teams' }
+        // { id: 'calendar', label: 'Calendar', icon: <Calendar className="w-4 h-4 mr-2" /> },
+        { id: 'settings', label: 'Settings' },
+        // { id: 'department', label: 'Tasks' },
+        { id: 'reports', label: 'Reports' },
+
+
     ];
 
     return (
@@ -62,7 +68,7 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
                         ))}
                     </div>
 
-                    <Button
+                    {/* <Button
                         onClick={onAddClick}
                         style={{ backgroundColor: '#00A3A1' }}
                         className="hover:opacity-90"
@@ -70,7 +76,7 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         Add {getAddButtonLabel()}
-                    </Button>
+                    </Button> */}
                 </div>
             </div>
         </CardHeader>

@@ -346,7 +346,12 @@ const AddDepartmentModal = ({
 
     return (
         <Dialog open={true} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="
+    w-[60vw]
+    max-w-none
+    min-w-[600px]
+    max-h-[80vh]
+  ">
                 <DialogHeader>
                     <DialogTitle>Add New Department</DialogTitle>
                     <DialogDescription>
@@ -1075,14 +1080,14 @@ export function TeamsTab() {
                     <p className="text-muted-foreground">Edit departments and team members</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button
+                    {/* <Button
                         onClick={() => setShowCreateRoleModal(true)}
                         size="sm"
                         variant="outline"
                     >
                         <Key className="w-4 h-4 mr-2" />
                         Create Role
-                    </Button>
+                    </Button> */}
                     <Button
                         onClick={() => setShowAddDepartmentModal(true)}
                         size="sm"

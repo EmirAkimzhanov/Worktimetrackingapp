@@ -1,3 +1,4 @@
+// src/components/admin/AdminPanel.tsx
 import React, { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { toast } from 'sonner';
@@ -39,17 +40,22 @@ import {
   WeeklySchedule,
   TeamMember
 } from '../types/types';
+import DepartmentsTabs from './admin/department/DepartmentTabs';
+import { ReportsTab } from './admin/reports/ReportsTab';
+import { SettingsTab } from './admin/settings/SettingsTab';
 
 export function AdminPanel() {
   const { projects, addProject, updateProject, deleteProject, entries } = useTimeTracker();
 
-  // Состояния - добавлена вкладка teams
-  const [activeTab, setActiveTab] = useState<'projects' | 'users' | 'clients' | 'calendar' | 'teams'>('projects');
+  // Состояния - добавлены вкладки department и reports
+  const [activeTab, setActiveTab] = useState<'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reports'>('projects');
 
-  // Состояния диалогов
+  // Состояния диалогов (открываются изнутри компонентов)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
+  const [isAddCountryDialogOpen, setIsAddCountryDialogOpen] = useState(false);
+  const [isAddDepartmentDialogOpen, setIsAddDepartmentDialogOpen] = useState(false);
 
   // Состояния редактирования
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -106,7 +112,7 @@ export function AdminPanel() {
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
 
-  // Состояние для Teams - добавьте поля assignedAt и updatedAt
+  // Состояние для Teams
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
     {
       id: 1,
@@ -629,7 +635,7 @@ export function AdminPanel() {
     toast.success('User removed from department');
   };
 
-  // НОВЫЕ ФУНКЦИИ ДЛЯ TeamsTab
+  // Функции для TeamsTab
   const handleAddUsersToDepartment = (userIds: number[], departmentId: number) => {
     const newTeamMembers: TeamMember[] = userIds.map(userId => {
       const existingMember = teamMembers.find(
@@ -644,7 +650,7 @@ export function AdminPanel() {
       }
 
       return {
-        id: Date.now() + userId, // Временный ID
+        id: Date.now() + userId,
         userId,
         departmentId,
         role: 'member',
@@ -654,7 +660,6 @@ export function AdminPanel() {
     });
 
     setTeamMembers(prev => {
-      // Удаляем существующих участников для этих пользователей в этом отделе (если есть)
       const filtered = prev.filter(m =>
         !(userIds.includes(m.userId) && m.departmentId === departmentId)
       );
@@ -687,14 +692,12 @@ export function AdminPanel() {
         );
 
         if (existingMemberIndex !== -1) {
-          // Обновляем существующего участника команды
           updatedMembers[existingMemberIndex] = {
             ...updatedMembers[existingMemberIndex],
             role: 'manager',
             updatedAt: new Date().toISOString()
           };
         } else {
-          // Добавляем нового участника команды как менеджера
           updatedMembers.push({
             id: prev.length > 0 ? Math.max(...prev.map(tm => tm.id)) + 1 : 1,
             userId: managerId,
@@ -722,6 +725,20 @@ export function AdminPanel() {
       prev.map(c => c.id === config.id ? config : c)
     );
     toast.success('Calendar configuration updated');
+  };
+
+  const handleAddCalendarConfig = (config: CountryCalendarConfig) => {
+    const newConfig = {
+      ...config,
+      id: calendarConfigs.length > 0 ? Math.max(...calendarConfigs.map(c => c.id)) + 1 : 0
+    };
+    setCalendarConfigs(prev => [...prev, newConfig]);
+    toast.success('Country added successfully');
+  };
+
+  const handleDeleteCalendarConfig = (id: number) => {
+    setCalendarConfigs(prev => prev.filter(c => c.id !== id));
+    toast.success('Country deleted successfully');
   };
 
   const handleAddHoliday = (countryId: number, holiday: Holiday) => {
@@ -814,7 +831,6 @@ export function AdminPanel() {
     setCalendarConfigs(prev =>
       prev.map(config => {
         if (config.id === countryId) {
-          // Calculate new statistics based on updated schedule
           const workDaysCount = [
             schedule.monday,
             schedule.tuesday,
@@ -861,6 +877,7 @@ export function AdminPanel() {
       department: project.department || '',
       description: project.description || ''
     });
+    setIsAddDialogOpen(true);
   };
 
   const handleEditUser = (user: User) => {
@@ -877,6 +894,7 @@ export function AdminPanel() {
       department_id: user.department_id,
       role: user.role
     });
+    setIsAddUserDialogOpen(true);
   };
 
   const handleEditClient = (client: Client) => {
@@ -889,6 +907,7 @@ export function AdminPanel() {
       country: client.country,
       is_active: client.is_active
     });
+    setIsAddClientDialogOpen(true);
   };
 
   // Обработчики удаления
@@ -921,7 +940,6 @@ export function AdminPanel() {
   const confirmDeleteUser = () => {
     if (userToDelete) {
       setUsers(prev => prev.filter(user => user.id !== userToDelete));
-      // Также удаляем все записи этого пользователя из команд
       setTeamMembers(prev => prev.filter(member => member.userId !== userToDelete));
       toast.success('User deleted successfully');
       setUserToDelete(null);
@@ -938,43 +956,12 @@ export function AdminPanel() {
     setDeleteClientDialogOpen(false);
   };
 
-  const handleAddCalendarConfig = (config: CountryCalendarConfig) => {
-    setCalendarConfigs(prev => [...prev, config]);
-    toast.success("Country added");
-  };
-
-  const handleDeleteCalendarConfig = (id: number) => {
-    setCalendarConfigs(prev => prev.filter(c => c.id !== id));
-    toast.success("Country deleted");
-  };
-
-  const handleAddButtonClick = () => {
-    switch (activeTab) {
-      case 'projects':
-        setIsAddDialogOpen(true);
-        break;
-      case 'users':
-        setIsAddUserDialogOpen(true);
-        break;
-      case 'clients':
-        setIsAddClientDialogOpen(true);
-        break;
-      case 'calendar':
-        // Calendar management handles its own dialogs
-        break;
-      case 'teams':
-        // Teams handles its own dialogs
-        break;
-    }
-  };
-
   return (
     <>
       <Card className="shadow-md">
         <AdminPanelHeader
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          onAddClick={handleAddButtonClick}
         />
         <CardContent className="pt-6">
           {activeTab === 'projects' && (
@@ -987,6 +974,11 @@ export function AdminPanel() {
               departments={departments}
               onEdit={handleEditProject}
               onDelete={handleDeleteProject}
+              onAdd={() => {
+                setEditingProject(null);
+                resetProjectForm();
+                setIsAddDialogOpen(true);
+              }}
             />
           )}
 
@@ -997,6 +989,11 @@ export function AdminPanel() {
               departments={departments}
               onEdit={handleEditUser}
               onDelete={handleDeleteUser}
+              onAdd={() => {
+                setEditingUser(null);
+                resetUserForm();
+                setIsAddUserDialogOpen(true);
+              }}
             />
           )}
 
@@ -1005,6 +1002,11 @@ export function AdminPanel() {
               clients={clients}
               onEdit={handleEditClient}
               onDelete={handleDeleteClient}
+              onAdd={() => {
+                setEditingClient(null);
+                resetClientForm();
+                setIsAddClientDialogOpen(true);
+              }}
             />
           )}
 
@@ -1020,6 +1022,7 @@ export function AdminPanel() {
               onAddWorkWeekend={handleAddWorkWeekend}
               onDeleteWorkWeekend={handleDeleteWorkWeekend}
               onUpdateWeeklySchedule={handleUpdateWeeklySchedule}
+              onAddCountry={() => setIsAddCountryDialogOpen(true)}
             />
           )}
 
@@ -1041,12 +1044,61 @@ export function AdminPanel() {
               onSetDepartmentManager={handleSetDepartmentManager}
             />
           )}
+
+          {activeTab === 'department' && (
+            <DepartmentsTabs
+              departments={departments}
+              users={users}
+              onAddDepartment={() => setIsAddDepartmentDialogOpen(true)}
+              onUpdateDepartment={handleUpdateDepartment}
+              onDeleteDepartment={handleDeleteDepartment}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <ReportsTab />
+          )}
+          {activeTab === 'settings' && (
+            <SettingsTab
+              // Teams props
+              departments={departments}
+              positions={positions}
+              users={users}
+              teamMembers={teamMembers}
+              onAddDepartment={handleAddDepartment}
+              onUpdateDepartment={handleUpdateDepartment}
+              onDeleteDepartment={handleDeleteDepartment}
+              onAddUser={handleAddUserForTeams}
+              onUpdateUser={handleUpdateUserForTeams}
+              onDeleteUser={handleDeleteUser}
+              onAssignToDepartment={handleAssignToDepartment}
+              onRemoveFromDepartment={handleRemoveFromDepartment}
+              onAddUsersToDepartment={handleAddUsersToDepartment}
+              onSetDepartmentManager={handleSetDepartmentManager}
+
+              // Calendar props
+              calendarConfigs={calendarConfigs}
+              onUpdateConfig={handleUpdateCalendarConfig}
+              onAddConfig={handleAddCalendarConfig}
+              onDeleteConfig={handleDeleteCalendarConfig}
+              onAddHoliday={handleAddHoliday}
+              onUpdateHoliday={handleUpdateHoliday}
+              onDeleteHoliday={handleDeleteHoliday}
+              onAddWorkWeekend={handleAddWorkWeekend}
+              onDeleteWorkWeekend={handleDeleteWorkWeekend}
+              onUpdateWeeklySchedule={handleUpdateWeeklySchedule}
+
+              // Callbacks для кнопок в SettingsTab
+              onAddDepartmentFromSettings={() => setIsAddDepartmentDialogOpen(true)}
+              onAddCountryFromSettings={() => setIsAddCountryDialogOpen(true)}
+            />
+          )}
         </CardContent>
       </Card>
 
       {/* Диалог проекта */}
       <ProjectDialog
-        open={isAddDialogOpen || !!editingProject}
+        open={isAddDialogOpen}
         onOpenChange={(open: boolean) => {
           if (!open) {
             setIsAddDialogOpen(false);
@@ -1066,7 +1118,7 @@ export function AdminPanel() {
 
       {/* Диалог пользователя */}
       <UserDialog
-        open={isAddUserDialogOpen || !!editingUser}
+        open={isAddUserDialogOpen}
         onOpenChange={(open: boolean) => {
           if (!open) {
             setIsAddUserDialogOpen(false);
@@ -1084,7 +1136,7 @@ export function AdminPanel() {
 
       {/* Диалог клиента */}
       <ClientDialog
-        open={isAddClientDialogOpen || !!editingClient}
+        open={isAddClientDialogOpen}
         onOpenChange={(open: boolean) => {
           if (!open) {
             setIsAddClientDialogOpen(false);
@@ -1098,6 +1150,12 @@ export function AdminPanel() {
         countries={COUNTRIES}
         onSave={editingClient ? handleUpdateClient : handleAddClient}
       />
+
+      {/* Диалог добавления страны */}
+      {/* Добавьте здесь компонент CountryDialog если есть */}
+
+      {/* Диалог добавления отдела */}
+      {/* Добавьте здесь компонент DepartmentDialog если есть */}
 
       {/* Диалог подтверждения удаления проекта */}
       <DeleteConfirmationDialog

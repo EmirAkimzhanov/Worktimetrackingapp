@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Button } from '../../ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Calendar, Settings, FileText, BarChart } from 'lucide-react';
 import { CountryCalendarConfig, Holiday, WorkWeekend, WeeklySchedule } from '../../../types/types';
@@ -12,8 +11,8 @@ import { CalendarSettingsDialog } from './CalendarSettingsDialog';
 interface CalendarManagementProps {
     configs: CountryCalendarConfig[];
     onUpdateConfig: (config: CountryCalendarConfig) => void;
-    onAddConfig?: (config: CountryCalendarConfig) => void; // Сделаем опциональным
-    onDeleteConfig?: (id: number) => void; // Сделаем опциональным
+    onAddConfig?: (config: CountryCalendarConfig) => void;
+    onDeleteConfig?: (id: number) => void;
     onAddHoliday: (countryId: number, holiday: Holiday) => void;
     onUpdateHoliday: (countryId: number, holiday: Holiday) => void;
     onDeleteHoliday: (countryId: number, holidayId: number) => void;
@@ -25,8 +24,8 @@ interface CalendarManagementProps {
 export function CalendarManagement({
     configs,
     onUpdateConfig,
-    onAddConfig, // Может быть undefined
-    onDeleteConfig, // Может быть undefined
+    onAddConfig,
+    onDeleteConfig,
     onAddHoliday,
     onUpdateHoliday,
     onDeleteHoliday,
@@ -34,11 +33,10 @@ export function CalendarManagement({
     onDeleteWorkWeekend,
     onUpdateWeeklySchedule
 }: CalendarManagementProps) {
-    const [activeTab, setActiveTab] = useState('holidays');
+    const [activeTab, setActiveTab] = useState<'holidays' | 'weekly' | 'statistics'>('holidays');
     const [selectedCountryId, setSelectedCountryId] = useState<number | 'general'>('general');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-    // Используем useMemo для пересчета при изменении configs
     const selectedConfig = useMemo(() => {
         return selectedCountryId === 'general'
             ? configs.find(c => c.countryCode === 'GENERAL')
@@ -49,12 +47,11 @@ export function CalendarManagement({
         return configs.find(c => c.countryCode === 'GENERAL');
     }, [configs]);
 
-    // Используем useMemo для пересчета списка стран при изменении configs
     const countries = useMemo(() => {
         return [
             { id: 'general' as const, name: 'General', code: 'GENERAL' },
             ...configs
-                .filter(c => c.countryCode !== 'GENERAL') // Исключаем GENERAL из списка стран
+                .filter(c => c.countryCode !== 'GENERAL')
                 .map(c => ({
                     id: c.id,
                     name: c.country,
@@ -63,22 +60,14 @@ export function CalendarManagement({
         ];
     }, [configs]);
 
-    const handleTabChange = (value: string) => {
-        if (['holidays', 'weekly', 'statistics'].includes(value)) {
-            setActiveTab(value);
-        }
-    };
-
     const handleCountrySelect = (id: number | 'general') => {
         setSelectedCountryId(id);
     };
 
-    // Добавим обработчик для добавления конфигурации с проверкой
     const handleAddConfig = (config: CountryCalendarConfig) => {
         console.log('CalendarManagement: Adding config', config);
         if (onAddConfig) {
             onAddConfig(config);
-            // После добавления новой страны, можно автоматически выбрать ее
             setSelectedCountryId(config.id);
         } else {
             console.error('onAddConfig is not provided');
@@ -86,12 +75,10 @@ export function CalendarManagement({
         }
     };
 
-    // Добавим обработчик для удаления конфигурации с проверкой
     const handleDeleteConfig = (id: number) => {
         console.log('CalendarManagement: Deleting config with id', id);
         if (onDeleteConfig) {
             onDeleteConfig(id);
-            // Если удаляем выбранную страну, переключаемся на General
             if (selectedCountryId === id) {
                 setSelectedCountryId('general');
             }
@@ -155,26 +142,52 @@ export function CalendarManagement({
                 <div className="flex-1">
                     <Card>
                         <CardHeader>
-                            <Tabs value={activeTab} onValueChange={handleTabChange}>
-                                <TabsList>
-                                    <TabsTrigger value="holidays" className="flex items-center gap-2">
-                                        <Calendar className="w-4 h-4" />
-                                        Holidays & Work Weekends
-                                    </TabsTrigger>
-                                    <TabsTrigger value="weekly" className="flex items-center gap-2">
-                                        <FileText className="w-4 h-4" />
-                                        Weekly Schedule
-                                    </TabsTrigger>
-                                    <TabsTrigger value="statistics" className="flex items-center gap-2">
-                                        <BarChart className="w-4 h-4" />
-                                        Statistics
-                                    </TabsTrigger>
-                                </TabsList>
-                            </Tabs>
+                            {/* Табы как в AdminPanel - простые кнопки */}
+                            <div className="flex gap-1 bg-muted p-1 rounded-md w-fit">
+                                <button
+                                    onClick={() => setActiveTab('holidays')}
+                                    className={`
+                                        flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
+                                        ${activeTab === 'holidays'
+                                            ? " text-black shadow"
+                                            : "text-muted-foreground hover:bg-muted/70"}
+                                    `}
+                                >
+                                    <Calendar className="w-4 h-4" />
+                                    Holidays & Work Weekends
+                                </button>
+
+                                <button
+                                    onClick={() => setActiveTab('weekly')}
+                                    className={`
+                                        flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
+                                        ${activeTab === 'weekly'
+                                            ? " text-black shadow"
+                                            : "text-muted-foreground hover:bg-muted/70"}
+                                    `}
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    Weekly Schedule
+                                </button>
+
+                                <button
+                                    onClick={() => setActiveTab('statistics')}
+                                    className={`
+                                        flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
+                                        ${activeTab === 'statistics'
+                                            ? "border-b-black text-black shadow"
+                                            : "text-muted-foreground hover:bg-muted/70"}
+                                    `}
+                                >
+                                    <BarChart className="w-4 h-4" />
+                                    Statistics
+                                </button>
+                            </div>
                         </CardHeader>
                         <CardContent>
-                            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-                                <TabsContent value="holidays" className="space-y-4">
+                            {/* Контент табов */}
+                            {activeTab === 'holidays' && (
+                                <div className="space-y-4">
                                     <CalendarHolidaysTab
                                         config={currentConfig}
                                         onAddHoliday={onAddHoliday}
@@ -183,27 +196,31 @@ export function CalendarManagement({
                                         onAddWorkWeekend={onAddWorkWeekend}
                                         onDeleteWorkWeekend={onDeleteWorkWeekend}
                                     />
-                                </TabsContent>
+                                </div>
+                            )}
 
-                                <TabsContent value="weekly" className="space-y-4">
+                            {activeTab === 'weekly' && (
+                                <div className="space-y-4">
                                     <CalendarWeeklyScheduleTab
                                         config={currentConfig}
                                         onUpdateWeeklySchedule={onUpdateWeeklySchedule}
                                     />
-                                </TabsContent>
+                                </div>
+                            )}
 
-                                <TabsContent value="statistics" className="space-y-4">
+                            {activeTab === 'statistics' && (
+                                <div className="space-y-4">
                                     <CalendarStatisticsTab
                                         config={currentConfig}
                                     />
-                                </TabsContent>
-                            </Tabs>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
             </div>
 
-            {/* Показываем CalendarSettingsDialog только если функции добавления/удаления доступны */}
+            {/* CalendarSettingsDialog */}
             {onAddConfig && onDeleteConfig ? (
                 <CalendarSettingsDialog
                     open={isSettingsOpen}
@@ -214,7 +231,6 @@ export function CalendarManagement({
                     onDeleteConfig={handleDeleteConfig}
                 />
             ) : (
-                // Альтернативный вариант диалога без функций управления странами
                 <CalendarSettingsDialog
                     open={isSettingsOpen}
                     onOpenChange={setIsSettingsOpen}
