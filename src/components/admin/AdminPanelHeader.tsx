@@ -4,8 +4,8 @@ import { Button } from '../ui/button';
 import { Settings, Plus, Calendar } from 'lucide-react';
 
 interface AdminPanelHeaderProps {
-    activeTab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'settings';
-    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'settings') => void;
+    activeTab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'monitoring';
+    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'monitoring') => void;
     onAddClick: () => void;
 }
 
@@ -15,10 +15,11 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
             case 'projects': return 'Project';
             case 'users': return 'User';
             case 'clients': return 'Client';
-            case 'settings': return 'Settings';
+            // case 'settings': return 'Settings';
             case 'teams': return 'Team';
             case 'department': return 'Tasks';
             case 'reprots': return 'Reports'
+            case 'monitoring': return 'Monitoring'
             default: return 'Item';
         }
     };
@@ -27,10 +28,10 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
         { id: 'projects', label: 'Projects' },
         { id: 'users', label: 'Users' },
         { id: 'clients', label: 'Clients' },
-        // { id: 'calendar', label: 'Calendar', icon: <Calendar className="w-4 h-4 mr-2" /> },
         { id: 'settings', label: 'Settings' },
-        // { id: 'department', label: 'Tasks' },
         { id: 'reports', label: 'Reports' },
+        { id: 'monitoring', label: 'Monitoring' },
+
 
 
     ];

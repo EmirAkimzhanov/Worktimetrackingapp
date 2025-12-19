@@ -12,14 +12,18 @@ export interface User {
 }
 
 export interface Client {
-    id: number;
+    id: string;
     name: string;
     company: string;
-    email: string;
+    emails: string[];
     phone: string;
     country: string;
+    personal_number: string; // Добавлено
+    sector: string;
+    sector_label?: string; // Для отображения
     is_active: boolean;
     created_at: string;
+    updated_at: string;
 }
 
 export interface Position {
@@ -51,6 +55,8 @@ export interface ClientFormData {
     email: string;
     phone: string;
     country: string;
+    personal_number: string; // Добавлено
+    sector: string; // Добавлено
     is_active: boolean;
 }
 
@@ -150,4 +156,40 @@ export interface TeamMember {
     departmentId: number;
     role: 'member' | 'lead' | 'manager';
     joinDate: string;
+}
+
+// Добавим новые типы
+export interface TimeSheetMonitoring {
+    id: string;
+    user_id: string;
+    user_name: string;
+    user_email: string;
+    period_start: string;
+    period_end: string;
+    total_hours_required: number;
+    total_hours_logged: number;
+    completion_percentage: number;
+    status: 'completed' | 'partial' | 'missing' | 'overdue';
+    last_updated: string;
+    missing_days: string[];
+}
+
+export interface TimeSheetNotification {
+    id: string;
+    user_id: string;
+    period_start: string;
+    period_end: string;
+    sent_at: string;
+    status: 'sent' | 'pending' | 'failed';
+    email_subject: string;
+    email_body: string;
+}
+
+export interface User {
+    id: string;
+    name: string;
+    email: string;
+    role: 'admin' | 'user' | 'manager';
+    is_active: boolean;
+    timezone: string;
 }

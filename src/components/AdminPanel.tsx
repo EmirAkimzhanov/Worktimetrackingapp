@@ -43,6 +43,7 @@ import {
 import DepartmentsTabs from './admin/department/DepartmentTabs';
 import { ReportsTab } from './admin/reports/ReportsTab';
 import { SettingsTab } from './admin/settings/SettingsTab';
+import MonitoringPage from './admin/monitoring/MonitoringPage';
 
 export function AdminPanel() {
   const { projects, addProject, updateProject, deleteProject, entries } = useTimeTracker();
@@ -103,8 +104,11 @@ export function AdminPanel() {
     email: '',
     phone: '',
     country: '',
-    is_active: true
+    is_active: true,
+    sector: '',
+    personal_number: ''
   });
+
 
   // Mock данные
   const [positions] = useState<Position[]>(MOCK_POSITIONS);
@@ -319,9 +323,12 @@ export function AdminPanel() {
       email: '',
       phone: '',
       country: '',
-      is_active: true
+      is_active: true,
+      sector: '',
+      personal_number: ''
     });
   };
+
 
   // Обработчики для проектов
   const handleAddProject = () => {
@@ -488,8 +495,11 @@ export function AdminPanel() {
       phone: clientForm.phone,
       country: clientForm.country,
       is_active: clientForm.is_active,
-      created_at: new Date().toISOString().split('T')[0]
+      created_at: new Date().toISOString().split('T')[0],
+      sector: clientForm.sector,
+      personal_number: clientForm.personal_number
     };
+
 
     setClients(prev => [...prev, newClient]);
     toast.success('Client added successfully');
@@ -519,10 +529,15 @@ export function AdminPanel() {
           email: clientForm.email,
           phone: clientForm.phone,
           country: clientForm.country,
-          is_active: clientForm.is_active
+          is_active: clientForm.is_active,
+
+          // ➕
+          sector: clientForm.sector,
+          personal_number: clientForm.personal_number
         }
         : client
     ));
+
 
     toast.success('Client updated successfully');
     setEditingClient(null);
@@ -905,8 +920,11 @@ export function AdminPanel() {
       email: client.email,
       phone: client.phone,
       country: client.country,
-      is_active: client.is_active
+      is_active: client.is_active,
+      sector: client.sector || '',
+      personal_number: client.personal_number || ''
     });
+
     setIsAddClientDialogOpen(true);
   };
 
@@ -1057,6 +1075,9 @@ export function AdminPanel() {
 
           {activeTab === 'reports' && (
             <ReportsTab />
+          )}
+          {activeTab === 'monitoring' && (
+            <MonitoringPage />
           )}
           {activeTab === 'settings' && (
             <SettingsTab
