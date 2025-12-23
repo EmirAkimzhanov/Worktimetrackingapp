@@ -27,8 +27,8 @@ interface DepartmentGroup {
     id: number;
     name: string;
     code: string;
-    manager?: string;
-    managerId?: number;
+    managers: string[]; // Массив имен менеджеров
+    managerIds: string[]; // Массив ID менеджеров
     members: OrganizationMember[];
 }
 
@@ -121,7 +121,7 @@ const AddMemberModal = ({
             role: employeeRole || selectedEmployee.role || '',
             email: selectedEmployee.email || '',
             status: 'active',
-            employeeId: selectedEmployee.id.toString()
+            employeeId: selectedEmployee.id.toString() // Всегда строка
         };
 
         onAdd(newMember);
@@ -320,7 +320,7 @@ const AddDepartmentModal = ({
 }) => {
     const [departmentName, setDepartmentName] = useState('');
     const [departmentCode, setDepartmentCode] = useState('');
-    const [selectedManagerId, setSelectedManagerId] = useState<string>('');
+    const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
 
     const handleAdd = () => {
         if (!departmentName.trim()) return;
@@ -329,15 +329,19 @@ const AddDepartmentModal = ({
             id: Date.now(),
             name: departmentName,
             code: departmentCode || departmentName.substring(0, 3).toUpperCase(),
+            managers: [],
+            managerIds: [],
             members: []
         };
 
-        if (selectedManagerId && selectedManagerId !== 'no-manager') {
-            const manager = allEmployees.find(e => e.id.toString() === selectedManagerId);
-            if (manager) {
-                newDepartment.manager = manager.name;
-                newDepartment.managerId = manager.id;
-            }
+        if (selectedManagerIds.length > 0) {
+            selectedManagerIds.forEach(managerId => {
+                const manager = allEmployees.find(e => e.id.toString() === managerId);
+                if (manager) {
+                    newDepartment.managers.push(manager.name);
+                    newDepartment.managerIds.push(manager.id.toString());
+                }
+            });
         }
 
         onAdd(newDepartment);
@@ -378,13 +382,19 @@ const AddDepartmentModal = ({
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="department-manager">Manager (Optional)</Label>
-                        <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
-                            <SelectTrigger id="department-manager">
-                                <SelectValue placeholder="Select a manager" />
+                        <Label htmlFor="department-managers">Managers (Optional)</Label>
+                        <Select
+                            value=""
+                            onValueChange={(value) => {
+                                if (value && !selectedManagerIds.includes(value)) {
+                                    setSelectedManagerIds([...selectedManagerIds, value]);
+                                }
+                            }}
+                        >
+                            <SelectTrigger id="department-managers">
+                                <SelectValue placeholder="Select managers" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="no-manager">No manager</SelectItem>
                                 {allEmployees.map(employee => (
                                     <SelectItem key={employee.id} value={employee.id.toString()}>
                                         {employee.name} ({employee.email})
@@ -392,6 +402,34 @@ const AddDepartmentModal = ({
                                 ))}
                             </SelectContent>
                         </Select>
+                        {selectedManagerIds.length > 0 && (
+                            <div className="mt-2 space-y-2">
+                                <div className="text-sm font-medium">Selected Managers:</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedManagerIds.map(managerId => {
+                                        const manager = allEmployees.find(e => e.id.toString() === managerId);
+                                        return (
+                                            <Badge
+                                                key={managerId}
+                                                variant="secondary"
+                                                className="flex items-center gap-1"
+                                            >
+                                                {manager?.name}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedManagerIds(selectedManagerIds.filter(id => id !== managerId));
+                                                    }}
+                                                    className="ml-1 hover:text-red-500"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </Badge>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <DialogFooter>
@@ -587,7 +625,8 @@ export function TeamsTab() {
                     id: 1,
                     name: 'COHS',
                     code: 'COHS',
-                    manager: 'Dagger Dodgers',
+                    managers: ['Turgut Drinksteller'],
+                    managerIds: ['3'],
                     members: [
                         { id: 1, name: 'Emile A. Montgomery', department: 'COHS', role: 'Developer', status: 'active', employeeId: '1' },
                         { id: 2, name: 'Terry Eisenberg', department: 'COHS', role: 'Designer', status: 'active', employeeId: '2' },
@@ -598,7 +637,8 @@ export function TeamsTab() {
                     id: 2,
                     name: 'Admin',
                     code: 'ADM',
-                    manager: 'Agertin Eckalena',
+                    managers: ['Agertin Eckalena', 'Susan Kazantseva'], // Два менеджера
+                    managerIds: ['4', '11'],
                     members: [
                         { id: 4, name: 'Adolf Grynkysse', department: 'Admin', status: 'active', employeeId: '5' },
                         { id: 5, name: 'Ching\'s Unladayer', department: 'Admin', status: 'active', employeeId: '6' },
@@ -615,7 +655,8 @@ export function TeamsTab() {
                     id: 3,
                     name: 'Audit',
                     code: 'AUD',
-                    manager: 'Adl Elsyaber',
+                    managers: ['Adl Elsyaber', 'Alan Lundholm', 'Barbara Juhnfeier'], // Три менеджера
+                    managerIds: ['14', '16', '26'],
                     members: [
                         { id: 13, name: 'Allan Omedelma', department: 'Audit', status: 'active', employeeId: '15' },
                         { id: 14, name: 'Alan Lundholm', department: 'Audit', status: 'active', employeeId: '16' },
@@ -653,6 +694,7 @@ export function TeamsTab() {
     const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
     const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
     const [selectedDepartment, setSelectedDepartment] = useState<DepartmentGroup | null>(null);
+    const [showManagerModal, setShowManagerModal] = useState<number | null>(null);
 
     // Состояния для уведомлений
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -668,6 +710,18 @@ export function TeamsTab() {
         setNotifications(prev => prev.filter(notification => notification.id !== id));
     };
 
+    // Проверяем, является ли сотрудник менеджером отдела
+    const isEmployeeManager = (department: DepartmentGroup, member: OrganizationMember) => {
+        if (!member.employeeId) {
+            return false;
+        }
+        // Проверяем, есть ли ID сотрудника в массиве managerIds
+        return department.managerIds.includes(member.employeeId);
+    };
+
+    // Функция для принудительного обновления интерфейса
+    const forceUpdate = useState({})[1];
+
     // Начать редактирование ячейки
     const startEditing = (
         type: 'department' | 'member' | 'manager',
@@ -680,8 +734,6 @@ export function TeamsTab() {
         let editingValue = currentValue;
         if (field === 'role' && currentValue === '') {
             editingValue = 'no-role';
-        } else if (field === 'manager' && currentValue === '') {
-            editingValue = 'no-manager';
         }
 
         setEditingCell({ type, departmentId, memberId, field, value: editingValue });
@@ -691,7 +743,6 @@ export function TeamsTab() {
     // Конвертировать значение для отображения
     const convertForDisplay = (value: string): string => {
         if (value === 'no-role') return '';
-        if (value === 'no-manager') return '';
         return value;
     };
 
@@ -716,7 +767,7 @@ export function TeamsTab() {
             let finalValue = newValue;
 
             // Конвертируем специальные значения в пустую строку для хранения
-            if (newValue === 'no-role' || newValue === 'no-manager') {
+            if (newValue === 'no-role') {
                 finalValue = '';
             }
 
@@ -742,26 +793,8 @@ export function TeamsTab() {
                     }
                     return updated;
                 });
-            } else if (type === 'manager') {
-                // Редактирование менеджера отдела
-                setBusinessUnits(prev => {
-                    const updated = [...prev];
-                    const department = updated[0].departments.find(d => d.id === departmentId);
-                    if (department) {
-                        const oldValue = department.manager || '';
-                        department.manager = finalValue || undefined;
-                        if (!finalValue) {
-                            department.managerId = undefined;
-                        }
-                        if (oldValue !== finalValue) {
-                            toast.success(
-                                `Manager for "${department.name}" has been updated`,
-                                // 'success'
-                            );
-                        }
-                    }
-                    return updated;
-                });
+                // Принудительно обновляем интерфейс
+                forceUpdate({});
             }
 
             // Закрываем режим редактирования
@@ -884,6 +917,8 @@ export function TeamsTab() {
                     }
                     return updated;
                 });
+                // Принудительно обновляем интерфейс
+                forceUpdate({});
             }
 
             setEditingCell(null);
@@ -964,6 +999,9 @@ export function TeamsTab() {
         // Закрыть модальное окно
         setShowAddMemberModal(false);
         setSelectedDepartment(null);
+
+        // Принудительно обновляем интерфейс
+        forceUpdate({});
     };
 
     // Добавить отдел с уведомлением
@@ -981,6 +1019,9 @@ export function TeamsTab() {
         );
 
         setShowAddDepartmentModal(false);
+
+        // Принудительно обновляем интерфейс
+        forceUpdate({});
     };
 
     // Добавить роль с уведомлением
@@ -1007,6 +1048,11 @@ export function TeamsTab() {
                 const member = department.members.find(m => m.id === memberId);
                 if (member) {
                     memberName = member.name;
+                    // Если удаляем менеджера, удаляем его из списка менеджеров
+                    if (member.employeeId && department.managerIds.includes(member.employeeId)) {
+                        department.managers = department.managers.filter(name => name !== member.name);
+                        department.managerIds = department.managerIds.filter(id => id !== member.employeeId);
+                    }
                 }
                 department.members = department.members.filter(m => m.id !== memberId);
             }
@@ -1020,6 +1066,9 @@ export function TeamsTab() {
                 // 'success'
             );
         }
+
+        // Принудительно обновляем интерфейс
+        forceUpdate({});
     };
 
     // Удалить отдел с уведомлением
@@ -1043,23 +1092,188 @@ export function TeamsTab() {
                 // 'success'
             );
         }
-    };
 
-    const getAvailableManagers = (departmentId: number) => {
-        const department = businessUnits[0].departments.find(d => d.id === departmentId);
-        if (!department) return [];
-
-        const options = allEmployees.map(employee => ({
-            value: employee.name,
-            label: `${employee.name} (${employee.email})`
-        }));
-
-        return [{ value: 'no-manager', label: 'No manager' }, ...options];
+        // Принудительно обновляем интерфейс
+        forceUpdate({});
     };
 
     // Получить опции для ролей
     const getRoleOptions = () => {
         return [{ value: 'no-role', label: 'No role' }, ...roles.map(r => ({ value: r.name, label: r.name }))];
+    };
+
+    // Рендер ячейки менеджера с галочкой
+    const renderManagerCell = (department: DepartmentGroup, member: OrganizationMember) => {
+        const isManager = isEmployeeManager(department, member);
+
+        return (
+            <div className="text-center">
+                {isManager ? (
+                    <div className="flex items-center justify-center">
+                        <Check className="h-4 w-4 text-green-600" />
+                    </div>
+                ) : (
+                    <div className="text-sm text-gray-400">-</div>
+                )}
+            </div>
+        );
+    };
+
+    // Назначить/снять с должности менеджера
+    const toggleEmployeeManager = (departmentId: number, member: OrganizationMember) => {
+        if (!member.employeeId) {
+            toast.error('Employee does not have an employeeId');
+            return;
+        }
+
+        setBusinessUnits(prev => {
+            const updated = [...prev];
+            const department = updated[0].departments.find(d => d.id === departmentId);
+            if (department) {
+                const isCurrentlyManager = department.managerIds.includes(member.employeeId!);
+
+                if (isCurrentlyManager) {
+                    // Снимаем с должности менеджера
+                    department.managers = department.managers.filter(name => name !== member.name);
+                    department.managerIds = department.managerIds.filter(id => id !== member.employeeId);
+                    toast.success(
+                        `${member.name} has been removed as manager of ${department.name}`
+                    );
+                } else {
+                    // Назначаем менеджером
+                    department.managers.push(member.name);
+                    department.managerIds.push(member.employeeId);
+                    toast.success(
+                        `${member.name} has been appointed as manager of ${department.name}`
+                    );
+                }
+            }
+            return updated;
+        });
+
+        // Принудительно обновляем интерфейс
+        forceUpdate({});
+    };
+
+    // Получить список менеджеров для отдела
+    const getDepartmentManagers = (departmentId: number) => {
+        const department = businessUnits[0].departments.find(d => d.id === departmentId);
+        return department ? department.managers : [];
+    };
+
+    // Модальное окно управления менеджерами
+    const ManagerManagementModal = ({ departmentId, onClose }: { departmentId: number, onClose: () => void }) => {
+        const department = businessUnits[0].departments.find(d => d.id === departmentId);
+        const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>(
+            department ? [...department.managerIds] : []
+        );
+
+        const handleSave = () => {
+            if (!department) return;
+
+            setBusinessUnits(prev => {
+                const updated = [...prev];
+                const dept = updated[0].departments.find(d => d.id === departmentId);
+                if (dept) {
+                    // Получаем имена выбранных менеджеров
+                    const selectedManagers = selectedManagerIds.map(managerId => {
+                        const employee = allEmployees.find(e => e.id.toString() === managerId);
+                        return employee?.name || '';
+                    }).filter(name => name);
+
+                    dept.managers = selectedManagers;
+                    dept.managerIds = selectedManagerIds;
+
+                    toast.success(
+                        `Managers for ${dept.name} have been updated`
+                    );
+                }
+                return updated;
+            });
+
+            onClose();
+            forceUpdate({});
+        };
+
+        if (!department) return null;
+
+        return (
+            <Dialog open={true} onOpenChange={onClose}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Manage Managers for {department.name}</DialogTitle>
+                        <DialogDescription>
+                            Select multiple employees as managers for this department
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Available Employees</Label>
+                            <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                                {department.members.map((member) => (
+                                    <div key={member.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedManagerIds.includes(member.employeeId || '')}
+                                                onChange={(e) => {
+                                                    if (member.employeeId) {
+                                                        if (e.target.checked) {
+                                                            setSelectedManagerIds([...selectedManagerIds, member.employeeId]);
+                                                        } else {
+                                                            setSelectedManagerIds(selectedManagerIds.filter(id => id !== member.employeeId));
+                                                        }
+                                                    }
+                                                }}
+                                                className="h-4 w-4"
+                                            />
+                                            <div>
+                                                <div className="font-medium text-sm">{member.name}</div>
+                                                <div className="text-xs text-gray-500">{member.role || 'No role'}</div>
+                                            </div>
+                                        </div>
+                                        {member.employeeId && selectedManagerIds.includes(member.employeeId) && (
+                                            <Crown className="h-4 w-4 text-yellow-500" />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {selectedManagerIds.length > 0 && (
+                            <div className="space-y-2">
+                                <Label>Selected Managers ({selectedManagerIds.length})</Label>
+                                <div className="flex flex-wrap gap-2 p-2 border rounded-md">
+                                    {selectedManagerIds.map(managerId => {
+                                        const member = department.members.find(m => m.employeeId === managerId);
+                                        return member ? (
+                                            <Badge key={managerId} variant="secondary" className="flex items-center gap-1">
+                                                {member.name}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedManagerIds(selectedManagerIds.filter(id => id !== managerId))}
+                                                    className="ml-1 hover:text-red-500"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </Badge>
+                                        ) : null;
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={onClose}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSave}>
+                            Save Managers
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        );
     };
 
     return (
@@ -1080,14 +1294,6 @@ export function TeamsTab() {
                     <p className="text-muted-foreground">Edit departments and team members</p>
                 </div>
                 <div className="flex gap-2">
-                    {/* <Button
-                        onClick={() => setShowCreateRoleModal(true)}
-                        size="sm"
-                        variant="outline"
-                    >
-                        <Key className="w-4 h-4 mr-2" />
-                        Create Role
-                    </Button> */}
                     <Button
                         onClick={() => setShowAddDepartmentModal(true)}
                         size="sm"
@@ -1127,6 +1333,22 @@ export function TeamsTab() {
                                                 <div className="text-sm text-gray-500">
                                                     Code: {renderEditableInputCell(department.code, 'department', department.id, undefined, 'code')}
                                                 </div>
+                                                {department.managers.length > 0 && (
+                                                    <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1 flex-wrap">
+                                                        <Crown className="w-3.5 h-3.5 text-yellow-500" />
+                                                        <span className="font-medium">Managers:</span>
+                                                        <span>{department.managers.join(', ')}</span>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-6 px-2 text-xs"
+                                                            onClick={() => setShowManagerModal(department.id)}
+                                                        >
+                                                            <Edit className="h-3 w-3 mr-1" />
+                                                            Edit
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -1157,29 +1379,16 @@ export function TeamsTab() {
                                         </div>
                                     </div>
 
-                                    {/* Менеджер отдела */}
+                                    {/* Таблица сотрудников отдела */}
                                     <div className="ml-6 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <Crown className="w-4 h-4 text-yellow-500" />
-                                            <span className="font-medium text-sm">Manager:</span>
-                                            {renderEditableSelectCell(
-                                                department.manager || '',
-                                                'manager',
-                                                department.id,
-                                                undefined,
-                                                'manager',
-                                                getAvailableManagers(department.id)
-                                            )}
-                                        </div>
-
-                                        {/* Таблица сотрудников отдела */}
                                         <div className="rounded-md border">
                                             <Table>
                                                 <TableHeader>
                                                     <TableRow>
-                                                        <TableHead className="w-[35%] py-2">Name</TableHead>
-                                                        <TableHead className="w-[25%] py-2">Role</TableHead>
-                                                        <TableHead className="w-[30%] py-2">Email</TableHead>
+                                                        <TableHead className="w-[30%] py-2">Name</TableHead>
+                                                        <TableHead className="w-[20%] py-2">Role</TableHead>
+                                                        <TableHead className="w-[25%] py-2">Email</TableHead>
+                                                        <TableHead className="w-[15%] py-2 text-center">Manager</TableHead>
                                                         <TableHead className="w-[10%] py-2 text-right">Actions</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
@@ -1208,6 +1417,9 @@ export function TeamsTab() {
                                                                     {renderEditableInputCell(member.email || '', 'member', department.id, member.id, 'email')}
                                                                 </div>
                                                             </TableCell>
+                                                            <TableCell className="py-2 text-center">
+                                                                {renderManagerCell(department, member)}
+                                                            </TableCell>
                                                             <TableCell className="py-2 text-right">
                                                                 <DropdownMenu>
                                                                     <DropdownMenuTrigger asChild>
@@ -1215,7 +1427,7 @@ export function TeamsTab() {
                                                                             <MoreVertical className="h-4 w-4" />
                                                                         </Button>
                                                                     </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end" className="w-40">
+                                                                    <DropdownMenuContent align="end" className="w-48">
                                                                         <DropdownMenuItem
                                                                             onClick={() => {
                                                                                 startEditing('member', department.id, member.id, 'name', member.name);
@@ -1231,6 +1443,23 @@ export function TeamsTab() {
                                                                         >
                                                                             <Edit className="h-3 w-3 mr-2" />
                                                                             Edit Role
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => {
+                                                                                toggleEmployeeManager(department.id, member);
+                                                                            }}
+                                                                        >
+                                                                            {isEmployeeManager(department, member) ? (
+                                                                                <>
+                                                                                    <X className="h-3 w-3 mr-2 text-red-500" />
+                                                                                    Remove as Manager
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Crown className="h-3 w-3 mr-2 text-yellow-500" />
+                                                                                    Set as Manager
+                                                                                </>
+                                                                            )}
                                                                         </DropdownMenuItem>
                                                                         <DropdownMenuItem className="text-red-600"
                                                                             onClick={() => removeMemberFromDepartment(department.id, member.id)}
@@ -1285,6 +1514,14 @@ export function TeamsTab() {
                 <CreateRoleModal
                     onClose={() => setShowCreateRoleModal(false)}
                     onAdd={addRole}
+                />
+            )}
+
+            {/* Модальное окно управления менеджерами */}
+            {showManagerModal && (
+                <ManagerManagementModal
+                    departmentId={showManagerModal}
+                    onClose={() => setShowManagerModal(null)}
                 />
             )}
         </div>
