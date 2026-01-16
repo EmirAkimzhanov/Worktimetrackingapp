@@ -1507,9 +1507,8 @@ export function TeamsTab() {
                     roles={roles}
                     allEmployees={allEmployees}
                 />
-            )}
+            )} 
 
-            {/* Модальное окно для создания роли */}
             {showCreateRoleModal && (
                 <CreateRoleModal
                     onClose={() => setShowCreateRoleModal(false)}
@@ -1517,7 +1516,6 @@ export function TeamsTab() {
                 />
             )}
 
-            {/* Модальное окно управления менеджерами */}
             {showManagerModal && (
                 <ManagerManagementModal
                     departmentId={showManagerModal}
