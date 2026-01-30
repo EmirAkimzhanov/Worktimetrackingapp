@@ -1,16 +1,31 @@
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
-import { deleteProject, editProject, getProjects, getProjectTasks, sendProject } from '../services/project';
-import { ProjectBody } from '../types/project';
+import { deleteUser, editUser, getUserGrades, getUsers, sendUsers } from '../services/users';
+import { UserBody } from '../types/user';
 
 
-export const useGetProjectTasks = () => {
-    const setProjectTasks = useUserStore((state) => state.setProjectTasks);
+export const useGetUsers = () => {
+    const setUsers = useUserStore((state) => state.setUsers);
 
     return useMutation({
-        mutationFn: (project_id: string) => getProjectTasks(project_id),
+        mutationFn: () => getUsers(),
         onSuccess: (data) => {
-            setProjectTasks(data);
+            setUsers(data);
+            console.log('Country clients loaded:', data);
+        },
+        onError: (error: Error) => {
+            console.error("Get country clients error:", error.message);
+        },
+    });
+};
+
+export const useGetUserGrades = () => {
+    const setUserGrades = useUserStore((state) => state.setUserGrades);
+
+    return useMutation({
+        mutationFn: () => getUserGrades(),
+        onSuccess: (data) => {
+            setUserGrades(data);
             console.log('Country clients loaded:', data);
         },
         onError: (error: Error) => {
@@ -20,11 +35,10 @@ export const useGetProjectTasks = () => {
 };
 
 
-export const useSendProject = () => {
-
+export const useSendUsers = () => {
 
     return useMutation({
-        mutationFn: (project_data: ProjectBody) => sendProject(project_data),
+        mutationFn: (body: UserBody) => sendUsers(body),
         onSuccess: (data) => {
             console.log('Country clients loaded:', data);
         },
@@ -34,13 +48,11 @@ export const useSendProject = () => {
     });
 };
 
-export const useEditProject = () => {
-
+export const useEditUsers = () => {
 
     return useMutation({
-        mutationFn: ({ project_data, project_id }: { project_data: ProjectBody; project_id: string }) => editProject(project_data, project_id),
+        mutationFn: ({ body, user_id }: { body: UserBody, user_id: string }) => editUser(body, user_id),
         onSuccess: (data) => {
-
             console.log('Country clients loaded:', data);
         },
         onError: (error: Error) => {
@@ -49,26 +61,10 @@ export const useEditProject = () => {
     });
 };
 
-export const useGetProjects = () => {
-    const setProjects = useUserStore((state) => state.setProjects);
+export const useDeleteUsers = () => {
 
     return useMutation({
-        mutationFn: () => getProjects(),
-        onSuccess: (data) => {
-            setProjects(data);
-            console.log('Country clients loaded:', data);
-        },
-        onError: (error: Error) => {
-            console.error("Get country clients error:", error.message);
-        },
-    });
-};
-
-export const useDeleteProject = () => {
-
-
-    return useMutation({
-        mutationFn: (project_id: string) => deleteProject(project_id),
+        mutationFn: (user_id: string) => deleteUser(user_id),
         onSuccess: (data) => {
             console.log('Country clients loaded:', data);
         },

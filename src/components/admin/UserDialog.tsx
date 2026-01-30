@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -10,10 +10,10 @@ import {
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { UserFormData } from '../../types/types';
-import { Position, Department } from '../../types/types';
+import { UserFormData, UserBody } from '../../types/types';
+import { useUserStore } from '../../store/UsersStore';
+import { useEditUsers, useGetUsers, useSendUsers } from '../../hooks/useUsers';
 
 interface UserDialogProps {
     open: boolean;
@@ -21,8 +21,6 @@ interface UserDialogProps {
     editingUser: any;
     userForm: UserFormData;
     setUserForm: (form: UserFormData) => void;
-    positions: Position[];
-    departments: Department[];
     onSave: () => void;
 }
 
@@ -32,10 +30,18 @@ export function UserDialog({
     editingUser,
     userForm,
     setUserForm,
-    positions,
-    departments,
     onSave,
 }: UserDialogProps) {
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const department_roles = useUserStore((state) => state.department_roles) || [];
+    const user_grades = useUserStore((state) => state.user_grades) || [];
+    const countries = useUserStore((state) => state.countries) || [];
+    const store_departments = useUserStore((state) => state.departments) || [];
+    const store_positions = useUserStore((state) => state.positions) || [];
+    const { mutate: sendUser } = useSendUsers();
+    const { mutate: getUsers } = useGetUsers();
+    const { mutate: editUser } = useEditUsers();
+
     const resetForm = () => {
         setUserForm({
             email: '',
@@ -45,15 +51,130 @@ export function UserDialog({
             date_joined: new Date().toISOString().split('T')[0],
             leave_date: '',
             is_active: true,
-            position_id: 1,
-            department_id: 1,
-            role: 'user'
+            position_id: store_positions.length > 0 ? store_positions[0].id : 1,
+            department_id: store_departments.length > 0 ? store_departments[0].id : 1,
+            role: 'user',
+            department_role_id: 1,
+            grade_id: user_grades.length > 0 ? user_grades[0].id : 10,
+            country_id: countries.length > 0 ? countries[0].id : 1
         });
+        setErrors({});
     };
 
     const handleClose = () => {
         resetForm();
         onOpenChange(false);
+    };
+
+    // Функция валидации email
+    const validateEmail = (email: string): boolean => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    };
+
+    // Валидация всей формы
+    const validateForm = (): boolean => {
+        const newErrors: Record<string, string> = {};
+
+        // Валидация email
+        if (!userForm.email?.trim()) {
+            newErrors.email = 'Email is required';
+        } else if (!validateEmail(userForm.email)) {
+            newErrors.email = 'Please enter a valid email address';
+        }
+
+        // Валидация имени
+        if (!userForm.first_name?.trim()) {
+            newErrors.first_name = 'First name is required';
+        }
+
+        // Валидация фамилии
+        if (!userForm.last_name?.trim()) {
+            newErrors.last_name = 'Last name is required';
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    // Преобразование role string в number
+    const mapRoleToNumber = (role: string): number => {
+        switch (role) {
+            case 'admin': return 1;
+            case 'manager': return 2;
+            case 'user': return 3;
+            default: return 3;
+        }
+    };
+
+    const handleSaveUser = () => {
+        // Проверяем валидность формы перед сохранением
+        if (!validateForm()) {
+            return;
+        }
+
+        // Создаем тело запроса в соответствии с интерфейсом UserBody
+        const userBody: UserBody = {
+            email: userForm.email,
+            first_name: userForm.first_name,
+            last_name: userForm.last_name,
+            grade: userForm.grade_id,
+            position: userForm.position_id,
+            department: userForm.department_id,
+            department_role: userForm.department_role_id,
+            role: mapRoleToNumber(userForm.role),
+            country: userForm.country_id
+        };
+
+        if (editingUser) {
+            // Редактирование существующего пользователя
+            editUser({ body: userBody, user_id: editingUser.id }, {
+                onSuccess: () => {
+                    // После успешного редактирования обновляем список пользователей
+                    getUsers();
+                    handleClose();
+                    if (onSave) onSave();
+                },
+                onError: (error) => {
+                    console.error('Error editing user:', error);
+                    // Можно добавить уведомление об ошибке
+                }
+            });
+        } else {
+            // Создание нового пользователя
+            sendUser(userBody, {
+                onSuccess: () => {
+                    // После успешного создания пользователя обновляем список пользователей
+                    getUsers();
+                    handleClose();
+                    if (onSave) onSave();
+                },
+                onError: (error) => {
+                    console.error('Error creating user:', error);
+                    // Можно добавить уведомление об ошибке
+                }
+            });
+        }
+    };
+
+    // Безопасное преобразование в строку
+    const safeToString = (value: any): string => {
+        if (value === null || value === undefined) return '';
+        return value.toString();
+    };
+
+    // Обработчик изменения email с валидацией
+    const handleEmailChange = (value: string) => {
+        setUserForm({ ...userForm, email: value });
+
+        // Очищаем ошибку email при изменении
+        if (errors.email) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors.email;
+                return newErrors;
+            });
+        }
     };
 
     return (
@@ -71,19 +192,27 @@ export function UserDialog({
                             <Label htmlFor="first_name">First Name *</Label>
                             <Input
                                 id="first_name"
-                                value={userForm.first_name}
+                                value={userForm.first_name || ''}
                                 onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })}
                                 placeholder="Enter first name"
+                                className={errors.first_name ? 'border-red-500' : ''}
                             />
+                            {errors.first_name && (
+                                <p className="text-sm text-red-500">{errors.first_name}</p>
+                            )}
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="last_name">Last Name *</Label>
                             <Input
                                 id="last_name"
-                                value={userForm.last_name}
+                                value={userForm.last_name || ''}
                                 onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })}
                                 placeholder="Enter last name"
+                                className={errors.last_name ? 'border-red-500' : ''}
                             />
+                            {errors.last_name && (
+                                <p className="text-sm text-red-500">{errors.last_name}</p>
+                            )}
                         </div>
                     </div>
                     <div className="space-y-2">
@@ -91,28 +220,42 @@ export function UserDialog({
                         <Input
                             id="email"
                             type="email"
-                            value={userForm.email}
-                            onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                            value={userForm.email || ''}
+                            onChange={(e) => handleEmailChange(e.target.value)}
                             placeholder="Enter email address"
+                            className={errors.email ? 'border-red-500' : ''}
                         />
+                        {errors.email && (
+                            <p className="text-sm text-red-500">{errors.email}</p>
+                        )}
                     </div>
+
                     <div className="space-y-2">
-                        <Label htmlFor="password">
-                            {editingUser ? 'Password (leave blank to keep current)' : 'Password *'}
-                        </Label>
-                        <Input
-                            id="password"
-                            type="password"
-                            value={userForm.password}
-                            onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                            placeholder="Enter password"
-                        />
+                        <Label htmlFor="grade">Grade *</Label>
+                        <Select
+                            value={safeToString(userForm.grade_id)}
+                            onValueChange={(value: string) =>
+                                setUserForm({ ...userForm, grade_id: parseInt(value) })
+                            }
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select grade" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {user_grades.map(grade => (
+                                    <SelectItem key={grade.id} value={safeToString(grade.id)}>
+                                        {grade.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+
+                    <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="position">Position *</Label>
                             <Select
-                                value={userForm.position_id.toString()}
+                                value={safeToString(userForm.position_id)}
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, position_id: parseInt(value) })
                                 }
@@ -121,8 +264,8 @@ export function UserDialog({
                                     <SelectValue placeholder="Select position" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {positions.map(position => (
-                                        <SelectItem key={position.id} value={position.id.toString()}>
+                                    {store_positions.map(position => (
+                                        <SelectItem key={position.id} value={safeToString(position.id)}>
                                             {position.name}
                                         </SelectItem>
                                     ))}
@@ -132,7 +275,7 @@ export function UserDialog({
                         <div className="space-y-2">
                             <Label htmlFor="department">Department *</Label>
                             <Select
-                                value={userForm.department_id.toString()}
+                                value={safeToString(userForm.department_id)}
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, department_id: parseInt(value) })
                                 }
@@ -141,40 +284,62 @@ export function UserDialog({
                                     <SelectValue placeholder="Select department" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {departments.map(department => (
-                                        <SelectItem key={department.id} value={department.id.toString()}>
+                                    {store_departments.map(department => (
+                                        <SelectItem key={department.id} value={safeToString(department.id)}>
                                             {department.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="date_joined">Date Joined *</Label>
-                            <Input
-                                id="date_joined"
-                                type="date"
-                                value={userForm.date_joined}
-                                onChange={(e) => setUserForm({ ...userForm, date_joined: e.target.value })}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="leave_date">Leave Date (optional)</Label>
-                            <Input
-                                id="leave_date"
-                                type="date"
-                                value={userForm.leave_date || ''}
-                                onChange={(e) => setUserForm({ ...userForm, leave_date: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="role">Role *</Label>
+                            <Label htmlFor="department_role">Department Role *</Label>
                             <Select
-                                value={userForm.role}
+                                value={safeToString(userForm.department_role_id)}
+                                onValueChange={(value: string) =>
+                                    setUserForm({ ...userForm, department_role_id: parseInt(value) })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {department_roles.map(role => (
+                                        <SelectItem key={role.id} value={safeToString(role.id)}>
+                                            {role.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="country">Country *</Label>
+                        <Select
+                            value={safeToString(userForm.country_id)}
+                            onValueChange={(value: string) =>
+                                setUserForm({ ...userForm, country_id: parseInt(value) })
+                            }
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select country" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {countries.map(country => (
+                                    <SelectItem key={country.id} value={safeToString(country.id)}>
+                                        {country.name} ({country.code})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="role">System Role *</Label>
+                            <Select
+                                value={userForm.role || 'user'}
                                 onValueChange={(value: 'admin' | 'user' | 'manager') =>
                                     setUserForm({ ...userForm, role: value })
                                 }
@@ -190,14 +355,14 @@ export function UserDialog({
                             </Select>
                         </div>
                         <div className="space-y-2 flex items-center gap-2 pt-6">
-                            <Switch
-                                id="user-active"
-                                checked={userForm.is_active}
-                                onCheckedChange={(checked: boolean) => setUserForm({ ...userForm, is_active: checked })}
-                            />
-                            <Label htmlFor="user-active" className="cursor-pointer">
-                                {userForm.is_active ? 'Active User' : 'Inactive User'}
-                            </Label>
+                            <div className="flex items-center space-x-2">
+                                <div
+                                    className={`w-3 h-3 rounded-full ${userForm.is_active ? 'bg-green-500' : 'bg-red-500'}`}
+                                />
+                                <Label className="text-sm font-medium">
+                                    {userForm.is_active ? 'Active' : 'Inactive'}
+                                </Label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -206,8 +371,9 @@ export function UserDialog({
                         Cancel
                     </Button>
                     <Button
-                        onClick={onSave}
+                        onClick={handleSaveUser}
                         style={{ backgroundColor: '#1F4E78' }}
+                        disabled={!userForm.email?.trim() || !userForm.first_name?.trim() || !userForm.last_name?.trim()}
                     >
                         {editingUser ? 'Save Changes' : 'Add User'}
                     </Button>

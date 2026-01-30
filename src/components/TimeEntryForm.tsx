@@ -10,7 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner@2.0.3';
-import { useSendTimeEntrys } from '../hooks/useTimeEntry';
+import { useGetTimeEntrys, useSendTimeEntrys } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
 import { useGetCountries } from '../hooks/useCountries';
 import { Country } from '../types/countries';
@@ -58,6 +58,7 @@ export function TimeEntryForm() {
   const { mutate: getProjectTasks } = useGetProjectTasks();
   const { mutate: getInternalTasks } = useGetInterbalTasks();
   const { mutate: getLeaves } = useGetLeaves();
+  const { mutate: getTimeEntrys } = useGetTimeEntrys();
 
   // Получаем данные из стора
   const countries = useUserStore((state) => state.countries);
@@ -594,6 +595,17 @@ export function TimeEntryForm() {
         } else {
           toast.warning('No time entries were added. Check your date range and weekend settings.');
         }
+
+        // Обновляем данные тайм-записей после успешной отправки
+        getTimeEntrys(undefined, {
+          onSuccess: (timeEntriesData) => {
+            console.log('Time entries refreshed after submission:', timeEntriesData);
+          },
+          onError: (error) => {
+            console.error('Failed to refresh time entries:', error);
+            // Не показываем ошибку пользователю, чтобы не мешать основному флоу
+          }
+        });
 
         resetForm();
       },

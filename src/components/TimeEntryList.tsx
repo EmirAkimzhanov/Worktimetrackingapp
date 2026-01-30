@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, User } from 'lucide-react';
+import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner@2.0.3';
 import { useGetTimeEntrys } from '../hooks/useTimeEntry';
@@ -18,7 +18,7 @@ import { useUserStore } from '../store/UsersStore';
 
 export function TimeEntryList() {
   const {
-    entries: mockEntries, // переименовали, чтобы не путать
+    entries: mockEntries,
     projects,
     filters,
     selectedEntries,
@@ -37,31 +37,75 @@ export function TimeEntryList() {
   const [editDescription, setEditDescription] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editHours, setEditHours] = useState('');
-  const [editTaskType, setEditTaskType] = useState('');
-  const [editTask, setEditTask] = useState('');
 
   const { mutate: getTimeEntrys } = useGetTimeEntrys();
   const time_entries = useUserStore((state) => state.time_entries);
 
-  // Вспомогательная функция для получения названия задачи (должна быть объявлена ДО useMemo)
+  // Вспомогательная функция для получения названия задачи
   const getTaskName = (taskId: number | null, taskType: string | null): string => {
     if (!taskId) return taskType || 'Unknown Task';
-    // Здесь можно добавить логику для получения имени задачи по ID
     return taskType || `Task ${taskId}`;
   };
 
   // Вспомогательная функция для получения названия страны
   const getCountryName = (countryId: number | null): string => {
     if (!countryId) return 'Unknown Country';
-    // Здесь можно добавить логику для получения имени страны по ID
     return `Country ${countryId}`;
   };
 
-  // Вспомогательная функция для определения типа записи
-  const determineEntryType = (entry: any): 'internal' | 'external' | 'vacation' => {
-    if (entry.project !== null) return 'external';
-    if (entry.task_type?.includes('vacation') || entry.task_type?.includes('leave')) return 'vacation';
-    return 'internal';
+  // Функция для определения типа записи
+  const determineEntryType = (entry: any): string => {
+    // Если есть task_type, используем его
+    if (entry.task_type) {
+      return entry.task_type;
+    }
+
+    // Логика определения типа
+    const lowerTaskType = (entry.task_type || '').toLowerCase();
+
+    if (lowerTaskType.includes('internal')) {
+      return 'internal';
+    } else if (lowerTaskType.includes('leave') || lowerTaskType.includes('vacation') || lowerTaskType.includes('holiday')) {
+      return 'leave';
+    } else {
+      return 'external';
+    }
+  };
+
+  // Функция для получения цвета по task_type
+  const getEntryColor = (taskType: string) => {
+    const lowerType = taskType.toLowerCase();
+
+    // internal - фиолетовый
+    if (lowerType.includes('internal')) {
+      return '#8B5CF6';
+    }
+
+    // leave/vacation - оранжевый
+    if (lowerType.includes('leave') || lowerType.includes('vacation') || lowerType.includes('holiday')) {
+      return '#F59E0B';
+    }
+
+    // все остальное - external (зеленый)
+    return '#10B981';
+  };
+
+  // Функция для получения иконки по task_type
+  const getEntryIcon = (taskType: string) => {
+    const lowerType = taskType.toLowerCase();
+
+    // internal - Briefcase
+    if (lowerType.includes('internal')) {
+      return <Briefcase className="w-4 h-4" />;
+    }
+
+    // leave/vacation - Plane
+    if (lowerType.includes('leave') || lowerType.includes('vacation') || lowerType.includes('holiday')) {
+      return <Plane className="w-4 h-4" />;
+    }
+
+    // все остальное - external (Calendar)
+    return <Calendar className="w-4 h-4" />;
   };
 
   // Загружаем записи при монтировании компонента
@@ -98,7 +142,7 @@ export function TimeEntryList() {
       projectId: entry.project?.toString() || '',
       projectColor: entry.project_color || '#1F4E78',
       projectCode: entry.project_code || 'N/A',
-      projectName: entry.client || 'External Project', // используем client как имя проекта
+      projectName: entry.client || 'External Project',
       task_type: entry.task_type,
       task: entry.task,
       taskName: getTaskName(entry.task, entry.task_type),
@@ -156,42 +200,12 @@ export function TimeEntryList() {
       .reduce((sum, entry) => sum + entry.hours, 0);
   }, [filteredEntries, selectedEntries]);
 
-  // Функция для получения иконки по типу записи
-  const getEntryIcon = (type: string) => {
-    switch (type) {
-      case 'internal':
-        return <Briefcase className="w-4 h-4" />;
-      case 'external':
-        return <Calendar className="w-4 h-4" />;
-      case 'vacation':
-        return <Plane className="w-4 h-4" />;
-      default:
-        return <Calendar className="w-4 h-4" />;
-    }
-  };
-
-  // Функция для получения цвета по типу записи
-  const getEntryColor = (type: string) => {
-    switch (type) {
-      case 'internal':
-        return '#8B5CF6'; // фиолетовый
-      case 'external':
-        return '#10B981'; // зеленый
-      case 'vacation':
-        return '#F59E0B'; // оранжевый
-      default:
-        return '#6B7280'; // серый
-    }
-  };
-
   const handleEdit = (entry: any) => {
     setEditingEntry(entry);
     setEditProjectId(entry.projectId);
     setEditDescription(entry.description);
     setEditDate(entry.date);
     setEditHours(entry.hours.toString());
-    setEditTaskType(entry.task_type || '');
-    setEditTask(entry.task?.toString() || '');
   };
 
   const handleUpdate = () => {
@@ -203,8 +217,6 @@ export function TimeEntryList() {
       return;
     }
 
-    // Здесь должна быть логика обновления записи через API
-    // Пока используем моковую функцию для демонстрации
     updateEntry(editingEntry.id, {
       projectId: editProjectId,
       projectName: editingEntry.projectName,
@@ -226,8 +238,6 @@ export function TimeEntryList() {
 
   const confirmDelete = () => {
     if (entryToDelete !== null) {
-      // Здесь должна быть логика удаления записи через API
-      // Пока используем моковую функцию для демонстрации
       deleteEntry(entryToDelete.toString());
       toast.success('Entry deleted successfully');
       setEntryToDelete(null);
@@ -240,8 +250,6 @@ export function TimeEntryList() {
   };
 
   const confirmBulkDelete = () => {
-    // Здесь должна быть логика удаления записей через API
-    // Пока используем моковую функцию для демонстрации
     deleteEntries(selectedEntries);
     toast.success(`Deleted ${selectedEntries.length} entries`);
     setBulkDeleteDialogOpen(false);
@@ -357,13 +365,13 @@ export function TimeEntryList() {
                           <TableCell>
                             <Badge
                               style={{
-                                backgroundColor: getEntryColor(entry.type),
+                                backgroundColor: getEntryColor(entry.task_type || entry.type),
                                 color: 'white'
                               }}
                               className="flex items-center gap-1"
                             >
-                              {getEntryIcon(entry.type)}
-                              <span className="capitalize">{entry.type}</span>
+                              {getEntryIcon(entry.task_type || entry.type)}
+                              <span className="capitalize">{entry.task_type || entry.type}</span>
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -424,7 +432,6 @@ export function TimeEntryList() {
                 </Table>
               </div>
             </div>
-            {/* Панель с информацией внизу */}
             <div className="border-t bg-slate-50 px-6 py-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-slate-600">
@@ -443,7 +450,7 @@ export function TimeEntryList() {
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#F59E0B' }}></div>
-                      <span>Vacation</span>
+                      <span>Leave/Vacation</span>
                     </div>
                   </div>
                   <div className="text-sm font-medium text-slate-700">
@@ -466,8 +473,8 @@ export function TimeEntryList() {
             <div className="space-y-2">
               <Label htmlFor="edit-type">Entry Type</Label>
               <div className="flex items-center gap-2">
-                {getEntryIcon(editingEntry?.type || '')}
-                <span className="capitalize">{editingEntry?.type || 'Unknown'}</span>
+                {getEntryIcon(editingEntry?.task_type || editingEntry?.type || '')}
+                <span className="capitalize">{editingEntry?.task_type || editingEntry?.type || 'Unknown'}</span>
               </div>
             </div>
             {editingEntry?.type === 'external' && (

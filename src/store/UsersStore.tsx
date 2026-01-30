@@ -1,12 +1,18 @@
-// stores/userStore.ts (минимальная версия)
+// stores/userStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Countries } from "../types/countries";
-import { CountryWithClients, MainEntity } from "../types/client";
-import { Project, ProjectTasks } from "../types/project";
+import { CountryWithClients, MainEntity, OnlyClient } from "../types/client";
+import { Project, ProjectBody, ProjectTasks } from "../types/project";
 import { Task, TasksArray } from "../types/task";
 import { LeaveArray } from "../types/leave";
 import { TimeEntry } from "../types/timeEntrys";
+import { Department, Position } from "../types/types";
+import { DepartmentWithMembers } from "../types/departments";
+import { Status, StatusesArray } from "../types/statuses";
+import { ServiceLines } from "../types/serviceLines";
+import { DepartmentRole } from "../types/user";
+import { DepartmentsResponse } from "../types/deaprtments";
 
 interface User {
   id: number;
@@ -31,7 +37,33 @@ interface UserState {
 
   leaves: LeaveArray | null;
 
-  time_entries: TimeEntry[] | null; // Изменено на массив
+  time_entries: TimeEntry[] | null;
+
+  departments: Department[] | null;
+
+  department_members: DepartmentWithMembers | null;
+
+  statuses: StatusesArray | null;
+
+  clients: OnlyClient[] | null;
+
+  service_lines: ServiceLines[] | null;
+
+  task_types: ServiceLines[] | null;
+
+  projects: ProjectBody[] | null;
+
+  users: User[] | null;
+
+  department_roles: DepartmentRole[] | null;
+
+  user_grades: DepartmentRole[] | null;
+
+  positions: Position[] | null;
+
+  sectors: Status[] | null;
+
+  department_workers: DepartmentsResponse | null;
 
   setUser: (
     user: User,
@@ -54,11 +86,35 @@ interface UserState {
   getInternalTaskById: (taskId: number) => Task | undefined;
   getInternalTasksByType: (taskType: string) => Task[];
 
-  // Leaves management - только setLeaves
   setLeaves: (leaves: LeaveArray | null) => void;
 
-  // Time entries management - ТОЛЬКО setTimeEntries
   setTimeEntries: (timeEntries: TimeEntry[] | null) => void;
+
+  setDepartments: (departments: Department[] | null) => void;
+
+  setDepartmentMembers: (departmentMembers: DepartmentWithMembers | null) => void;
+
+  setStatuses: (statuses: StatusesArray | null) => void;
+
+  setClients: (clients: OnlyClient[] | null) => void;
+
+  setServiceLines: (service_lines: ServiceLines[] | null) => void;
+
+  setTaskTypes: (task_types: ServiceLines[] | null) => void;
+
+  setProjects: (projects: ProjectBody[] | null) => void;
+
+  setUsers: (users: User[] | null) => void;
+
+  setDepartmentRoles: (department_roles: DepartmentRole[] | null) => void;
+
+  setUserGrades: (user_grades: DepartmentRole[] | null) => void;
+
+  setPositions: (positions: Position[] | null) => void;
+
+  setSectors: (sectors: Status[] | null) => void;
+
+  setDepartmentWorkers: (department_workers: DepartmentsResponse | null) => void; // Добавлено
 
   logout: () => void;
 }
@@ -77,7 +133,21 @@ export const useUserStore = create<UserState>()(
       project_tasks: null,
       internal_tasks: null,
       leaves: null,
-      time_entries: null, // Инициализация
+      time_entries: null,
+
+      departments: null,
+      department_members: null,
+      statuses: null,
+      clients: null,
+      service_lines: null,
+      task_types: null,
+      projects: null,
+      users: null,
+      department_roles: null,
+      user_grades: null,
+      positions: null,
+      sectors: null,
+      department_workers: null, // Инициализация
 
       setUser: (userData, tokens) =>
         set({
@@ -114,20 +184,41 @@ export const useUserStore = create<UserState>()(
       clearInternalTasks: () =>
         set({ internal_tasks: null }),
 
-      // Leaves management - только setLeaves
       setLeaves: (leaves) =>
         set({ leaves }),
 
-      // Time entries management - ТОЛЬКО setTimeEntries
       setTimeEntries: (timeEntries) =>
         set({ time_entries: timeEntries }),
 
-      getTaskById: (taskId: number) => {
-        const state = get();
-        if (!state.project_tasks?.tasks) return undefined;
+      setDepartments: (departments) =>
+        set({ departments }),
 
-        return state.project_tasks.tasks.find(task => task.id === taskId);
-      },
+      setDepartmentMembers: (departmentMembers) =>
+        set({ department_members: departmentMembers }),
+
+      setStatuses: (statuses) =>
+        set({ statuses }),
+
+      setClients: (clients) =>
+        set({ clients }),
+
+      setServiceLines: (service_lines) => set({ service_lines }),
+
+      setTaskTypes: (task_types) => set({ task_types }),
+
+      setProjects: (projects) => set({ projects }),
+
+      setUsers: (users) => set({ users }),
+
+      setDepartmentRoles: (department_roles) => set({ department_roles }),
+
+      setUserGrades: (user_grades) => set({ user_grades }),
+
+      setPositions: (positions) => set({ positions }),
+
+      setSectors: (sectors) => set({ sectors }),
+
+      setDepartmentWorkers: (department_workers) => set({ department_workers }), // Реализация сет-функции
 
       getInternalTaskById: (taskId: number) => {
         const state = get();
@@ -157,6 +248,19 @@ export const useUserStore = create<UserState>()(
           internal_tasks: null,
           leaves: null,
           time_entries: null,
+          departments: null,
+          department_members: null,
+          statuses: null,
+          clients: null,
+          service_lines: null,
+          task_types: null,
+          projects: null,
+          users: null,
+          department_roles: null,
+          user_grades: null,
+          positions: null,
+          sectors: null,
+          department_workers: null, // Очищаем при выходе
         });
       },
     }),
@@ -172,6 +276,18 @@ export const useUserStore = create<UserState>()(
         internal_tasks: state.internal_tasks,
         leaves: state.leaves,
         time_entries: state.time_entries,
+        departments: state.departments,
+        department_members: state.department_members,
+        statuses: state.statuses,
+        clients: state.clients,
+        service_lines: state.service_lines,
+        task_types: state.task_types,
+        users: state.users,
+        department_roles: state.department_roles,
+        user_grades: state.user_grades,
+        positions: state.positions,
+        sectors: state.sectors,
+        department_workers: state.department_workers, // Добавляем в persist
       }),
     }
   )

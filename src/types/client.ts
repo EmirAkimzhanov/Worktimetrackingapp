@@ -20,3 +20,13 @@ export interface MainEntity {
     name: string;
     projects: Project[];
 }
+
+export interface OnlyClient {
+    id: number; // ID
+    name: string; // Name
+    group: string; // Group
+    personal_number: string; // Personal number
+    sector?: string; // Sector (optional)
+}
+
+export type ClientArray = OnlyClient[];

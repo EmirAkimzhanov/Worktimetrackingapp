@@ -30,3 +30,25 @@ export interface ProjectTasks {
     service_line: string; // Например: 'Non Audit - Consulting'
     tasks: Task[];
 }
+
+export interface ProjectBody {
+    status_id?: number;
+    country_id?: number;
+    manager_id?: number;
+    client_id?: number;
+    department_id?: number;
+    service_line_id?: number;
+    task_type_id?: number;
+    name: string;
+    code: string;
+    description: string;
+    project_color: string;
+    is_chargeable: boolean;
+    status?: number;
+    country?: number;
+    manager?: number;
+    client?: number;
+    department?: number;
+    service_line?: number;
+    task_type?: number;
+}

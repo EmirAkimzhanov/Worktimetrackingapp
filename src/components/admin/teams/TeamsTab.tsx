@@ -11,24 +11,30 @@ import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../ui/dialog';
 import { toast } from 'sonner';
+import { useUserStore } from '../../../store/UsersStore';
 
 interface OrganizationMember {
     id: number;
-    name: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    grade: string | null;
+    position: string | null;
     department: string;
-    role?: string;
-    email?: string;
-    phone?: string;
-    status: 'active' | 'inactive' | 'pending';
-    employeeId?: string;
+    department_role: string;
+    role: string | null;
+    country: string;
+    is_active: boolean;
+    date_joined: string;
+    date_left: string | null;
 }
 
 interface DepartmentGroup {
     id: number;
     name: string;
     code: string;
-    managers: string[]; // Массив имен менеджеров
-    managerIds: string[]; // Массив ID менеджеров
+    managers: OrganizationMember[]; // Теперь храним объекты менеджеров
+    managerIds: number[]; // Массив ID менеджеров
     members: OrganizationMember[];
 }
 
@@ -53,6 +59,13 @@ interface Role {
     description?: string;
 }
 
+// Интерфейс для department_roles из store
+interface DepartmentRole {
+    id: number;
+    name: string;
+    // добавьте другие поля если они есть в ваших данных
+}
+
 // Интерфейс для уведомлений
 interface Notification {
     id: number;
@@ -65,14 +78,14 @@ const AddMemberModal = ({
     department,
     allEmployees,
     businessUnits,
-    roles,
+    departmentRoles,
     onClose,
     onAdd
 }: {
     department: DepartmentGroup;
     allEmployees: Employee[];
     businessUnits: BusinessUnit[];
-    roles: Role[];
+    departmentRoles: DepartmentRole[];
     onClose: () => void;
     onAdd: (member: OrganizationMember) => void;
 }) => {
@@ -85,7 +98,7 @@ const AddMemberModal = ({
         const currentDepartment = businessUnits[0].departments.find(d => d.id === department.id);
         if (!currentDepartment) return allEmployees;
 
-        const assignedEmployeeIds = currentDepartment.members.map(m => m.employeeId);
+        const assignedEmployeeIds = currentDepartment.members.map(m => m.id.toString());
 
         return allEmployees.filter(emp =>
             (emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -116,12 +129,18 @@ const AddMemberModal = ({
 
         const newMember: OrganizationMember = {
             id: Date.now(),
-            name: selectedEmployee.name,
-            department: department.name,
-            role: employeeRole || selectedEmployee.role || '',
+            first_name: selectedEmployee.name.split(' ')[0],
+            last_name: selectedEmployee.name.split(' ').slice(1).join(' ') || '',
             email: selectedEmployee.email || '',
-            status: 'active',
-            employeeId: selectedEmployee.id.toString() // Всегда строка
+            grade: null,
+            position: selectedEmployee.role || null,
+            department: department.name,
+            department_role: employeeRole === 'Manager' ? 'Manager' : employeeRole || 'Member',
+            role: employeeRole === 'Manager' ? 'operational' : null,
+            country: 'KG',
+            is_active: true,
+            date_joined: new Date().toISOString(),
+            date_left: null
         };
 
         onAdd(newMember);
@@ -176,7 +195,7 @@ const AddMemberModal = ({
 
                         <div className="space-y-2">
                             <Label htmlFor="modal-employee-role" className="text-sm font-medium">
-                                Role
+                                Department Role
                             </Label>
                             <Select value={employeeRole} onValueChange={setEmployeeRole}>
                                 <SelectTrigger id="modal-employee-role" className="h-9">
@@ -184,7 +203,7 @@ const AddMemberModal = ({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="no-role">No role</SelectItem>
-                                    {roles.map(role => (
+                                    {departmentRoles.map(role => (
                                         <SelectItem key={role.id} value={role.name}>
                                             {role.name}
                                         </SelectItem>
@@ -309,18 +328,18 @@ const AddDepartmentModal = ({
     onClose,
     onAdd,
     businessUnits,
-    roles,
+    departmentRoles,
     allEmployees
 }: {
     onClose: () => void;
     onAdd: (department: DepartmentGroup) => void;
     businessUnits: BusinessUnit[];
-    roles: Role[];
+    departmentRoles: DepartmentRole[];
     allEmployees: Employee[];
 }) => {
     const [departmentName, setDepartmentName] = useState('');
     const [departmentCode, setDepartmentCode] = useState('');
-    const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>([]);
+    const [selectedManagerIds, setSelectedManagerIds] = useState<number[]>([]);
 
     const handleAdd = () => {
         if (!departmentName.trim()) return;
@@ -336,10 +355,25 @@ const AddDepartmentModal = ({
 
         if (selectedManagerIds.length > 0) {
             selectedManagerIds.forEach(managerId => {
-                const manager = allEmployees.find(e => e.id.toString() === managerId);
+                const manager = allEmployees.find(e => e.id === managerId);
                 if (manager) {
-                    newDepartment.managers.push(manager.name);
-                    newDepartment.managerIds.push(manager.id.toString());
+                    const managerObj: OrganizationMember = {
+                        id: manager.id,
+                        first_name: manager.name.split(' ')[0],
+                        last_name: manager.name.split(' ').slice(1).join(' ') || '',
+                        email: manager.email || '',
+                        grade: null,
+                        position: manager.role || null,
+                        department: departmentName,
+                        department_role: 'Manager',
+                        role: 'operational',
+                        country: 'KG',
+                        is_active: true,
+                        date_joined: new Date().toISOString(),
+                        date_left: null
+                    };
+                    newDepartment.managers.push(managerObj);
+                    newDepartment.managerIds.push(manager.id);
                 }
             });
         }
@@ -386,8 +420,8 @@ const AddDepartmentModal = ({
                         <Select
                             value=""
                             onValueChange={(value) => {
-                                if (value && !selectedManagerIds.includes(value)) {
-                                    setSelectedManagerIds([...selectedManagerIds, value]);
+                                if (value && !selectedManagerIds.includes(parseInt(value))) {
+                                    setSelectedManagerIds([...selectedManagerIds, parseInt(value)]);
                                 }
                             }}
                         >
@@ -407,7 +441,7 @@ const AddDepartmentModal = ({
                                 <div className="text-sm font-medium">Selected Managers:</div>
                                 <div className="flex flex-wrap gap-2">
                                     {selectedManagerIds.map(managerId => {
-                                        const manager = allEmployees.find(e => e.id.toString() === managerId);
+                                        const manager = allEmployees.find(e => e.id === managerId);
                                         return (
                                             <Badge
                                                 key={managerId}
@@ -572,112 +606,107 @@ const NotificationToast = ({ notification, onClose }: { notification: Notificati
 };
 
 export function TeamsTab() {
-    // Полный список всех сотрудников в компании
-    const [allEmployees, setAllEmployees] = useState<Employee[]>([
-        { id: 1, name: 'Emile A. Montgomery', department: 'COHS', role: 'Developer', email: 'emile@company.com', status: 'active' },
-        { id: 2, name: 'Terry Eisenberg', department: 'COHS', role: 'Designer', email: 'terry@company.com', status: 'active' },
-        { id: 3, name: 'Turgut Drinksteller', department: 'COHS', role: 'Manager', email: 'turgut@company.com', status: 'active' },
-        { id: 4, name: 'Agertin Eckalena', department: 'Admin', role: 'Manager', email: 'agertin@company.com', status: 'active' },
-        { id: 5, name: 'Adolf Grynkysse', department: 'Admin', email: 'adolf@company.com', status: 'active' },
-        { id: 6, name: 'Ching\'s Unladayer', department: 'Admin', email: 'ching@company.com', status: 'active' },
-        { id: 7, name: 'Dyreusen Ynutzova', department: 'Admin', email: 'dyreusen@company.com', status: 'active' },
-        { id: 8, name: 'Karisa Zakirova', department: 'Admin', email: 'karisa@company.com', status: 'active' },
-        { id: 9, name: 'Luna Alpilova', department: 'Admin', email: 'luna@company.com', status: 'active' },
-        { id: 10, name: 'Nesmula Kostyuk', department: 'Admin', email: 'nesmula@company.com', status: 'active' },
-        { id: 11, name: 'Susan Kazantseva', department: 'Admin', email: 'susan@company.com', status: 'active' },
-        { id: 12, name: 'Vita Khador', department: 'Admin', email: 'vita@company.com', status: 'active' },
-        { id: 13, name: 'Zhangbak Shamputarov', department: 'Admin', email: 'zhangbak@company.com', status: 'active' },
-        { id: 14, name: 'Adl Elsyaber', department: 'Audit', role: 'Manager', email: 'adl@company.com', status: 'active' },
-        { id: 15, name: 'Allan Omedelma', department: 'Audit', email: 'allan@company.com', status: 'active' },
-        { id: 16, name: 'Alan Lundholm', department: 'Audit', email: 'alan@company.com', status: 'active' },
-        { id: 17, name: 'Adele Kalmyza', department: 'Audit', email: 'adele@company.com', status: 'active' },
-        { id: 18, name: 'Ajayas Kapfereggeev', department: 'Audit', email: 'ajayas@company.com', status: 'active' },
-        { id: 19, name: 'Abbasan Mustarev', department: 'Audit', email: 'abbasan@company.com', status: 'active' },
-        { id: 20, name: 'Ahmed Ryosny', department: 'Audit', email: 'ahmed@company.com', status: 'active' },
-        { id: 21, name: 'Alan', department: 'Audit', email: 'alan2@company.com', status: 'active' },
-        { id: 22, name: 'Alyana Trudaleva', department: 'Audit', email: 'alyana@company.com', status: 'active' },
-        { id: 23, name: 'Adolf Kotolakova', department: 'Audit', email: 'adolfk@company.com', status: 'active' },
-        { id: 24, name: 'Ayana Dubina', department: 'Audit', email: 'ayana@company.com', status: 'active' },
-        { id: 25, name: 'Bashan Novopolska', department: 'Audit', email: 'bashan@company.com', status: 'active' },
-        { id: 26, name: 'Barbara Juhnfeier', department: 'Audit', email: 'barbara@company.com', status: 'active' },
-        { id: 27, name: 'Bernet Zhiegheva', department: 'Audit', email: 'bernet@company.com', status: 'active' },
-        { id: 28, name: 'Burdiati Rastotanov', department: 'Audit', email: 'burdiati@company.com', status: 'active' },
-        { id: 29, name: 'Diana Kazantseva', department: 'Audit', email: 'diana@company.com', status: 'active' },
-        { id: 30, name: 'Rafaela Baddenov', department: 'Audit', email: 'rafaela@company.com', status: 'active' },
-    ]);
+    const departments = useUserStore((state) => state.departments);
+    const department_roles = useUserStore((state) => state.department_roles);
 
-    // Список ролей
+    // Конвертируем данные из departments в структуру для отображения
+    const convertToBusinessUnits = (depts: any[] | null): BusinessUnit[] => {
+        if (!depts || depts.length === 0) {
+            return [
+                {
+                    id: 1,
+                    name: 'Business Unit (EU)',
+                    departments: []
+                }
+            ];
+        }
+
+        return [
+            {
+                id: 1,
+                name: 'Business Unit (EU)',
+                departments: depts.map(dept => ({
+                    id: dept.id,
+                    name: dept.name,
+                    code: dept.name.substring(0, 3).toUpperCase(),
+                    managers: dept.managers.map((manager: any) => ({
+                        ...manager,
+                        department: dept.name,
+                        department_role: 'Manager'
+                    })),
+                    managerIds: dept.managers.map((m: any) => m.id),
+                    members: [...dept.managers.map((manager: any) => ({
+                        ...manager,
+                        department: dept.name,
+                        department_role: 'Manager'
+                    })), ...dept.members.map((member: any) => ({
+                        ...member,
+                        department: dept.name
+                    }))]
+                }))
+            }
+        ];
+    };
+
+    const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+    const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+
+    // Инициализируем данные из departments
+    useEffect(() => {
+        if (departments) {
+            const businessUnitsData = convertToBusinessUnits(departments);
+            setBusinessUnits(businessUnitsData);
+
+            // Создаем список всех сотрудников из departments (включая менеджеров)
+            const allEmps: Employee[] = [];
+            departments.forEach(dept => {
+                // Добавляем менеджеров
+                dept.managers.forEach((manager: any) => {
+                    allEmps.push({
+                        id: manager.id,
+                        name: `${manager.first_name} ${manager.last_name}`,
+                        department: manager.department,
+                        role: manager.department_role,
+                        email: manager.email,
+                        status: manager.is_active ? 'active' : 'inactive'
+                    });
+                });
+
+                // Добавляем обычных членов
+                dept.members.forEach((member: any) => {
+                    if (!allEmps.some(emp => emp.id === member.id)) {
+                        allEmps.push({
+                            id: member.id,
+                            name: `${member.first_name} ${member.last_name}`,
+                            department: member.department,
+                            role: member.department_role,
+                            email: member.email,
+                            status: member.is_active ? 'active' : 'inactive'
+                        });
+                    }
+                });
+            });
+            setAllEmployees(allEmps);
+        } else {
+            // Fallback данные если departments пустые
+            setBusinessUnits([
+                {
+                    id: 1,
+                    name: 'Business Unit (EU)',
+                    departments: []
+                }
+            ]);
+            setAllEmployees([]);
+        }
+    }, [departments]);
+
+    // Список ролей (изначальный, может быть удален если используем только department_roles)
     const [roles, setRoles] = useState<Role[]>([
         { id: 1, name: 'Developer', description: 'Software development' },
         { id: 2, name: 'Designer', description: 'UI/UX design' },
         { id: 3, name: 'Manager', description: 'Team management' },
         { id: 4, name: 'Analyst', description: 'Business analysis' },
         { id: 5, name: 'Tester', description: 'Quality assurance' },
-    ]);
-
-    // Исходные данные структуры
-    const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([
-        {
-            id: 1,
-            name: 'Business Unit (EU)',
-            departments: [
-                {
-                    id: 1,
-                    name: 'COHS',
-                    code: 'COHS',
-                    managers: ['Turgut Drinksteller'],
-                    managerIds: ['3'],
-                    members: [
-                        { id: 1, name: 'Emile A. Montgomery', department: 'COHS', role: 'Developer', status: 'active', employeeId: '1' },
-                        { id: 2, name: 'Terry Eisenberg', department: 'COHS', role: 'Designer', status: 'active', employeeId: '2' },
-                        { id: 3, name: 'Turgut Drinksteller', department: 'COHS', role: 'Manager', status: 'active', employeeId: '3' },
-                    ]
-                },
-                {
-                    id: 2,
-                    name: 'Admin',
-                    code: 'ADM',
-                    managers: ['Agertin Eckalena', 'Susan Kazantseva'], // Два менеджера
-                    managerIds: ['4', '11'],
-                    members: [
-                        { id: 4, name: 'Adolf Grynkysse', department: 'Admin', status: 'active', employeeId: '5' },
-                        { id: 5, name: 'Ching\'s Unladayer', department: 'Admin', status: 'active', employeeId: '6' },
-                        { id: 6, name: 'Dyreusen Ynutzova', department: 'Admin', status: 'active', employeeId: '7' },
-                        { id: 7, name: 'Karisa Zakirova', department: 'Admin', status: 'active', employeeId: '8' },
-                        { id: 8, name: 'Luna Alpilova', department: 'Admin', status: 'active', employeeId: '9' },
-                        { id: 9, name: 'Nesmula Kostyuk', department: 'Admin', status: 'active', employeeId: '10' },
-                        { id: 10, name: 'Susan Kazantseva', department: 'Admin', status: 'active', employeeId: '11' },
-                        { id: 11, name: 'Vita Khador', department: 'Admin', status: 'active', employeeId: '12' },
-                        { id: 12, name: 'Zhangbak Shamputarov', department: 'Admin', status: 'active', employeeId: '13' },
-                    ]
-                },
-                {
-                    id: 3,
-                    name: 'Audit',
-                    code: 'AUD',
-                    managers: ['Adl Elsyaber', 'Alan Lundholm', 'Barbara Juhnfeier'], // Три менеджера
-                    managerIds: ['14', '16', '26'],
-                    members: [
-                        { id: 13, name: 'Allan Omedelma', department: 'Audit', status: 'active', employeeId: '15' },
-                        { id: 14, name: 'Alan Lundholm', department: 'Audit', status: 'active', employeeId: '16' },
-                        { id: 15, name: 'Adele Kalmyza', department: 'Audit', status: 'active', employeeId: '17' },
-                        { id: 16, name: 'Ajayas Kapfereggeev', department: 'Audit', status: 'active', employeeId: '18' },
-                        { id: 17, name: 'Abbasan Mustarev', department: 'Audit', status: 'active', employeeId: '19' },
-                        { id: 18, name: 'Ahmed Ryosny', department: 'Audit', status: 'active', employeeId: '20' },
-                        { id: 19, name: 'Alan', department: 'Audit', status: 'active', employeeId: '21' },
-                        { id: 20, name: 'Alyana Trudaleva', department: 'Audit', status: 'active', employeeId: '22' },
-                        { id: 21, name: 'Adolf Kotolakova', department: 'Audit', status: 'active', employeeId: '23' },
-                        { id: 22, name: 'Ayana Dubina', department: 'Audit', status: 'active', employeeId: '24' },
-                        { id: 23, name: 'Bashan Novopolska', department: 'Audit', status: 'active', employeeId: '25' },
-                        { id: 24, name: 'Barbara Juhnfeier', department: 'Audit', status: 'active', employeeId: '26' },
-                        { id: 25, name: 'Bernet Zhiegheva', department: 'Audit', status: 'active', employeeId: '27' },
-                        { id: 26, name: 'Burdiati Rastotanov', department: 'Audit', status: 'active', employeeId: '28' },
-                        { id: 27, name: 'Diana Kazantseva', department: 'Audit', status: 'active', employeeId: '29' },
-                        { id: 28, name: 'Rafaela Baddenov', department: 'Audit', status: 'active', employeeId: '30' },
-                    ]
-                }
-            ]
-        }
     ]);
 
     // Состояния для редактирования
@@ -712,11 +741,13 @@ export function TeamsTab() {
 
     // Проверяем, является ли сотрудник менеджером отдела
     const isEmployeeManager = (department: DepartmentGroup, member: OrganizationMember) => {
-        if (!member.employeeId) {
-            return false;
-        }
-        // Проверяем, есть ли ID сотрудника в массиве managerIds
-        return department.managerIds.includes(member.employeeId);
+        return department.managerIds.includes(member.id);
+    };
+
+    // Получить всех сотрудников отдела (включая менеджеров)
+    const getAllDepartmentMembers = (department: DepartmentGroup): OrganizationMember[] => {
+        // Менеджеры уже включены в members, но для ясности объединяем
+        return department.members;
     };
 
     // Функция для принудительного обновления интерфейса
@@ -784,7 +815,7 @@ export function TeamsTab() {
                                 member.role = finalValue || undefined;
                                 if (oldValue !== finalValue) {
                                     toast.success(
-                                        `Role for "${member.name}" has been updated to "${finalValue || 'No role'}"`,
+                                        `Role for "${member.first_name} ${member.last_name}" has been updated to "${finalValue || 'No role'}"`,
                                         // 'success'
                                     );
                                 }
@@ -848,6 +879,124 @@ export function TeamsTab() {
         );
     };
 
+    // Рендер редактируемой ячейки с department_roles
+    const renderEditableDepartmentRoleCell = (
+        value: string,
+        type: 'department' | 'member' | 'manager',
+        departmentId?: number,
+        memberId?: number,
+        field: string = 'department_role'
+    ) => {
+        const isEditing = editingCell?.type === type &&
+            editingCell?.departmentId === departmentId &&
+            editingCell?.memberId === memberId &&
+            editingCell?.field === field;
+
+        const handleSelectChange = (newValue: string) => {
+            // Сохраняем изменения сразу при выборе значения
+            if (!departmentId || !memberId) return;
+
+            let finalValue = newValue;
+
+            // Конвертируем специальные значения в пустую строку для хранения
+            if (newValue === 'no-role') {
+                finalValue = '';
+            }
+
+            // Редактирование сотрудника
+            setBusinessUnits(prev => {
+                const updated = [...prev];
+                const department = updated[0].departments.find(d => d.id === departmentId);
+                if (department) {
+                    const member = department.members.find(m => m.id === memberId);
+                    if (member) {
+                        const oldValue = member.department_role;
+                        member.department_role = finalValue || 'Member';
+
+                        // Если ставим роль менеджера, добавляем в список менеджеров
+                        if (finalValue === 'Manager' && !department.managerIds.includes(member.id)) {
+                            department.managers.push(member);
+                            department.managerIds.push(member.id);
+                        }
+                        // Если убираем роль менеджера, удаляем из списка менеджеров
+                        else if (finalValue !== 'Manager' && department.managerIds.includes(member.id)) {
+                            department.managers = department.managers.filter(m => m.id !== member.id);
+                            department.managerIds = department.managerIds.filter(id => id !== member.id);
+                        }
+
+                        if (oldValue !== finalValue) {
+                            toast.success(
+                                `Department role for "${member.first_name} ${member.last_name}" has been updated to "${finalValue || 'Member'}"`,
+                                // 'success'
+                            );
+                        }
+                    }
+                }
+                return updated;
+            });
+
+            // Принудительно обновляем интерфейс
+            forceUpdate({});
+
+            // Закрываем режим редактирования
+            setEditingCell(null);
+            setTempValue('');
+        };
+
+        if (isEditing) {
+            const selectValue = tempValue || (value === '' ? 'no-role' : value);
+
+            return (
+                <div className="flex items-center gap-1">
+                    <Select
+                        value={selectValue}
+                        onValueChange={handleSelectChange}
+                        autoFocus
+                    >
+                        <SelectTrigger className="h-7 text-sm">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="no-role">No role</SelectItem>
+                            {department_roles && department_roles.length > 0 ? (
+                                department_roles.map(role => (
+                                    <SelectItem key={role.id} value={role.name}>
+                                        {role.name}
+                                    </SelectItem>
+                                ))
+                            ) : (
+                                <>
+                                    <SelectItem value="Member">Member</SelectItem>
+                                    <SelectItem value="Manager">Manager</SelectItem>
+                                </>
+                            )}
+                        </SelectContent>
+                    </Select>
+                    <Button size="icon" variant="ghost" onClick={() => {
+                        setEditingCell(null);
+                        setTempValue('');
+                    }} className="h-6 w-6">
+                        <X className="h-3 w-3" />
+                    </Button>
+                </div>
+            );
+        }
+
+        const displayValue = convertForDisplay(value);
+
+        return (
+            <div
+                className="group flex items-center gap-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 px-1 py-0.5 rounded"
+                onClick={() => {
+                    startEditing(type, departmentId, memberId, field, value);
+                }}
+            >
+                <span className="text-sm font-medium">{displayValue || 'Member'}</span>
+                <Edit className="h-3 w-3 opacity-0 group-hover:opacity-50 text-gray-400" />
+            </div>
+        );
+    };
+
     // Рендер редактируемой ячейки с инпутом
     const renderEditableInputCell = (
         value: string,
@@ -904,12 +1053,16 @@ export function TeamsTab() {
                         const member = department.members.find(m => m.id === memberId);
                         if (member) {
                             const oldValue = member[field as keyof OrganizationMember];
-                            if (field === 'name') member.name = tempValue;
+                            if (field === 'first_name') {
+                                const names = tempValue.split(' ');
+                                member.first_name = names[0];
+                                member.last_name = names.slice(1).join(' ') || member.last_name;
+                            }
                             if (field === 'email') member.email = tempValue;
 
                             if (oldValue !== tempValue) {
                                 toast.success(
-                                    `Employee "${member.name}" has been updated successfully`,
+                                    `Employee "${member.first_name} ${member.last_name}" has been updated successfully`,
                                     // 'success'
                                 );
                             }
@@ -987,9 +1140,15 @@ export function TeamsTab() {
             if (department) {
                 department.members.push(newMember);
 
+                // Если добавляем менеджера, добавляем его в список менеджеров
+                if (newMember.department_role === 'Manager') {
+                    department.managers.push(newMember);
+                    department.managerIds.push(newMember.id);
+                }
+
                 // Уведомление об успешном добавлении
                 toast.success(
-                    `Employee "${newMember.name}" has been added to ${department.name} department`,
+                    `Employee "${newMember.first_name} ${newMember.last_name}" has been added to ${department.name} department`,
                     // 'success'
                 );
             }
@@ -1047,11 +1206,12 @@ export function TeamsTab() {
             if (department) {
                 const member = department.members.find(m => m.id === memberId);
                 if (member) {
-                    memberName = member.name;
+                    memberName = `${member.first_name} ${member.last_name}`;
+
                     // Если удаляем менеджера, удаляем его из списка менеджеров
-                    if (member.employeeId && department.managerIds.includes(member.employeeId)) {
-                        department.managers = department.managers.filter(name => name !== member.name);
-                        department.managerIds = department.managerIds.filter(id => id !== member.employeeId);
+                    if (department.managerIds.includes(member.id)) {
+                        department.managers = department.managers.filter(m => m.id !== member.id);
+                        department.managerIds = department.managerIds.filter(id => id !== member.id);
                     }
                 }
                 department.members = department.members.filter(m => m.id !== memberId);
@@ -1102,6 +1262,18 @@ export function TeamsTab() {
         return [{ value: 'no-role', label: 'No role' }, ...roles.map(r => ({ value: r.name, label: r.name }))];
     };
 
+    // Получить опции для department_roles
+    const getDepartmentRoleOptions = () => {
+        if (department_roles && department_roles.length > 0) {
+            return [{ value: 'no-role', label: 'No role' }, ...department_roles.map(r => ({ value: r.name, label: r.name }))];
+        }
+        return [
+            { value: 'no-role', label: 'No role' },
+            { value: 'Member', label: 'Member' },
+            { value: 'Manager', label: 'Manager' }
+        ];
+    };
+
     // Рендер ячейки менеджера с галочкой
     const renderManagerCell = (department: DepartmentGroup, member: OrganizationMember) => {
         const isManager = isEmployeeManager(department, member);
@@ -1110,10 +1282,15 @@ export function TeamsTab() {
             <div className="text-center">
                 {isManager ? (
                     <div className="flex items-center justify-center">
-                        <Check className="h-4 w-4 text-green-600" />
+                        <Badge variant="outline" className="flex items-center gap-1 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300">
+                            <Crown className="h-3 w-3" />
+                            Manager
+                        </Badge>
                     </div>
                 ) : (
-                    <div className="text-sm text-gray-400">-</div>
+                    <Badge variant="outline" className="flex items-center gap-1">
+                        {member.department_role || 'Member'}
+                    </Badge>
                 )}
             </div>
         );
@@ -1121,8 +1298,8 @@ export function TeamsTab() {
 
     // Назначить/снять с должности менеджера
     const toggleEmployeeManager = (departmentId: number, member: OrganizationMember) => {
-        if (!member.employeeId) {
-            toast.error('Employee does not have an employeeId');
+        if (!member.id) {
+            toast.error('Employee does not have an id');
             return;
         }
 
@@ -1130,21 +1307,24 @@ export function TeamsTab() {
             const updated = [...prev];
             const department = updated[0].departments.find(d => d.id === departmentId);
             if (department) {
-                const isCurrentlyManager = department.managerIds.includes(member.employeeId!);
+                const isCurrentlyManager = department.managerIds.includes(member.id);
+                const memberName = `${member.first_name} ${member.last_name}`;
 
                 if (isCurrentlyManager) {
                     // Снимаем с должности менеджера
-                    department.managers = department.managers.filter(name => name !== member.name);
-                    department.managerIds = department.managerIds.filter(id => id !== member.employeeId);
+                    department.managers = department.managers.filter(m => m.id !== member.id);
+                    department.managerIds = department.managerIds.filter(id => id !== member.id);
+                    member.department_role = 'Member';
                     toast.success(
-                        `${member.name} has been removed as manager of ${department.name}`
+                        `${memberName} has been removed as manager of ${department.name}`
                     );
                 } else {
                     // Назначаем менеджером
-                    department.managers.push(member.name);
-                    department.managerIds.push(member.employeeId);
+                    department.managers.push(member);
+                    department.managerIds.push(member.id);
+                    member.department_role = 'Manager';
                     toast.success(
-                        `${member.name} has been appointed as manager of ${department.name}`
+                        `${memberName} has been appointed as manager of ${department.name}`
                     );
                 }
             }
@@ -1157,14 +1337,14 @@ export function TeamsTab() {
 
     // Получить список менеджеров для отдела
     const getDepartmentManagers = (departmentId: number) => {
-        const department = businessUnits[0].departments.find(d => d.id === departmentId);
+        const department = businessUnits[0]?.departments.find(d => d.id === departmentId);
         return department ? department.managers : [];
     };
 
     // Модальное окно управления менеджерами
     const ManagerManagementModal = ({ departmentId, onClose }: { departmentId: number, onClose: () => void }) => {
-        const department = businessUnits[0].departments.find(d => d.id === departmentId);
-        const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>(
+        const department = businessUnits[0]?.departments.find(d => d.id === departmentId);
+        const [selectedManagerIds, setSelectedManagerIds] = useState<number[]>(
             department ? [...department.managerIds] : []
         );
 
@@ -1175,11 +1355,21 @@ export function TeamsTab() {
                 const updated = [...prev];
                 const dept = updated[0].departments.find(d => d.id === departmentId);
                 if (dept) {
-                    // Получаем имена выбранных менеджеров
-                    const selectedManagers = selectedManagerIds.map(managerId => {
-                        const employee = allEmployees.find(e => e.id.toString() === managerId);
-                        return employee?.name || '';
-                    }).filter(name => name);
+                    // Сначала сбрасываем всех менеджеров
+                    dept.members.forEach(member => {
+                        if (dept.managerIds.includes(member.id)) {
+                            member.department_role = 'Member';
+                        }
+                    });
+
+                    // Получаем выбранных менеджеров
+                    const selectedManagers: OrganizationMember[] = [];
+                    dept.members.forEach(member => {
+                        if (selectedManagerIds.includes(member.id)) {
+                            member.department_role = 'Manager';
+                            selectedManagers.push(member);
+                        }
+                    });
 
                     dept.managers = selectedManagers;
                     dept.managerIds = selectedManagerIds;
@@ -1215,24 +1405,22 @@ export function TeamsTab() {
                                         <div className="flex items-center gap-2">
                                             <input
                                                 type="checkbox"
-                                                checked={selectedManagerIds.includes(member.employeeId || '')}
+                                                checked={selectedManagerIds.includes(member.id)}
                                                 onChange={(e) => {
-                                                    if (member.employeeId) {
-                                                        if (e.target.checked) {
-                                                            setSelectedManagerIds([...selectedManagerIds, member.employeeId]);
-                                                        } else {
-                                                            setSelectedManagerIds(selectedManagerIds.filter(id => id !== member.employeeId));
-                                                        }
+                                                    if (e.target.checked) {
+                                                        setSelectedManagerIds([...selectedManagerIds, member.id]);
+                                                    } else {
+                                                        setSelectedManagerIds(selectedManagerIds.filter(id => id !== member.id));
                                                     }
                                                 }}
                                                 className="h-4 w-4"
                                             />
                                             <div>
-                                                <div className="font-medium text-sm">{member.name}</div>
-                                                <div className="text-xs text-gray-500">{member.role || 'No role'}</div>
+                                                <div className="font-medium text-sm">{member.first_name} {member.last_name}</div>
+                                                <div className="text-xs text-gray-500">{member.position || 'No position'}</div>
                                             </div>
                                         </div>
-                                        {member.employeeId && selectedManagerIds.includes(member.employeeId) && (
+                                        {selectedManagerIds.includes(member.id) && (
                                             <Crown className="h-4 w-4 text-yellow-500" />
                                         )}
                                     </div>
@@ -1245,10 +1433,11 @@ export function TeamsTab() {
                                 <Label>Selected Managers ({selectedManagerIds.length})</Label>
                                 <div className="flex flex-wrap gap-2 p-2 border rounded-md">
                                     {selectedManagerIds.map(managerId => {
-                                        const member = department.members.find(m => m.employeeId === managerId);
+                                        const member = department.members.find(m => m.id === managerId);
                                         return member ? (
                                             <Badge key={managerId} variant="secondary" className="flex items-center gap-1">
-                                                {member.name}
+                                                <Crown className="h-3 w-3" />
+                                                {member.first_name} {member.last_name}
                                                 <button
                                                     type="button"
                                                     onClick={() => setSelectedManagerIds(selectedManagerIds.filter(id => id !== managerId))}
@@ -1320,7 +1509,7 @@ export function TeamsTab() {
                                 Members
                             </h3>
 
-                            {businessUnits[0].departments.map((department) => (
+                            {businessUnits[0]?.departments.map((department) => (
                                 <div key={department.id} className="space-y-4">
                                     {/* Заголовок отдела */}
                                     <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg">
@@ -1337,7 +1526,7 @@ export function TeamsTab() {
                                                     <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1 flex-wrap">
                                                         <Crown className="w-3.5 h-3.5 text-yellow-500" />
                                                         <span className="font-medium">Managers:</span>
-                                                        <span>{department.managers.join(', ')}</span>
+                                                        <span>{department.managers.map(m => `${m.first_name} ${m.last_name}`).join(', ')}</span>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
@@ -1355,7 +1544,14 @@ export function TeamsTab() {
                                         <div className="flex items-center gap-2">
                                             <Badge variant="outline" className="flex items-center gap-1 text-xs">
                                                 <Users className="w-3 h-3" />
-                                                {department.members.length}
+                                                {getAllDepartmentMembers(department).length} total
+                                            </Badge>
+                                            <Badge variant="outline" className="flex items-center gap-1 text-xs bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300">
+                                                <Crown className="w-3 h-3" />
+                                                {department.managers.length} managers
+                                            </Badge>
+                                            <Badge variant="outline" className="flex items-center gap-1 text-xs bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300">
+                                                {getAllDepartmentMembers(department).filter(m => m.is_active).length} active
                                             </Badge>
                                             <Button
                                                 size="sm"
@@ -1381,100 +1577,117 @@ export function TeamsTab() {
 
                                     {/* Таблица сотрудников отдела */}
                                     <div className="ml-6 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
-                                        <div className="rounded-md border">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead className="w-[30%] py-2">Name</TableHead>
-                                                        <TableHead className="w-[20%] py-2">Role</TableHead>
-                                                        <TableHead className="w-[25%] py-2">Email</TableHead>
-                                                        <TableHead className="w-[15%] py-2 text-center">Manager</TableHead>
-                                                        <TableHead className="w-[10%] py-2 text-right">Actions</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {department.members.map((member) => (
-                                                        <TableRow key={member.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                                                            <TableCell className="py-2">
-                                                                <div className="text-sm font-medium">
-                                                                    {renderEditableInputCell(member.name, 'member', department.id, member.id, 'name')}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="py-2">
-                                                                <div className="text-sm">
-                                                                    {renderEditableSelectCell(
-                                                                        member.role || '',
-                                                                        'member',
-                                                                        department.id,
-                                                                        member.id,
-                                                                        'role',
-                                                                        getRoleOptions()
-                                                                    )}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="py-2">
-                                                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    {renderEditableInputCell(member.email || '', 'member', department.id, member.id, 'email')}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="py-2 text-center">
-                                                                {renderManagerCell(department, member)}
-                                                            </TableCell>
-                                                            <TableCell className="py-2 text-right">
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                                                                            <MoreVertical className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end" className="w-48">
-                                                                        <DropdownMenuItem
-                                                                            onClick={() => {
-                                                                                startEditing('member', department.id, member.id, 'name', member.name);
-                                                                            }}
-                                                                        >
-                                                                            <Edit className="h-3 w-3 mr-2" />
-                                                                            Edit Name
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem
-                                                                            onClick={() => {
-                                                                                startEditing('member', department.id, member.id, 'role', member.role || '');
-                                                                            }}
-                                                                        >
-                                                                            <Edit className="h-3 w-3 mr-2" />
-                                                                            Edit Role
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem
-                                                                            onClick={() => {
-                                                                                toggleEmployeeManager(department.id, member);
-                                                                            }}
-                                                                        >
-                                                                            {isEmployeeManager(department, member) ? (
-                                                                                <>
-                                                                                    <X className="h-3 w-3 mr-2 text-red-500" />
-                                                                                    Remove as Manager
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <Crown className="h-3 w-3 mr-2 text-yellow-500" />
-                                                                                    Set as Manager
-                                                                                </>
-                                                                            )}
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem className="text-red-600"
-                                                                            onClick={() => removeMemberFromDepartment(department.id, member.id)}
-                                                                        >
-                                                                            <Trash2 className="h-3 w-3 mr-2" />
-                                                                            Remove
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            </TableCell>
+                                        {getAllDepartmentMembers(department).length === 0 ? (
+                                            <div className="text-center py-8 text-gray-500">
+                                                <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                                                <p>No members in this department</p>
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-md border">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead className="w-[25%] py-2">Name</TableHead>
+                                                            <TableHead className="w-[20%] py-2">Position & Grade</TableHead>
+                                                            <TableHead className="w-[25%] py-2">Contact</TableHead>
+                                                            <TableHead className="w-[15%] py-2">Department Role</TableHead>
+                                                            <TableHead className="w-[15%] py-2 text-center">Status</TableHead>
+                                                            <TableHead className="w-[10%] py-2 text-right">Actions</TableHead>
                                                         </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {getAllDepartmentMembers(department).map((member) => (
+                                                            <TableRow key={member.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                                                                <TableCell className="py-2">
+                                                                    <div className="text-sm font-medium">
+                                                                        {renderEditableInputCell(`${member.first_name} ${member.last_name}`, 'member', department.id, member.id, 'first_name')}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="py-2">
+                                                                    <div>
+                                                                        <div className="text-sm font-medium">
+                                                                            {member.position || '-'}
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-500">
+                                                                            {member.grade || 'No grade'}
+                                                                        </div>
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="py-2">
+                                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                                        {renderEditableInputCell(member.email || '', 'member', department.id, member.id, 'email')}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="py-2">
+                                                                    <div className="text-sm">
+                                                                        {renderEditableDepartmentRoleCell(
+                                                                            member.department_role || '',
+                                                                            'member',
+                                                                            department.id,
+                                                                            member.id,
+                                                                            'department_role',
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="py-2 text-center">
+                                                                    {renderManagerCell(department, member)}
+                                                                </TableCell>
+                                                                <TableCell className="py-2 text-right">
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger asChild>
+                                                                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                                                <MoreVertical className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </DropdownMenuTrigger>
+                                                                        <DropdownMenuContent align="end" className="w-48">
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => {
+                                                                                    startEditing('member', department.id, member.id, 'first_name', `${member.first_name} ${member.last_name}`);
+                                                                                }}
+                                                                            >
+                                                                                <Edit className="h-3 w-3 mr-2" />
+                                                                                Edit Name
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => {
+                                                                                    startEditing('member', department.id, member.id, 'department_role', member.department_role || '');
+                                                                                }}
+                                                                            >
+                                                                                <Edit className="h-3 w-3 mr-2" />
+                                                                                Edit Department Role
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => {
+                                                                                    toggleEmployeeManager(department.id, member);
+                                                                                }}
+                                                                            >
+                                                                                {isEmployeeManager(department, member) ? (
+                                                                                    <>
+                                                                                        <X className="h-3 w-3 mr-2 text-red-500" />
+                                                                                        Remove as Manager
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <Crown className="h-3 w-3 mr-2 text-yellow-500" />
+                                                                                        Set as Manager
+                                                                                    </>
+                                                                                )}
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem className="text-red-600"
+                                                                                onClick={() => removeMemberFromDepartment(department.id, member.id)}
+                                                                            >
+                                                                                <Trash2 className="h-3 w-3 mr-2" />
+                                                                                Remove
+                                                                            </DropdownMenuItem>
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenu>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -1489,7 +1702,7 @@ export function TeamsTab() {
                     department={selectedDepartment}
                     allEmployees={allEmployees}
                     businessUnits={businessUnits}
-                    roles={roles}
+                    departmentRoles={department_roles || []}
                     onClose={() => {
                         setShowAddMemberModal(false);
                         setSelectedDepartment(null);
@@ -1504,10 +1717,10 @@ export function TeamsTab() {
                     onClose={() => setShowAddDepartmentModal(false)}
                     onAdd={addDepartment}
                     businessUnits={businessUnits}
-                    roles={roles}
+                    departmentRoles={department_roles || []}
                     allEmployees={allEmployees}
                 />
-            )} 
+            )}
 
             {showCreateRoleModal && (
                 <CreateRoleModal

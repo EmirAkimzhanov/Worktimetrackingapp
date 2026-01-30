@@ -1,39 +1,47 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Edit, Trash2, Plus, Building, Copy, ChevronDown, Check, Hash, Building2, Globe } from 'lucide-react';
+import { Edit, Trash2, Plus, Building, Copy, Check, Hash, Building2, User } from 'lucide-react';
 import { Client } from '../../types/types';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
 import { toast } from 'sonner@2.0.3';
+import { useDeleteClients, useGetClients } from '../../hooks/useClients';
+import { getClients } from '../../services/clients';
+import { useUserStore } from '../../store/UsersStore';
+import { useGetSectors } from '../../hooks/useSectors';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '../ui/alert-dialog';
 
-// Список секторов/отраслей для получения лейблов
+// Sector options based on the actual data
 const SECTOR_OPTIONS = [
-    { value: 'technology', label: 'Technology & IT' },
-    { value: 'finance', label: 'Finance & Banking' },
-    { value: 'healthcare', label: 'Healthcare' },
-    { value: 'manufacturing', label: 'Manufacturing' },
-    { value: 'retail', label: 'Retail & E-commerce' },
-    { value: 'telecommunications', label: 'Telecommunications' },
-    { value: 'energy', label: 'Energy & Utilities' },
-    { value: 'transportation', label: 'Transportation & Logistics' },
-    { value: 'real_estate', label: 'Real Estate' },
-    { value: 'education', label: 'Education' },
-    { value: 'hospitality', label: 'Hospitality & Tourism' },
-    { value: 'media', label: 'Media & Entertainment' },
-    { value: 'agriculture', label: 'Agriculture' },
-    { value: 'construction', label: 'Construction' },
-    { value: 'consulting', label: 'Consulting' },
-    { value: 'legal', label: 'Legal Services' },
-    { value: 'pharmaceutical', label: 'Pharmaceutical' },
-    { value: 'automotive', label: 'Automotive' },
-    { value: 'aerospace', label: 'Aerospace & Defense' },
-    { value: 'other', label: 'Other' },
+    { value: 'Technology', label: 'Technology' },
+    { value: 'Finance', label: 'Finance & Banking' },
+    { value: 'Healthcare', label: 'Healthcare' },
+    { value: 'Manufacturing', label: 'Manufacturing' },
+    { value: 'Retail', label: 'Retail & E-commerce' },
+    { value: 'Telecommunications', label: 'Telecommunications' },
+    { value: 'Energy', label: 'Energy & Utilities' },
+    { value: 'Transportation', label: 'Transportation & Logistics' },
+    { value: 'Real Estate', label: 'Real Estate' },
+    { value: 'Education', label: 'Education' },
+    { value: 'Hospitality', label: 'Hospitality & Tourism' },
+    { value: 'Media', label: 'Media & Entertainment' },
+    { value: 'Agriculture', label: 'Agriculture' },
+    { value: 'Construction', label: 'Construction' },
+    { value: 'Consulting', label: 'Consulting' },
+    { value: 'Legal', label: 'Legal Services' },
+    { value: 'Pharmaceutical', label: 'Pharmaceutical' },
+    { value: 'Automotive', label: 'Automotive' },
+    { value: 'Aerospace', label: 'Aerospace & Defense' },
+    { value: 'Other', label: 'Other' },
 ];
 
 interface ClientsTableProps {
@@ -44,72 +52,97 @@ interface ClientsTableProps {
 }
 
 export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableProps) {
-    const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+    const [copiedText, setCopiedText] = useState<string | null>(null);
+    const { mutate: getCLients } = useGetClients();
+    const store_clients = useUserStore((state) => state.clients);
+    const displayClients = store_clients.length > 0 ? store_clients : clients;
+    const { mutate: getSectors } = useGetSectors();
+    const { mutate: deleteCLient } = useDeleteClients();
 
-    console.log(clients);
+    // Состояние для попапа подтверждения удаления
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [clientToDelete, setClientToDelete] = useState<{
+        id: number;
+        name: string;
+    } | null>(null);
 
-    const copyToClipboard = async (email: string) => {
+    useEffect(() => {
+        getClients();
+        getSectors();
+    }, []);
+
+    const copyToClipboard = async (text: string, itemName: string) => {
+        if (!text || text === 'N/A') return;
+
         try {
-            await navigator.clipboard.writeText(email);
-            setCopiedEmail(email);
-            toast.success(`Copied: ${email}`);
+            await navigator.clipboard.writeText(text);
+            setCopiedText(text);
+            toast.success(`${itemName} copied to clipboard`);
 
-            // Сброс состояния через 2 секунды
+            // Reset after 2 seconds
             setTimeout(() => {
-                setCopiedEmail(null);
+                setCopiedText(null);
             }, 2000);
         } catch (err) {
-            toast.error('Failed to copy email');
+            toast.error(`Failed to copy ${itemName}`);
         }
     };
 
-    // Функция для получения лейбла сектора по значению
+    // Функция для открытия попапа удаления
+    const handleDeleteClick = (client: Client) => {
+        setClientToDelete({
+            id: client.id,
+            name: client.name
+        });
+        setDeleteDialogOpen(true);
+    };
+
+    // Функция для подтверждения удаления
+    const handleConfirmDelete = () => {
+        if (clientToDelete) {
+            deleteCLient(clientToDelete.id, {
+                onSuccess: () => {
+                    // После успешного удаления обновляем список клиентов
+                    getCLients();
+                    // Также вызываем onDelete проп для обратной совместимости
+                    onDelete(clientToDelete.id);
+                    // Закрываем попап
+                    setDeleteDialogOpen(false);
+                    setClientToDelete(null);
+                    toast.success('Client deleted successfully');
+                },
+                onError: (error) => {
+                    console.error('Error deleting client:', error);
+                    toast.error('Failed to delete client');
+                    setDeleteDialogOpen(false);
+                    setClientToDelete(null);
+                }
+            });
+        }
+    };
+
+    // Функция для отмены удаления
+    const handleCancelDelete = () => {
+        setDeleteDialogOpen(false);
+        setClientToDelete(null);
+    };
+
+    // Function to get sector label by value
     const getSectorLabel = (sectorValue: string): string => {
-        if (!sectorValue) return 'Not specified';
-        const sector = SECTOR_OPTIONS.find(s => s.value === sectorValue);
+        if (!sectorValue || sectorValue === 'N/A') return 'Not specified';
+        const sector = SECTOR_OPTIONS.find(s => s.value.toLowerCase() === sectorValue.toLowerCase());
         return sector ? sector.label : sectorValue;
-    };
-
-    // Функция для разделения email строки на массив
-    const getEmailsArray = (emailString: string): string[] => {
-        if (!emailString) return [];
-
-        // Разделяем по запятой и очищаем от пробелов
-        return emailString
-            .split(',')
-            .map(email => email.trim())
-            .filter(email => email.length > 0);
-    };
-
-    // Получаем первый email для отображения в основном поле
-    const getFirstEmail = (emailString: string): string => {
-        const emails = getEmailsArray(emailString);
-        return emails.length > 0 ? emails[0] : 'No email';
-    };
-
-    // Получаем количество email
-    const getEmailCount = (emailString: string): number => {
-        return getEmailsArray(emailString).length;
-    };
-
-    // Функция для копирования personal number
-    const copyPersonalNumber = async (personalNumber: string) => {
-        if (!personalNumber) return;
-        try {
-            await navigator.clipboard.writeText(personalNumber);
-            toast.success(`Copied personal number: ${personalNumber}`);
-        } catch (err) {
-            toast.error('Failed to copy personal number');
-        }
     };
 
     return (
         <div className="space-y-4">
-            {/* Заголовок с кнопкой Add */}
+            {/* Header with Add button */}
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Clients</h2>
-                    <p className="text-muted-foreground">Manage all clients in the organization</p>
+                    <p className="text-muted-foreground">
+                        {displayClients.length} client{displayClients.length !== 1 ? 's' : ''} found
+                    </p>
                 </div>
                 <Button onClick={onAdd} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
@@ -121,22 +154,17 @@ export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableP
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Client</TableHead>
-                            <TableHead>Company</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Phone</TableHead>
-                            <TableHead>Country</TableHead>
+                            <TableHead>Client Name</TableHead>
+                            <TableHead>Group</TableHead>
                             <TableHead>Personal Number</TableHead>
                             <TableHead>Sector</TableHead>
-                            <TableHead>Created</TableHead>
-                            <TableHead>Status</TableHead>
                             <TableHead className="w-24">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {clients.length === 0 ? (
+                        {displayClients.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={10} className="text-center text-slate-500 py-8">
+                                <TableCell colSpan={5} className="text-center text-slate-500 py-8">
                                     <div className="flex flex-col items-center justify-center gap-2">
                                         <Building className="w-12 h-12 text-slate-300" />
                                         <p className="text-lg font-medium">No clients found</p>
@@ -147,10 +175,7 @@ export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableP
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            clients.map(client => {
-                                const emails = getEmailsArray(client.email);
-                                const firstEmail = getFirstEmail(client.email);
-                                const emailCount = getEmailCount(client.email);
+                            displayClients.map(client => {
                                 const sectorLabel = getSectorLabel(client.sector);
 
                                 return (
@@ -160,111 +185,21 @@ export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableP
                                                 <Building className="w-4 h-4 text-slate-500" />
                                                 <div>
                                                     <div>{client.name}</div>
-                                                    {client.personal_number && (
-                                                        <div className="text-xs text-gray-500">
-                                                            ID: {client.personal_number}
-                                                        </div>
-                                                    )}
+                                                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                                                        <User className="w-3 h-3" />
+                                                        ID: {client.id}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="font-medium">{client.company}</div>
-                                        </TableCell>
-                                        <TableCell>
-                                            {emailCount > 0 ? (
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            className="h-auto p-0 hover:bg-transparent justify-start text-left"
-                                                        >
-                                                            <div className="flex items-center gap-1 group">
-                                                                <span className="text-blue-600 hover:text-blue-800 truncate max-w-[200px]">
-                                                                    {firstEmail}
-                                                                </span>
-                                                                {emailCount > 1 && (
-                                                                    <>
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="ml-2 text-xs h-5 px-1.5 flex-shrink-0"
-                                                                        >
-                                                                            +{emailCount - 1}
-                                                                        </Badge>
-                                                                        <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-gray-600 ml-1 flex-shrink-0" />
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="start" className="w-64">
-                                                        <div className="px-2 py-1.5 text-xs text-gray-500 border-b">
-                                                            {emailCount} email{emailCount !== 1 ? 's' : ''}
-                                                        </div>
-                                                        {emails.map((email, index) => (
-                                                            <DropdownMenuItem
-                                                                key={index}
-                                                                className="flex items-center justify-between gap-2 cursor-default"
-                                                                onSelect={(e) => e.preventDefault()}
-                                                            >
-                                                                <div className="flex-1 min-w-0">
-                                                                    <span className="truncate block">{email}</span>
-                                                                </div>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-6 w-6 ml-2 flex-shrink-0"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        copyToClipboard(email);
-                                                                    }}
-                                                                >
-                                                                    {copiedEmail === email ? (
-                                                                        <Check className="w-3 h-3 text-green-600" />
-                                                                    ) : (
-                                                                        <Copy className="w-3 h-3 text-gray-500 hover:text-gray-700" />
-                                                                    )}
-                                                                </Button>
-                                                            </DropdownMenuItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            ) : (
-                                                <span className="text-gray-400 italic">No email</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-1">
-                                                <span className={client.phone ? '' : 'text-gray-400 italic'}>
-                                                    {client.phone || '-'}
-                                                </span>
-                                                {client.phone && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => copyToClipboard(client.phone)}
-                                                    >
-                                                        <Copy className="w-3 h-3 text-gray-400 hover:text-gray-600" />
-                                                    </Button>
-                                                )}
+                                            <div className="font-medium">
+                                                {client.group || <span className="text-gray-400 italic">No group</span>}
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            {client.country ? (
-                                                <Badge variant="outline" className="text-xs">
-                                                    <div className="flex items-center gap-1">
-                                                        <Globe className="w-3 h-3" />
-                                                        {client.country}
-                                                    </div>
-                                                </Badge>
-                                            ) : (
-                                                <span className="text-gray-400 text-sm">Not specified</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
                                             <div className="flex items-center gap-1">
-                                                {client.personal_number ? (
+                                                {client.personal_number && client.personal_number !== 'N/A' ? (
                                                     <>
                                                         <div className="flex items-center gap-1">
                                                             <Hash className="w-3 h-3 text-gray-400" />
@@ -274,18 +209,22 @@ export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableP
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-6 w-6"
-                                                            onClick={() => copyPersonalNumber(client.personal_number)}
+                                                            onClick={() => copyToClipboard(client.personal_number, 'Personal number')}
                                                         >
-                                                            <Copy className="w-3 h-3 text-gray-400 hover:text-gray-600" />
+                                                            {copiedText === client.personal_number ? (
+                                                                <Check className="w-3 h-3 text-green-600" />
+                                                            ) : (
+                                                                <Copy className="w-3 h-3 text-gray-400 hover:text-gray-600" />
+                                                            )}
                                                         </Button>
                                                     </>
                                                 ) : (
-                                                    <span className="text-gray-400 italic text-sm">Not set</span>
+                                                    <span className="text-gray-400 italic text-sm">N/A</span>
                                                 )}
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            {client.sector ? (
+                                            {client.sector && client.sector !== 'N/A' ? (
                                                 <Badge variant="secondary" className="text-xs">
                                                     <div className="flex items-center gap-1">
                                                         <Building2 className="w-3 h-3" />
@@ -295,19 +234,6 @@ export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableP
                                             ) : (
                                                 <span className="text-gray-400 italic text-sm">Not specified</span>
                                             )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="text-sm text-gray-600">
-                                                {new Date(client.created_at).toLocaleDateString()}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge
-                                                variant={client.is_active ? 'default' : 'outline'}
-                                                className={`${client.is_active ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-800 hover:bg-gray-100'}`}
-                                            >
-                                                {client.is_active ? 'Active' : 'Inactive'}
-                                            </Badge>
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex gap-1">
@@ -322,7 +248,7 @@ export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableP
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={() => onDelete(client.id)}
+                                                    onClick={() => handleDeleteClick(client)}
                                                     title="Delete client"
                                                 >
                                                     <Trash2 className="w-4 h-4 text-red-500" />
@@ -336,6 +262,40 @@ export function ClientsTable({ clients, onEdit, onDelete, onAdd }: ClientsTableP
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Попап подтверждения удаления */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {clientToDelete && (
+                                <>
+                                    This action cannot be undone. This will permanently delete the client{" "}
+                                    <span className="font-semibold text-red-600">{clientToDelete.name}</span>{" "}
+                                    from the system.
+                                    <div className="mt-3 p-3 bg-red-50 rounded-md">
+                                        <p className="text-sm text-red-700 font-medium">
+                                            ⚠️ Warning: All data associated with this client will be lost.
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={handleCancelDelete}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmDelete}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete Client
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

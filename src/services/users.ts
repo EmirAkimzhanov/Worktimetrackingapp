@@ -1,17 +1,17 @@
 import axios from 'axios'
 import { api } from '../consts/api';
 import { useUserStore } from '../store/UsersStore';
-import { ProjectBody } from '../types/project';
+import { UserBody } from '../types/user';
 
 
-export const getProjectTasks = async (project_id: string) => {
+export const getUsers = async () => {
     const token = useUserStore.getState().access_token;
 
     if (!token) {
         throw new Error("No access token available");
     }
 
-    const res = await axios(`${api}api/projects/projects/${project_id}`,
+    const res = await axios(`${api}api/accounts/users/`,
 
         {
             headers: {
@@ -22,14 +22,14 @@ export const getProjectTasks = async (project_id: string) => {
     return res.data;
 }
 
-export const sendProject = async (project_data: ProjectBody) => {
+export const getUserGrades = async () => {
     const token = useUserStore.getState().access_token;
 
     if (!token) {
         throw new Error("No access token available");
     }
 
-    const res = await axios.post(`${api}api/projects/projects/`, project_data,
+    const res = await axios(`${api}api/accounts/grades/`,
 
         {
             headers: {
@@ -40,14 +40,14 @@ export const sendProject = async (project_data: ProjectBody) => {
     return res.data;
 }
 
-export const deleteProject = async (project_id: string) => {
+export const sendUsers = async (body: UserBody) => {
     const token = useUserStore.getState().access_token;
 
     if (!token) {
         throw new Error("No access token available");
     }
 
-    const res = await axios.delete(`${api}api/projects/projects/${project_id}/`,
+    const res = await axios.post(`${api}api/accounts/users/`, body,
 
         {
             headers: {
@@ -58,14 +58,14 @@ export const deleteProject = async (project_id: string) => {
     return res.data;
 }
 
-export const editProject = async (project_data: ProjectBody, project_id: string) => {
+export const editUser = async (body: UserBody, user_id: string) => {
     const token = useUserStore.getState().access_token;
 
     if (!token) {
         throw new Error("No access token available");
     }
 
-    const res = await axios.patch(`${api}api/projects/projects/${project_id}/`, project_data,
+    const res = await axios.patch(`${api}api/accounts/users/${user_id}/`, body,
 
         {
             headers: {
@@ -76,14 +76,14 @@ export const editProject = async (project_data: ProjectBody, project_id: string)
     return res.data;
 }
 
-export const getProjects = async () => {
+export const deleteUser = async (user_id: string) => {
     const token = useUserStore.getState().access_token;
 
     if (!token) {
         throw new Error("No access token available");
     }
 
-    const res = await axios(`${api}api/projects/projects/`,
+    const res = await axios.delete(`${api}api/accounts/users/${user_id}/`,
 
         {
             headers: {
