@@ -3,6 +3,7 @@ import { api } from '../consts/api';
 import { useUserStore } from '../store/UsersStore';
 import { TimeBody } from '../types/timeEntrys';
 import { TimeEntry } from '../components/TimeTrackerContext';
+import { CalendarEvent } from '../types/calendar';
 
 
 export const sendTimeEntry = async (body: TimeBody) => {
@@ -33,6 +34,76 @@ export const getTimeEntry = async () => {
     }
 
     const res = await axios(`${api}api/calendars/time-entries/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+export const getCalendar = async () => {
+    const token = useUserStore.getState().access_token;
+    console.log(token);
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios(`${api}api/calendars/calendars/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+export const sendCalendar = async (body: CalendarEvent) => {
+    const token = useUserStore.getState().access_token;
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.post(`${api}api/calendars/calendars/`, body,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+export const editCalendar = async (body: CalendarEvent, day_id: string) => {
+    const token = useUserStore.getState().access_token;
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.patch(`${api}api/calendars/calendars/${day_id}/`, body,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+export const deleteCalendar = async (day_id: string) => {
+    const token = useUserStore.getState().access_token;
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.delete(`${api}api/calendars/calendars/${day_id}/`,
 
         {
             headers: {

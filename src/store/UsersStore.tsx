@@ -1,4 +1,3 @@
-// stores/userStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Countries } from "../types/countries";
@@ -13,6 +12,7 @@ import { Status, StatusesArray } from "../types/statuses";
 import { ServiceLines } from "../types/serviceLines";
 import { DepartmentRole } from "../types/user";
 import { DepartmentsResponse } from "../types/deaprtments";
+import { Calendar } from "../types/calendar"; // Импортируем тип
 
 interface User {
   id: number;
@@ -65,6 +65,8 @@ interface UserState {
 
   department_workers: DepartmentsResponse | null;
 
+  calendar: Calendar[] | null; // Добавляем поле календаря
+
   setUser: (
     user: User,
     tokens: { access_token: string; refresh_token: string }
@@ -114,7 +116,10 @@ interface UserState {
 
   setSectors: (sectors: Status[] | null) => void;
 
-  setDepartmentWorkers: (department_workers: DepartmentsResponse | null) => void; // Добавлено
+  setDepartmentWorkers: (department_workers: DepartmentsResponse | null) => void;
+
+  // ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ КАЛЕНДАРЯ
+  setCalendar: (calendar: Calendar[] | null) => void; // Добавляем сет-функцию
 
   logout: () => void;
 }
@@ -147,7 +152,8 @@ export const useUserStore = create<UserState>()(
       user_grades: null,
       positions: null,
       sectors: null,
-      department_workers: null, // Инициализация
+      department_workers: null,
+      calendar: null, // Инициализируем как null
 
       setUser: (userData, tokens) =>
         set({
@@ -218,7 +224,10 @@ export const useUserStore = create<UserState>()(
 
       setSectors: (sectors) => set({ sectors }),
 
-      setDepartmentWorkers: (department_workers) => set({ department_workers }), // Реализация сет-функции
+      setDepartmentWorkers: (department_workers) => set({ department_workers }),
+
+      // ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ КАЛЕНДАРЯ
+      setCalendar: (calendar) => set({ calendar }),
 
       getInternalTaskById: (taskId: number) => {
         const state = get();
@@ -260,7 +269,8 @@ export const useUserStore = create<UserState>()(
           user_grades: null,
           positions: null,
           sectors: null,
-          department_workers: null, // Очищаем при выходе
+          department_workers: null,
+          calendar: null, // Очищаем календарь при выходе
         });
       },
     }),
@@ -287,7 +297,8 @@ export const useUserStore = create<UserState>()(
         user_grades: state.user_grades,
         positions: state.positions,
         sectors: state.sectors,
-        department_workers: state.department_workers, // Добавляем в persist
+        department_workers: state.department_workers,
+        calendar: state.calendar, // Добавляем календарь в persist
       }),
     }
   )
