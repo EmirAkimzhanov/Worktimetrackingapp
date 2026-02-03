@@ -42,6 +42,7 @@ export function UsersTable({
     const { mutate: getPositions } = useGetPositions();
     const { mutate: deleteUser } = useDeleteUsers();
     const store_users = useUserStore((state) => state.users);
+    const store_departments = useUserStore((state) => state.departments);
 
     // Состояние для попапа подтверждения удаления
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);

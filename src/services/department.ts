@@ -47,4 +47,62 @@ export const getDepartmentRoles = async () => {
 }
 
 
+export const editDepartmentMemberRole = async (
+    userId: number,
+    body: { department_role: number }
+) => {
+    const token = useUserStore.getState().access_token;
+
+    const res = await axios.patch(
+        `${api}api/accounts/users/${userId}/`,
+        body,
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    return res.data;
+};
+
+
+export const createDepartment = async (
+    body: { name: string }
+) => {
+    const token = useUserStore.getState().access_token;
+
+    const res = await axios.post(
+        `${api}api/accounts/departments/`,
+        body,
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    return res.data;
+};
+
+export const editDepartmentName = async (
+    department_id: number,
+    body: { name: string }
+) => {
+    const token = useUserStore.getState().access_token;
+
+    const res = await axios.patch(
+        `${api}api/accounts/departments/${department_id}/`,
+        body,
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    return res.data;
+};
+
+
 

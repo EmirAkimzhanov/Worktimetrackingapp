@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
-import { getDepartmentRoles, getDepartments } from '../services/department';
+import { createDepartment, editDepartmentMemberRole, editDepartmentName, getDepartmentRoles, getDepartments } from '../services/department';
 
 export const useGetDepartments = () => {
     const setDepartments = useUserStore((state) => state.setDepartments);
@@ -42,3 +42,42 @@ export const useGetDepartmentRoles = () => {
         },
     });
 };
+
+export const useEditDepartmentRoles = () => {
+    return useMutation({
+        mutationFn: ({
+            userId,
+            department_role,
+        }: {
+            userId: string;
+            department_role: string;
+        }) =>
+            editDepartmentMemberRole(userId, {
+                department_role,
+            }),
+    });
+};
+
+export const useCreateDepartment = () => {
+    return useMutation({
+        mutationFn: (body: { name: string }) =>
+            createDepartment(body),
+    });
+};
+
+
+// В файле hooks/useDepartments.ts
+export const useEditDepartmentName = () => {
+    return useMutation({
+        mutationFn: ({
+            department_id,
+            name,
+        }: {
+            department_id: number;
+            name: string;
+        }) =>
+            editDepartmentName(department_id, { name }),
+    });
+};
+
+

@@ -1,17 +1,18 @@
 // src/components/admin/TeamsTab.tsx
-import React, { useState, useEffect, forwardRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Badge } from '../../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
-import { Plus, Edit, Trash2, X, Users, Building, Search, Check, UserPlus, Crown, MoreVertical, AlertCircle, Key, Briefcase } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Users, Building, Search, Check, UserPlus, Crown, MoreVertical, AlertCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../ui/dropdown-menu';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../../ui/dialog';
 import { toast } from 'sonner';
 import { useUserStore } from '../../../store/UsersStore';
+import { useCreateDepartment, useEditDepartmentName, useEditDepartmentRoles } from '../../../hooks/useDepartments';
 
 interface OrganizationMember {
     id: number;
@@ -33,8 +34,8 @@ interface DepartmentGroup {
     id: number;
     name: string;
     code: string;
-    managers: OrganizationMember[]; // Теперь храним объекты менеджеров
-    managerIds: number[]; // Массив ID менеджеров
+    managers: OrganizationMember[];
+    managerIds: number[];
     members: OrganizationMember[];
 }
 
@@ -59,14 +60,11 @@ interface Role {
     description?: string;
 }
 
-// Интерфейс для department_roles из store
 interface DepartmentRole {
     id: number;
     name: string;
-    // добавьте другие поля если они есть в ваших данных
 }
 
-// Интерфейс для уведомлений
 interface Notification {
     id: number;
     message: string;
@@ -90,10 +88,9 @@ const AddMemberModal = ({
     onAdd: (member: OrganizationMember) => void;
 }) => {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
-    const [employeeRole, setEmployeeRole] = useState<string>('');
+    const [employeeRoleId, setEmployeeRoleId] = useState<string>('1');
     const [searchQuery, setSearchQuery] = useState<string>('');
 
-    // Получить доступных сотрудников для отдела
     const getAvailableEmployees = () => {
         const currentDepartment = businessUnits[0].departments.find(d => d.id === department.id);
         if (!currentDepartment) return allEmployees;
@@ -110,15 +107,14 @@ const AddMemberModal = ({
 
     const availableEmployees = getAvailableEmployees();
     const selectedEmployee = allEmployees.find(e => e.id.toString() === selectedEmployeeId);
+    const selectedRole = departmentRoles.find(r => r.id.toString() === employeeRoleId);
 
-    // Обработчик клавиши Escape
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
         };
 
         document.addEventListener('keydown', handleEscape);
-
         return () => {
             document.removeEventListener('keydown', handleEscape);
         };
@@ -127,16 +123,18 @@ const AddMemberModal = ({
     const handleAdd = () => {
         if (!selectedEmployee) return;
 
+        const selectedRole = departmentRoles.find(r => r.id.toString() === employeeRoleId);
+
         const newMember: OrganizationMember = {
-            id: Date.now(),
+            id: selectedEmployee.id,
             first_name: selectedEmployee.name.split(' ')[0],
             last_name: selectedEmployee.name.split(' ').slice(1).join(' ') || '',
             email: selectedEmployee.email || '',
             grade: null,
             position: selectedEmployee.role || null,
             department: department.name,
-            department_role: employeeRole === 'Manager' ? 'Manager' : employeeRole || 'Member',
-            role: employeeRole === 'Manager' ? 'operational' : null,
+            department_role: selectedRole ? selectedRole.name : 'Member',
+            role: selectedRole?.name === 'Manager' ? 'operational' : null,
             country: 'KG',
             is_active: true,
             date_joined: new Date().toISOString(),
@@ -155,7 +153,6 @@ const AddMemberModal = ({
             }}
         >
             <div className="bg-background rounded-lg shadow-lg border w-full max-w-2xl flex flex-col" style={{ width: '40%', height: '600px' }}>
-                {/* Заголовок */}
                 <div className="flex items-center justify-between p-4 border-b shrink-0">
                     <div>
                         <h2 className="text-lg font-semibold">Add Member to {department.name}</h2>
@@ -163,26 +160,19 @@ const AddMemberModal = ({
                             Select an employee to add to this department
                         </p>
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={onClose}
-                        className="h-8 w-8"
-                    >
+                    <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
                         <X className="h-4 w-4" />
                     </Button>
                 </div>
 
-                {/* Основной контент с фиксированной высотой и скроллом */}
                 <div className="flex-1 overflow-hidden flex flex-col p-4">
-                    {/* Поиск и роль */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 shrink-0">
                         <div className="space-y-2">
                             <Label htmlFor="modal-search-employees" className="text-sm font-medium">
                                 Search Employees
                             </Label>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Search className="absolute left-1 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" style={{ padding: "1px" }} />
                                 <Input
                                     id="modal-search-employees"
                                     placeholder="Type to search..."
@@ -197,14 +187,13 @@ const AddMemberModal = ({
                             <Label htmlFor="modal-employee-role" className="text-sm font-medium">
                                 Department Role
                             </Label>
-                            <Select value={employeeRole} onValueChange={setEmployeeRole}>
+                            <Select value={employeeRoleId} onValueChange={setEmployeeRoleId}>
                                 <SelectTrigger id="modal-employee-role" className="h-9">
                                     <SelectValue placeholder="Select a role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="no-role">No role</SelectItem>
                                     {departmentRoles.map(role => (
-                                        <SelectItem key={role.id} value={role.name}>
+                                        <SelectItem key={role.id} value={role.id.toString()}>
                                             {role.name}
                                         </SelectItem>
                                     ))}
@@ -213,14 +202,12 @@ const AddMemberModal = ({
                         </div>
                     </div>
 
-                    {/* Заголовок списка */}
                     <div className="shrink-0 mb-2">
                         <Label className="text-sm font-medium">
                             Available Employees ({availableEmployees.length})
                         </Label>
                     </div>
 
-                    {/* Список сотрудников с фиксированной высотой и скроллом */}
                     <div className="flex-1 min-h-0 border rounded-lg overflow-hidden">
                         {availableEmployees.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center p-6">
@@ -270,7 +257,6 @@ const AddMemberModal = ({
                         )}
                     </div>
 
-                    {/* Выбранный сотрудник */}
                     {selectedEmployee && (
                         <div className="mt-4 shrink-0">
                             <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -282,10 +268,10 @@ const AddMemberModal = ({
                                             <div className="font-medium">
                                                 {selectedEmployee.name}
                                             </div>
-                                            {employeeRole && employeeRole !== 'no-role' && (
+                                            {selectedRole && (
                                                 <div className="mt-1 flex items-center gap-2">
                                                     <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                                                        {employeeRole}
+                                                        {selectedRole.name}
                                                     </Badge>
                                                     <span className="text-xs text-gray-500">will be assigned as this role</span>
                                                 </div>
@@ -298,21 +284,12 @@ const AddMemberModal = ({
                     )}
                 </div>
 
-                {/* Футер */}
                 <div className="border-t p-4 shrink-0">
                     <div className="flex items-center justify-end gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={onClose}
-                            className="h-9"
-                        >
+                        <Button variant="outline" onClick={onClose} className="h-9">
                             Cancel
                         </Button>
-                        <Button
-                            onClick={handleAdd}
-                            disabled={!selectedEmployeeId}
-                            className="h-9"
-                        >
+                        <Button onClick={handleAdd} disabled={!selectedEmployeeId} className="h-9">
                             <UserPlus className="w-4 h-4 mr-2" />
                             Add to Department
                         </Button>
@@ -326,70 +303,44 @@ const AddMemberModal = ({
 // Компонент модального окна добавления отдела
 const AddDepartmentModal = ({
     onClose,
-    onAdd,
-    businessUnits,
-    departmentRoles,
-    allEmployees
+    onAdd
 }: {
     onClose: () => void;
     onAdd: (department: DepartmentGroup) => void;
-    businessUnits: BusinessUnit[];
-    departmentRoles: DepartmentRole[];
-    allEmployees: Employee[];
 }) => {
     const [departmentName, setDepartmentName] = useState('');
-    const [departmentCode, setDepartmentCode] = useState('');
-    const [selectedManagerIds, setSelectedManagerIds] = useState<number[]>([]);
+    const { mutate: createDepartment } = useCreateDepartment();
 
     const handleAdd = () => {
         if (!departmentName.trim()) return;
 
-        const newDepartment: DepartmentGroup = {
-            id: Date.now(),
-            name: departmentName,
-            code: departmentCode || departmentName.substring(0, 3).toUpperCase(),
-            managers: [],
-            managerIds: [],
-            members: []
-        };
-
-        if (selectedManagerIds.length > 0) {
-            selectedManagerIds.forEach(managerId => {
-                const manager = allEmployees.find(e => e.id === managerId);
-                if (manager) {
-                    const managerObj: OrganizationMember = {
-                        id: manager.id,
-                        first_name: manager.name.split(' ')[0],
-                        last_name: manager.name.split(' ').slice(1).join(' ') || '',
-                        email: manager.email || '',
-                        grade: null,
-                        position: manager.role || null,
-                        department: departmentName,
-                        department_role: 'Manager',
-                        role: 'operational',
-                        country: 'KG',
-                        is_active: true,
-                        date_joined: new Date().toISOString(),
-                        date_left: null
+        createDepartment(
+            { name: departmentName },
+            {
+                onSuccess: (data) => {
+                    const newDepartment: DepartmentGroup = {
+                        id: data.id || Date.now(),
+                        name: departmentName,
+                        code: departmentName.substring(0, 3).toUpperCase(),
+                        managers: [],
+                        managerIds: [],
+                        members: []
                     };
-                    newDepartment.managers.push(managerObj);
-                    newDepartment.managerIds.push(manager.id);
-                }
-            });
-        }
 
-        onAdd(newDepartment);
-        onClose();
+                    onAdd(newDepartment);
+                    toast.success(`Department "${departmentName}" has been created successfully`);
+                    onClose();
+                },
+                onError: (error) => {
+                    toast.error(`Failed to create department: ${error.message || 'Unknown error'}`);
+                }
+            }
+        );
     };
 
     return (
         <Dialog open={true} onOpenChange={onClose}>
-            <DialogContent className="
-    w-[60vw]
-    max-w-none
-    min-w-[600px]
-    max-h-[80vh]
-  ">
+            <DialogContent className="w-[60vw] max-w-none min-w-[600px] max-h-[80vh]">
                 <DialogHeader>
                     <DialogTitle>Add New Department</DialogTitle>
                     <DialogDescription>
@@ -406,140 +357,14 @@ const AddDepartmentModal = ({
                             placeholder="e.g., Engineering"
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="department-code">Code (Optional)</Label>
-                        <Input
-                            id="department-code"
-                            value={departmentCode}
-                            onChange={(e) => setDepartmentCode(e.target.value)}
-                            placeholder="e.g., ENG"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="department-managers">Managers (Optional)</Label>
-                        <Select
-                            value=""
-                            onValueChange={(value) => {
-                                if (value && !selectedManagerIds.includes(parseInt(value))) {
-                                    setSelectedManagerIds([...selectedManagerIds, parseInt(value)]);
-                                }
-                            }}
-                        >
-                            <SelectTrigger id="department-managers">
-                                <SelectValue placeholder="Select managers" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {allEmployees.map(employee => (
-                                    <SelectItem key={employee.id} value={employee.id.toString()}>
-                                        {employee.name} ({employee.email})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {selectedManagerIds.length > 0 && (
-                            <div className="mt-2 space-y-2">
-                                <div className="text-sm font-medium">Selected Managers:</div>
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedManagerIds.map(managerId => {
-                                        const manager = allEmployees.find(e => e.id === managerId);
-                                        return (
-                                            <Badge
-                                                key={managerId}
-                                                variant="secondary"
-                                                className="flex items-center gap-1"
-                                            >
-                                                {manager?.name}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSelectedManagerIds(selectedManagerIds.filter(id => id !== managerId));
-                                                    }}
-                                                    className="ml-1 hover:text-red-500"
-                                                >
-                                                    <X className="h-3 w-3" />
-                                                </button>
-                                            </Badge>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                    </div>
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
+                <DialogFooter style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Button variant="outline" onClick={onClose} >
                         Cancel
                     </Button>
                     <Button onClick={handleAdd} disabled={!departmentName.trim()}>
                         <Plus className="w-4 h-4 mr-2" />
                         Create Department
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-// Компонент модального окна создания роли
-const CreateRoleModal = ({
-    onClose,
-    onAdd
-}: {
-    onClose: () => void;
-    onAdd: (role: Role) => void;
-}) => {
-    const [roleName, setRoleName] = useState('');
-    const [roleDescription, setRoleDescription] = useState('');
-
-    const handleAdd = () => {
-        if (!roleName.trim()) return;
-
-        const newRole: Role = {
-            id: Date.now(),
-            name: roleName,
-            description: roleDescription || undefined
-        };
-
-        onAdd(newRole);
-        onClose();
-    };
-
-    return (
-        <Dialog open={true} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Create New Role</DialogTitle>
-                    <DialogDescription>
-                        Add a new role that can be assigned to employees
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                    <div className="space-y-2">
-                        <Label htmlFor="role-name">Role Name *</Label>
-                        <Input
-                            id="role-name"
-                            value={roleName}
-                            onChange={(e) => setRoleName(e.target.value)}
-                            placeholder="e.g., Senior Developer"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="role-description">Description (Optional)</Label>
-                        <Input
-                            id="role-description"
-                            value={roleDescription}
-                            onChange={(e) => setRoleDescription(e.target.value)}
-                            placeholder="Describe the role responsibilities..."
-                        />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
-                        Cancel
-                    </Button>
-                    <Button onClick={handleAdd} disabled={!roleName.trim()}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Role
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -592,12 +417,7 @@ const NotificationToast = ({ notification, onClose }: { notification: Notificati
                         {notification.message}
                     </p>
                 </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onClose}
-                    className="h-6 w-6 -mt-1 -mr-1"
-                >
+                <Button variant="ghost" size="icon" onClick={onClose} className="h-6 w-6 -mt-1 -mr-1">
                     <X className="h-3 w-3" />
                 </Button>
             </div>
@@ -608,8 +428,9 @@ const NotificationToast = ({ notification, onClose }: { notification: Notificati
 export function TeamsTab() {
     const departments = useUserStore((state) => state.departments);
     const department_roles = useUserStore((state) => state.department_roles);
+    const { mutate: editDepartmentName } = useEditDepartmentName();
+    const { mutate: editDepartmentRole } = useEditDepartmentRoles();
 
-    // Конвертируем данные из departments в структуру для отображения
     const convertToBusinessUnits = (depts: any[] | null): BusinessUnit[] => {
         if (!depts || depts.length === 0) {
             return [
@@ -638,7 +459,6 @@ export function TeamsTab() {
                     members: [...dept.managers.map((manager: any) => ({
                         ...manager,
                         department: dept.name,
-                        department_role: 'Manager'
                     })), ...dept.members.map((member: any) => ({
                         ...member,
                         department: dept.name
@@ -651,16 +471,13 @@ export function TeamsTab() {
     const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
     const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
 
-    // Инициализируем данные из departments
     useEffect(() => {
         if (departments) {
             const businessUnitsData = convertToBusinessUnits(departments);
             setBusinessUnits(businessUnitsData);
 
-            // Создаем список всех сотрудников из departments (включая менеджеров)
             const allEmps: Employee[] = [];
             departments.forEach(dept => {
-                // Добавляем менеджеров
                 dept.managers.forEach((manager: any) => {
                     allEmps.push({
                         id: manager.id,
@@ -672,7 +489,6 @@ export function TeamsTab() {
                     });
                 });
 
-                // Добавляем обычных членов
                 dept.members.forEach((member: any) => {
                     if (!allEmps.some(emp => emp.id === member.id)) {
                         allEmps.push({
@@ -688,7 +504,6 @@ export function TeamsTab() {
             });
             setAllEmployees(allEmps);
         } else {
-            // Fallback данные если departments пустые
             setBusinessUnits([
                 {
                     id: 1,
@@ -700,7 +515,6 @@ export function TeamsTab() {
         }
     }, [departments]);
 
-    // Список ролей (изначальный, может быть удален если используем только department_roles)
     const [roles, setRoles] = useState<Role[]>([
         { id: 1, name: 'Developer', description: 'Software development' },
         { id: 2, name: 'Designer', description: 'UI/UX design' },
@@ -709,7 +523,6 @@ export function TeamsTab() {
         { id: 5, name: 'Tester', description: 'Quality assurance' },
     ]);
 
-    // Состояния для редактирования
     const [editingCell, setEditingCell] = useState<{
         type: 'department' | 'member' | 'manager';
         departmentId?: number;
@@ -721,39 +534,39 @@ export function TeamsTab() {
     const [tempValue, setTempValue] = useState('');
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
     const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
-    const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
     const [selectedDepartment, setSelectedDepartment] = useState<DepartmentGroup | null>(null);
     const [showManagerModal, setShowManagerModal] = useState<number | null>(null);
 
-    // Состояния для уведомлений
     const [notifications, setNotifications] = useState<Notification[]>([]);
 
-    // Добавить уведомление
     const addNotification = (message: string, type: 'success' | 'error' | 'info') => {
         const id = Date.now();
         setNotifications(prev => [...prev, { id, message, type }]);
     };
 
-    // Удалить уведомление
     const removeNotification = (id: number) => {
         setNotifications(prev => prev.filter(notification => notification.id !== id));
     };
 
-    // Проверяем, является ли сотрудник менеджером отдела
     const isEmployeeManager = (department: DepartmentGroup, member: OrganizationMember) => {
         return department.managerIds.includes(member.id);
     };
 
-    // Получить всех сотрудников отдела (включая менеджеров)
     const getAllDepartmentMembers = (department: DepartmentGroup): OrganizationMember[] => {
-        // Менеджеры уже включены в members, но для ясности объединяем
         return department.members;
     };
 
-    // Функция для принудительного обновления интерфейса
     const forceUpdate = useState({})[1];
 
-    // Начать редактирование ячейки
+    const findRoleIdByName = (roleName: string): number => {
+        const role = department_roles?.find(r => r.name === roleName);
+        return role ? role.id : 1;
+    };
+
+    const findRoleById = (roleId: number): DepartmentRole | undefined => {
+        return department_roles?.find(r => r.id === roleId);
+    };
+
     const startEditing = (
         type: 'department' | 'member' | 'manager',
         departmentId?: number,
@@ -761,7 +574,6 @@ export function TeamsTab() {
         field: string,
         currentValue: string
     ) => {
-        // Преобразуем значение для редактирования
         let editingValue = currentValue;
         if (field === 'role' && currentValue === '') {
             editingValue = 'no-role';
@@ -769,114 +581,6 @@ export function TeamsTab() {
 
         setEditingCell({ type, departmentId, memberId, field, value: editingValue });
         setTempValue(editingValue);
-    };
-
-    // Конвертировать значение для отображения
-    const convertForDisplay = (value: string): string => {
-        if (value === 'no-role') return '';
-        return value;
-    };
-
-    // Рендер редактируемой ячейки с выпадающим списком (автосохранение)
-    const renderEditableSelectCell = (
-        value: string,
-        type: 'department' | 'member' | 'manager',
-        departmentId?: number,
-        memberId?: number,
-        field: string = 'name',
-        options: { value: string; label: string }[] = []
-    ) => {
-        const isEditing = editingCell?.type === type &&
-            editingCell?.departmentId === departmentId &&
-            editingCell?.memberId === memberId &&
-            editingCell?.field === field;
-
-        const handleSelectChange = (newValue: string) => {
-            // Сохраняем изменения сразу при выборе значения
-            if (!departmentId) return;
-
-            let finalValue = newValue;
-
-            // Конвертируем специальные значения в пустую строку для хранения
-            if (newValue === 'no-role') {
-                finalValue = '';
-            }
-
-            if (type === 'member' && memberId) {
-                // Редактирование сотрудника
-                setBusinessUnits(prev => {
-                    const updated = [...prev];
-                    const department = updated[0].departments.find(d => d.id === departmentId);
-                    if (department) {
-                        const member = department.members.find(m => m.id === memberId);
-                        if (member) {
-                            const oldValue = field === 'role' ? member.role : '';
-                            if (field === 'role') {
-                                member.role = finalValue || undefined;
-                                if (oldValue !== finalValue) {
-                                    toast.success(
-                                        `Role for "${member.first_name} ${member.last_name}" has been updated to "${finalValue || 'No role'}"`,
-                                        // 'success'
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    return updated;
-                });
-                // Принудительно обновляем интерфейс
-                forceUpdate({});
-            }
-
-            // Закрываем режим редактирования
-            setEditingCell(null);
-            setTempValue('');
-        };
-
-        if (isEditing) {
-            const selectValue = tempValue || (value === '' ? 'no-role' : value);
-
-            return (
-                <div className="flex items-center gap-1">
-                    <Select
-                        value={selectValue}
-                        onValueChange={handleSelectChange}
-                        autoFocus
-                    >
-                        <SelectTrigger className="h-7 text-sm">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {options.map(option => (
-                                <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Button size="icon" variant="ghost" onClick={() => {
-                        setEditingCell(null);
-                        setTempValue('');
-                    }} className="h-6 w-6">
-                        <X className="h-3 w-3" />
-                    </Button>
-                </div>
-            );
-        }
-
-        const displayValue = convertForDisplay(value);
-
-        return (
-            <div
-                className="group flex items-center gap-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 px-1 py-0.5 rounded"
-                onClick={() => {
-                    startEditing(type, departmentId, memberId, field, value);
-                }}
-            >
-                <span className="text-sm">{displayValue || '-'}</span>
-                <Edit className="h-3 w-3 opacity-0 group-hover:opacity-50 text-gray-400" />
-            </div>
-        );
     };
 
     // Рендер редактируемой ячейки с department_roles
@@ -892,18 +596,14 @@ export function TeamsTab() {
             editingCell?.memberId === memberId &&
             editingCell?.field === field;
 
-        const handleSelectChange = (newValue: string) => {
-            // Сохраняем изменения сразу при выборе значения
+        const handleSelectChange = (newRoleId: string) => {
             if (!departmentId || !memberId) return;
 
-            let finalValue = newValue;
+            const roleId = parseInt(newRoleId);
+            const selectedRole = findRoleById(roleId);
 
-            // Конвертируем специальные значения в пустую строку для хранения
-            if (newValue === 'no-role') {
-                finalValue = '';
-            }
+            if (!selectedRole) return;
 
-            // Редактирование сотрудника
             setBusinessUnits(prev => {
                 const updated = [...prev];
                 const department = updated[0].departments.find(d => d.id === departmentId);
@@ -911,23 +611,27 @@ export function TeamsTab() {
                     const member = department.members.find(m => m.id === memberId);
                     if (member) {
                         const oldValue = member.department_role;
-                        member.department_role = finalValue || 'Member';
+                        member.department_role = selectedRole.name;
 
-                        // Если ставим роль менеджера, добавляем в список менеджеров
-                        if (finalValue === 'Manager' && !department.managerIds.includes(member.id)) {
+                        if (selectedRole.name === 'Manager' && !department.managerIds.includes(member.id)) {
                             department.managers.push(member);
                             department.managerIds.push(member.id);
                         }
-                        // Если убираем роль менеджера, удаляем из списка менеджеров
-                        else if (finalValue !== 'Manager' && department.managerIds.includes(member.id)) {
+                        else if (selectedRole.name !== 'Manager' && department.managerIds.includes(member.id)) {
                             department.managers = department.managers.filter(m => m.id !== member.id);
                             department.managerIds = department.managerIds.filter(id => id !== member.id);
                         }
 
-                        if (oldValue !== finalValue) {
+                        if (member.id) {
+                            editDepartmentRole({
+                                userId: member.id,
+                                department_role: roleId
+                            });
+                        }
+
+                        if (oldValue !== selectedRole.name) {
                             toast.success(
-                                `Department role for "${member.first_name} ${member.last_name}" has been updated to "${finalValue || 'Member'}"`,
-                                // 'success'
+                                `Department role for "${member.first_name} ${member.last_name}" has been updated to "${selectedRole.name}"`,
                             );
                         }
                     }
@@ -935,41 +639,27 @@ export function TeamsTab() {
                 return updated;
             });
 
-            // Принудительно обновляем интерфейс
             forceUpdate({});
-
-            // Закрываем режим редактирования
             setEditingCell(null);
             setTempValue('');
         };
 
         if (isEditing) {
-            const selectValue = tempValue || (value === '' ? 'no-role' : value);
+            const currentRoleId = findRoleIdByName(value);
+            const selectValue = currentRoleId.toString();
 
             return (
                 <div className="flex items-center gap-1">
-                    <Select
-                        value={selectValue}
-                        onValueChange={handleSelectChange}
-                        autoFocus
-                    >
+                    <Select value={selectValue} onValueChange={handleSelectChange} autoFocus>
                         <SelectTrigger className="h-7 text-sm">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="no-role">No role</SelectItem>
-                            {department_roles && department_roles.length > 0 ? (
-                                department_roles.map(role => (
-                                    <SelectItem key={role.id} value={role.name}>
-                                        {role.name}
-                                    </SelectItem>
-                                ))
-                            ) : (
-                                <>
-                                    <SelectItem value="Member">Member</SelectItem>
-                                    <SelectItem value="Manager">Manager</SelectItem>
-                                </>
-                            )}
+                            {department_roles?.map(role => (
+                                <SelectItem key={role.id} value={role.id.toString()}>
+                                    {role.name}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     <Button size="icon" variant="ghost" onClick={() => {
@@ -982,22 +672,22 @@ export function TeamsTab() {
             );
         }
 
-        const displayValue = convertForDisplay(value);
+        const displayValue = value || 'Member';
 
         return (
             <div
                 className="group flex items-center gap-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 px-1 py-0.5 rounded"
                 onClick={() => {
-                    startEditing(type, departmentId, memberId, field, value);
+                    startEditing(type, departmentId, memberId, field, value || '');
                 }}
             >
-                <span className="text-sm font-medium">{displayValue || 'Member'}</span>
+                <span className="text-sm font-medium">{displayValue}</span>
                 <Edit className="h-3 w-3 opacity-0 group-hover:opacity-50 text-gray-400" />
             </div>
         );
     };
 
-    // Рендер редактируемой ячейки с инпутом
+    // Рендер редактируемой ячейки с инпутом (с использованием editDepartmentName)
     const renderEditableInputCell = (
         value: string,
         type: 'department' | 'member' | 'manager',
@@ -1024,12 +714,26 @@ export function TeamsTab() {
                         if (field === 'name') {
                             const oldValue = department.name;
                             department.name = tempValue;
-                            if (oldValue !== tempValue) {
-                                toast.success(
-                                    `Department name has been updated to "${tempValue}"`,
-                                    // 'success'
-                                );
-                            }
+
+                            // Вызываем API для обновления названия отдела
+                            editDepartmentName({
+                                department_id: departmentId,
+                                name: tempValue
+                            }, {
+                                onSuccess: () => {
+                                    toast.success(
+                                        `Department name has been updated to "${tempValue}"`,
+                                    );
+                                },
+                                onError: (error) => {
+                                    // В случае ошибки откатываем изменения
+                                    department.name = oldValue;
+                                    toast.error(
+                                        `Failed to update department name: ${error.message || 'Unknown error'}`,
+                                    );
+                                    forceUpdate({});
+                                }
+                            });
                         }
                         if (field === 'code') {
                             const oldValue = department.code;
@@ -1037,41 +741,12 @@ export function TeamsTab() {
                             if (oldValue !== tempValue) {
                                 toast.success(
                                     `Department code has been updated to "${tempValue}"`,
-                                    // 'success'
                                 );
                             }
                         }
                     }
                     return updated;
                 });
-            } else if (type === 'member' && departmentId && memberId) {
-                // Редактирование сотрудника
-                setBusinessUnits(prev => {
-                    const updated = [...prev];
-                    const department = updated[0].departments.find(d => d.id === departmentId);
-                    if (department) {
-                        const member = department.members.find(m => m.id === memberId);
-                        if (member) {
-                            const oldValue = member[field as keyof OrganizationMember];
-                            if (field === 'first_name') {
-                                const names = tempValue.split(' ');
-                                member.first_name = names[0];
-                                member.last_name = names.slice(1).join(' ') || member.last_name;
-                            }
-                            if (field === 'email') member.email = tempValue;
-
-                            if (oldValue !== tempValue) {
-                                toast.success(
-                                    `Employee "${member.first_name} ${member.last_name}" has been updated successfully`,
-                                    // 'success'
-                                );
-                            }
-                        }
-                    }
-                    return updated;
-                });
-                // Принудительно обновляем интерфейс
-                forceUpdate({});
             }
 
             setEditingCell(null);
@@ -1124,13 +799,14 @@ export function TeamsTab() {
         );
     };
 
-    // Отменить редактирование
-    const cancelEdit = () => {
-        setEditingCell(null);
-        setTempValue('');
+    const renderReadOnlyCell = (value: string) => {
+        return (
+            <div className="text-sm">
+                <span className="text-sm">{value || '-'}</span>
+            </div>
+        );
     };
 
-    // Добавить сотрудника в отдел с уведомлением
     const addMemberToDepartment = (newMember: OrganizationMember) => {
         if (!selectedDepartment) return;
 
@@ -1140,30 +816,32 @@ export function TeamsTab() {
             if (department) {
                 department.members.push(newMember);
 
-                // Если добавляем менеджера, добавляем его в список менеджеров
                 if (newMember.department_role === 'Manager') {
                     department.managers.push(newMember);
                     department.managerIds.push(newMember.id);
                 }
 
-                // Уведомление об успешном добавлении
+                const roleId = findRoleIdByName(newMember.department_role);
+
+                if (newMember.id) {
+                    editDepartmentRole({
+                        userId: newMember.id,
+                        department_role: roleId
+                    });
+                }
+
                 toast.success(
                     `Employee "${newMember.first_name} ${newMember.last_name}" has been added to ${department.name} department`,
-                    // 'success'
                 );
             }
             return updated;
         });
 
-        // Закрыть модальное окно
         setShowAddMemberModal(false);
         setSelectedDepartment(null);
-
-        // Принудительно обновляем интерфейс
         forceUpdate({});
     };
 
-    // Добавить отдел с уведомлением
     const addDepartment = (newDepartment: DepartmentGroup) => {
         setBusinessUnits(prev => {
             const updated = [...prev];
@@ -1171,32 +849,11 @@ export function TeamsTab() {
             return updated;
         });
 
-        // Уведомление об успешном создании
-        toast.success(
-            `Department "${newDepartment.name}" has been created successfully`,
-            // 'success'
-        );
-
+        toast.success(`Department "${newDepartment.name}" has been created successfully`);
         setShowAddDepartmentModal(false);
-
-        // Принудительно обновляем интерфейс
         forceUpdate({});
     };
 
-    // Добавить роль с уведомлением
-    const addRole = (newRole: Role) => {
-        setRoles(prev => [...prev, newRole]);
-
-        // Уведомление об успешном создании
-        toast.success(
-            `Role "${newRole.name}" has been created successfully`,
-            // 'success'
-        );
-
-        setShowCreateRoleModal(false);
-    };
-
-    // Удалить сотрудника из отдела с уведомлением
     const removeMemberFromDepartment = (departmentId: number, memberId: number) => {
         let memberName = '';
 
@@ -1208,10 +865,16 @@ export function TeamsTab() {
                 if (member) {
                     memberName = `${member.first_name} ${member.last_name}`;
 
-                    // Если удаляем менеджера, удаляем его из списка менеджеров
                     if (department.managerIds.includes(member.id)) {
                         department.managers = department.managers.filter(m => m.id !== member.id);
                         department.managerIds = department.managerIds.filter(id => id !== member.id);
+
+                        if (member.id) {
+                            editDepartmentRole({
+                                userId: member.id,
+                                department_role: 1
+                            });
+                        }
                     }
                 }
                 department.members = department.members.filter(m => m.id !== memberId);
@@ -1219,19 +882,13 @@ export function TeamsTab() {
             return updated;
         });
 
-        // Уведомление об успешном удалении
         if (memberName) {
-            toast.success(
-                `Employee "${memberName}" has been removed from department`,
-                // 'success'
-            );
+            toast.success(`Employee "${memberName}" has been removed from department`);
         }
 
-        // Принудительно обновляем интерфейс
         forceUpdate({});
     };
 
-    // Удалить отдел с уведомлением
     const removeDepartment = (departmentId: number) => {
         let departmentName = '';
 
@@ -1245,58 +902,13 @@ export function TeamsTab() {
             return updated;
         });
 
-        // Уведомление об успешном удалении
         if (departmentName) {
-            toast.success(
-                `Department "${departmentName}" has been deleted`,
-                // 'success'
-            );
+            toast.success(`Department "${departmentName}" has been deleted`);
         }
 
-        // Принудительно обновляем интерфейс
         forceUpdate({});
     };
 
-    // Получить опции для ролей
-    const getRoleOptions = () => {
-        return [{ value: 'no-role', label: 'No role' }, ...roles.map(r => ({ value: r.name, label: r.name }))];
-    };
-
-    // Получить опции для department_roles
-    const getDepartmentRoleOptions = () => {
-        if (department_roles && department_roles.length > 0) {
-            return [{ value: 'no-role', label: 'No role' }, ...department_roles.map(r => ({ value: r.name, label: r.name }))];
-        }
-        return [
-            { value: 'no-role', label: 'No role' },
-            { value: 'Member', label: 'Member' },
-            { value: 'Manager', label: 'Manager' }
-        ];
-    };
-
-    // Рендер ячейки менеджера с галочкой
-    const renderManagerCell = (department: DepartmentGroup, member: OrganizationMember) => {
-        const isManager = isEmployeeManager(department, member);
-
-        return (
-            <div className="text-center">
-                {isManager ? (
-                    <div className="flex items-center justify-center">
-                        <Badge variant="outline" className="flex items-center gap-1 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300">
-                            <Crown className="h-3 w-3" />
-                            Manager
-                        </Badge>
-                    </div>
-                ) : (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                        {member.department_role || 'Member'}
-                    </Badge>
-                )}
-            </div>
-        );
-    };
-
-    // Назначить/снять с должности менеджера
     const toggleEmployeeManager = (departmentId: number, member: OrganizationMember) => {
         if (!member.id) {
             toast.error('Employee does not have an id');
@@ -1311,37 +923,35 @@ export function TeamsTab() {
                 const memberName = `${member.first_name} ${member.last_name}`;
 
                 if (isCurrentlyManager) {
-                    // Снимаем с должности менеджера
                     department.managers = department.managers.filter(m => m.id !== member.id);
                     department.managerIds = department.managerIds.filter(id => id !== member.id);
                     member.department_role = 'Member';
-                    toast.success(
-                        `${memberName} has been removed as manager of ${department.name}`
-                    );
+
+                    editDepartmentRole({
+                        userId: member.id,
+                        department_role: 1
+                    });
+
+                    toast.success(`${memberName} has been removed as manager of ${department.name}`);
                 } else {
-                    // Назначаем менеджером
                     department.managers.push(member);
                     department.managerIds.push(member.id);
                     member.department_role = 'Manager';
-                    toast.success(
-                        `${memberName} has been appointed as manager of ${department.name}`
-                    );
+
+                    editDepartmentRole({
+                        userId: member.id,
+                        department_role: 2
+                    });
+
+                    toast.success(`${memberName} has been appointed as manager of ${department.name}`);
                 }
             }
             return updated;
         });
 
-        // Принудительно обновляем интерфейс
         forceUpdate({});
     };
 
-    // Получить список менеджеров для отдела
-    const getDepartmentManagers = (departmentId: number) => {
-        const department = businessUnits[0]?.departments.find(d => d.id === departmentId);
-        return department ? department.managers : [];
-    };
-
-    // Модальное окно управления менеджерами
     const ManagerManagementModal = ({ departmentId, onClose }: { departmentId: number, onClose: () => void }) => {
         const department = businessUnits[0]?.departments.find(d => d.id === departmentId);
         const [selectedManagerIds, setSelectedManagerIds] = useState<number[]>(
@@ -1355,28 +965,38 @@ export function TeamsTab() {
                 const updated = [...prev];
                 const dept = updated[0].departments.find(d => d.id === departmentId);
                 if (dept) {
-                    // Сначала сбрасываем всех менеджеров
                     dept.members.forEach(member => {
                         if (dept.managerIds.includes(member.id)) {
                             member.department_role = 'Member';
+
+                            if (member.id) {
+                                editDepartmentRole({
+                                    userId: member.id,
+                                    department_role: 1
+                                });
+                            }
                         }
                     });
 
-                    // Получаем выбранных менеджеров
                     const selectedManagers: OrganizationMember[] = [];
                     dept.members.forEach(member => {
                         if (selectedManagerIds.includes(member.id)) {
                             member.department_role = 'Manager';
                             selectedManagers.push(member);
+
+                            if (member.id) {
+                                editDepartmentRole({
+                                    userId: member.id,
+                                    department_role: 2
+                                });
+                            }
                         }
                     });
 
                     dept.managers = selectedManagers;
                     dept.managerIds = selectedManagerIds;
 
-                    toast.success(
-                        `Managers for ${dept.name} have been updated`
-                    );
+                    toast.success(`Managers for ${dept.name} have been updated`);
                 }
                 return updated;
             });
@@ -1467,7 +1087,6 @@ export function TeamsTab() {
 
     return (
         <div className="space-y-6">
-            {/* Уведомления */}
             {notifications.map((notification) => (
                 <NotificationToast
                     key={notification.id}
@@ -1476,24 +1095,19 @@ export function TeamsTab() {
                 />
             ))}
 
-            {/* Заголовок и управление */}
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Organization Structure</h2>
                     <p className="text-muted-foreground">Edit departments and team members</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button
-                        onClick={() => setShowAddDepartmentModal(true)}
-                        size="sm"
-                    >
+                    <Button onClick={() => setShowAddDepartmentModal(true)} size="sm">
                         <Plus className="w-4 h-4 mr-2" />
                         Add Department
                     </Button>
                 </div>
             </div>
 
-            {/* Карточка с организационной структурой */}
             <Card>
                 <CardHeader>
                     <CardTitle className="text-xl">
@@ -1502,7 +1116,6 @@ export function TeamsTab() {
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-8">
-                        {/* Members Section */}
                         <div className="space-y-6">
                             <h3 className="text-lg font-semibold flex items-center gap-2">
                                 <Users className="w-5 h-5" />
@@ -1511,7 +1124,6 @@ export function TeamsTab() {
 
                             {businessUnits[0]?.departments.map((department) => (
                                 <div key={department.id} className="space-y-4">
-                                    {/* Заголовок отдела */}
                                     <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg">
                                         <div className="flex items-center gap-3">
                                             <Building className="w-5 h-5 text-gray-500" />
@@ -1520,7 +1132,6 @@ export function TeamsTab() {
                                                     {renderEditableInputCell(department.name, 'department', department.id, undefined, 'name')}
                                                 </div>
                                                 <div className="text-sm text-gray-500">
-                                                    Code: {renderEditableInputCell(department.code, 'department', department.id, undefined, 'code')}
                                                 </div>
                                                 {department.managers.length > 0 && (
                                                     <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1 flex-wrap">
@@ -1555,17 +1166,6 @@ export function TeamsTab() {
                                             </Badge>
                                             <Button
                                                 size="sm"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setSelectedDepartment(department);
-                                                    setShowAddMemberModal(true);
-                                                }}
-                                            >
-                                                <UserPlus className="w-4 h-4 mr-1" />
-                                                Add
-                                            </Button>
-                                            <Button
-                                                size="sm"
                                                 variant="ghost"
                                                 onClick={() => removeDepartment(department.id)}
                                                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
@@ -1575,7 +1175,6 @@ export function TeamsTab() {
                                         </div>
                                     </div>
 
-                                    {/* Таблица сотрудников отдела */}
                                     <div className="ml-6 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
                                         {getAllDepartmentMembers(department).length === 0 ? (
                                             <div className="text-center py-8 text-gray-500">
@@ -1600,7 +1199,7 @@ export function TeamsTab() {
                                                             <TableRow key={member.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
                                                                 <TableCell className="py-2">
                                                                     <div className="text-sm font-medium">
-                                                                        {renderEditableInputCell(`${member.first_name} ${member.last_name}`, 'member', department.id, member.id, 'first_name')}
+                                                                        {renderReadOnlyCell(`${member.first_name} ${member.last_name}`)}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="py-2">
@@ -1615,7 +1214,7 @@ export function TeamsTab() {
                                                                 </TableCell>
                                                                 <TableCell className="py-2">
                                                                     <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                                        {renderEditableInputCell(member.email || '', 'member', department.id, member.id, 'email')}
+                                                                        {renderReadOnlyCell(member.email || '')}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="py-2">
@@ -1630,7 +1229,20 @@ export function TeamsTab() {
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="py-2 text-center">
-                                                                    {renderManagerCell(department, member)}
+                                                                    <div className="text-center">
+                                                                        {isEmployeeManager(department, member) ? (
+                                                                            <div className="flex items-center justify-center">
+                                                                                <Badge variant="outline" className="flex items-center gap-1 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300">
+                                                                                    <Crown className="h-3 w-3" />
+                                                                                    Manager
+                                                                                </Badge>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <Badge variant="outline" className="flex items-center gap-1">
+                                                                                {member.department_role || 'Member'}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
                                                                 </TableCell>
                                                                 <TableCell className="py-2 text-right">
                                                                     <DropdownMenu>
@@ -1640,14 +1252,6 @@ export function TeamsTab() {
                                                                             </Button>
                                                                         </DropdownMenuTrigger>
                                                                         <DropdownMenuContent align="end" className="w-48">
-                                                                            <DropdownMenuItem
-                                                                                onClick={() => {
-                                                                                    startEditing('member', department.id, member.id, 'first_name', `${member.first_name} ${member.last_name}`);
-                                                                                }}
-                                                                            >
-                                                                                <Edit className="h-3 w-3 mr-2" />
-                                                                                Edit Name
-                                                                            </DropdownMenuItem>
                                                                             <DropdownMenuItem
                                                                                 onClick={() => {
                                                                                     startEditing('member', department.id, member.id, 'department_role', member.department_role || '');
@@ -1696,7 +1300,6 @@ export function TeamsTab() {
                 </CardContent>
             </Card>
 
-            {/* Модальное окно для добавления сотрудника */}
             {showAddMemberModal && selectedDepartment && (
                 <AddMemberModal
                     department={selectedDepartment}
@@ -1711,21 +1314,10 @@ export function TeamsTab() {
                 />
             )}
 
-            {/* Модальное окно для добавления отдела */}
             {showAddDepartmentModal && (
                 <AddDepartmentModal
                     onClose={() => setShowAddDepartmentModal(false)}
                     onAdd={addDepartment}
-                    businessUnits={businessUnits}
-                    departmentRoles={department_roles || []}
-                    allEmployees={allEmployees}
-                />
-            )}
-
-            {showCreateRoleModal && (
-                <CreateRoleModal
-                    onClose={() => setShowCreateRoleModal(false)}
-                    onAdd={addRole}
                 />
             )}
 
