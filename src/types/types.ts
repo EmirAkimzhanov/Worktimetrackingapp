@@ -139,10 +139,10 @@ export interface CalendarStatistics {
 export interface Department {
     id: number;
     name: string;
-    code: string; // Делаем опциональным
-    createdAt?: string; // Делаем опциональным
-    updatedAt?: string; // Делаем опциональным
-    teamSize?: number; // Делаем опциональным
+    code: string;
+    createdAt?: string;
+    updatedAt?: string;
+    teamSize?: number;
 }
 
 export interface DepartmentFormData {
@@ -186,7 +186,7 @@ export interface TimeSheetNotification {
 }
 
 export interface User {
-    id: string;
+    id: number;
     name: string;
     email: string;
     role: 'admin' | 'user' | 'manager';

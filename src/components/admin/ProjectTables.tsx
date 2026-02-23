@@ -1,40 +1,84 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Edit, Trash2, FolderKanban, Plus } from 'lucide-react';
 import { Project } from '../TimeTrackerContext';
 import { Client, Department, Position, User } from '../../types/types';
+import { useGetDepartments } from '../../hooks/useDepartments';
+import { useStatus } from '../../hooks/useStatus';
+import { useGetCountries } from '../../hooks/useCountries';
+import { useGetClients, useGetCountryClients } from '../../hooks/useClients';
+import { useGetServiceLines } from '../../hooks/useServiceLines';
+import { useGetTaskTypes } from '../../hooks/useTasks';
+import { useDeleteProject, useGetProjects } from '../../hooks/useProject';
+import { useUserStore } from '../../store/UsersStore';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '../ui/alert-dialog';
 
 interface ProjectsTableProps {
-    projects: Project[];
     entries: any[];
     clients: Client[];
     users: User[];
     positions: Position[];
     departments: Department[];
     onEdit: (project: Project) => void;
-    onDelete: (id: string) => void;
-    onAdd: () => void; // Добавлен новый проп
+    onAdd: () => void;
 }
 
 export function ProjectsTable({
-    projects,
     entries,
     clients,
     users,
     positions,
     departments,
     onEdit,
-    onDelete,
-    onAdd, // Добавлен новый проп
+    onAdd,
 }: ProjectsTableProps) {
+    const { mutate: getDepartments } = useGetDepartments();
+    const { mutate: getStatuses } = useStatus();
+    const { mutate: getCountries } = useGetCountries();
+    const { mutate: getClients } = useGetClients();
+    const { mutate: getServiceLines } = useGetServiceLines();
+    const { mutate: getTaskTypes } = useGetTaskTypes();
+    const { mutate: getProjects } = useGetProjects();
+    const { mutate: deleteProject } = useDeleteProject();
+    const store_projects = useUserStore((state) => state.projects);
+
+    // Состояние для попапа подтверждения удаления
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [projectToDelete, setProjectToDelete] = useState<{
+        id: string;
+        name: string;
+        code: string;
+        hasEntries: boolean;
+    } | null>(null);
+
+    useEffect(() => {
+        getDepartments();
+        getStatuses();
+        getServiceLines();
+        getCountries();
+        getClients();
+        getTaskTypes();
+        getProjects();
+    }, []);
+
     const getProjectStats = (projectId: string) => {
         const projectEntries = entries.filter(e => e.projectId === projectId);
         const totalHours = projectEntries.reduce((sum, e) => sum + e.hours, 0);
         return {
             entriesCount: projectEntries.length,
             totalHours: totalHours.toFixed(1),
+            hasEntries: projectEntries.length > 0,
         };
     };
 
@@ -53,6 +97,49 @@ export function ProjectsTable({
         if (!departmentId) return '-';
         return departments.find(d => d.id === departmentId)?.name || 'Unknown';
     };
+
+    // Функция для открытия попапа удаления
+    const handleDeleteClick = (project: Project) => {
+        const stats = getProjectStats(project.id);
+
+        setProjectToDelete({
+            id: project.id,
+            name: project.name,
+            code: project.code,
+            hasEntries: stats.hasEntries
+        });
+        setDeleteDialogOpen(true);
+    };
+
+    // Функция для подтверждения удаления
+    const handleConfirmDelete = () => {
+        if (projectToDelete) {
+            deleteProject(projectToDelete.id, {
+                onSuccess: () => {
+                    // После успешного удаления обновляем список проектов
+                    getProjects();
+                    // Закрываем попап
+                    setDeleteDialogOpen(false);
+                    setProjectToDelete(null);
+                },
+                onError: (error) => {
+                    console.error('Error deleting project:', error);
+                    // Можно добавить уведомление об ошибке
+                    setDeleteDialogOpen(false);
+                    setProjectToDelete(null);
+                }
+            });
+        }
+    };
+
+    // Функция для отмены удаления
+    const handleCancelDelete = () => {
+        setDeleteDialogOpen(false);
+        setProjectToDelete(null);
+    };
+
+    // Используем projects из store с проверкой на null
+    const projects = store_projects || [];
 
     return (
         <div className="space-y-4">
@@ -87,7 +174,7 @@ export function ProjectsTable({
                         {projects.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={9} className="text-center text-slate-500 py-8">
-                                    No projects found. Click "Add Project" to create your first project.
+                                    {store_projects === null ? 'Loading projects...' : 'No projects found. Click "Add Project" to create your first project.'}
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -132,7 +219,7 @@ export function ProjectsTable({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={() => onDelete(project.id)}
+                                                    onClick={() => handleDeleteClick(project)}
                                                 >
                                                     <Trash2 className="w-4 h-4 text-red-500" />
                                                 </Button>
@@ -145,6 +232,52 @@ export function ProjectsTable({
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Попап подтверждения удаления проекта */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Project?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {projectToDelete && (
+                                <>
+                                    You are about to delete project{" "}
+                                    <span className="font-semibold text-red-600">
+                                        {projectToDelete.code} - {projectToDelete.name}
+                                    </span>
+                                    .
+
+                                    <div className="mt-3 space-y-2">
+                                        <p className="text-sm text-amber-600">
+                                            This action cannot be undone. All project data will be permanently removed.
+                                        </p>
+
+                                        {projectToDelete.hasEntries && (
+                                            <div className="p-3 bg-red-50 rounded-md">
+                                                <p className="text-sm font-medium text-red-700">
+                                                    ⚠️ Warning: This project has time entries associated with it.
+                                                    Deleting this project will also remove all related time tracking data.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={handleCancelDelete}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmDelete}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete Project
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

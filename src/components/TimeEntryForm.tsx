@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -10,257 +10,437 @@ import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner@2.0.3';
+import { useGetTimeEntrys, useSendTimeEntrys } from '../hooks/useTimeEntry';
+import { useUserStore } from '../store/UsersStore';
+import { useGetCountries } from '../hooks/useCountries';
+import { Country } from '../types/countries';
+import { useGetCLientProjecs, useGetCountryClients } from '../hooks/useClients';
+import { Client } from '../types/client';
+import { Project, Task } from '../types/project';
+import { useGetProjectTasks } from '../hooks/useProject';
+import { useGetInterbalTasks } from '../hooks/useTasks';
+import { useGetLeaves } from '../hooks/useLeaves';
+import { Leave } from '../types/leave';
 
 type InputMode = 'single' | 'range';
 type TabType = 'internal' | 'external' | 'vacations';
-
-// Предопределенные задачи по странам и клиентам
-const TASK_OPTIONS = [
-  { value: 'bug_fixing', label: 'Bug Fixing' },
-  { value: 'feature_development', label: 'Feature Development' },
-  { value: 'code_review', label: 'Code Review' },
-  { value: 'testing', label: 'Testing' },
-  { value: 'documentation', label: 'Documentation' },
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'planning', label: 'Planning' },
-  { value: 'refactoring', label: 'Refactoring' },
-  { value: 'research', label: 'Research' },
-  { value: 'deployment', label: 'Deployment' },
-  { value: 'maintenance', label: 'Maintenance' },
-  { value: 'support', label: 'Support' },
-  { value: 'training', label: 'Training' },
-  { value: 'analysis', label: 'Analysis' },
-  { value: 'design', label: 'Design' },
-];
-
-// Страны для внешних проектов
-const COUNTRIES = [
-  { value: 'us', label: 'United States' },
-  { value: 'uk', label: 'United Kingdom' },
-  { value: 'de', label: 'Germany' },
-  { value: 'fr', label: 'France' },
-  { value: 'jp', label: 'Japan' },
-  { value: 'ca', label: 'Canada' },
-  { value: 'au', label: 'Australia' },
-  { value: 'other', label: 'Other' },
-];
-
-// Клиенты для внешних проектов
-const CLIENTS = [
-  { value: 'client_a', label: 'Client A Corp.' },
-  { value: 'client_b', label: 'Client B Ltd.' },
-  { value: 'client_c', label: 'Client C GmbH' },
-  { value: 'client_d', label: 'Client D Inc.' },
-  { value: 'client_e', label: 'Client E S.A.' },
-];
-
-// Проекты, сгруппированные по странам и клиентам
-const PROJECTS_BY_COUNTRY_CLIENT = {
-  // США проекты
-  us: {
-    client_a: [
-      { id: 'us_client_a_1', name: 'US Client A - E-commerce Platform', code: 'USA-CA1', color: '#3B82F6' },
-      { id: 'us_client_a_2', name: 'US Client A - Mobile App', code: 'USA-CA2', color: '#10B981' },
-    ],
-    client_b: [
-      { id: 'us_client_b_1', name: 'US Client B - Banking System', code: 'USA-CB1', color: '#8B5CF6' },
-      { id: 'us_client_b_2', name: 'US Client B - Analytics Dashboard', code: 'USA-CB2', color: '#F59E0B' },
-    ],
-  },
-  // Великобритания проекты
-  uk: {
-    client_a: [
-      { id: 'uk_client_a_1', name: 'UK Client A - Healthcare Portal', code: 'UK-CA1', color: '#EF4444' },
-      { id: 'uk_client_a_2', name: 'UK Client A - CRM System', code: 'UK-CA2', color: '#06B6D4' },
-    ],
-    client_c: [
-      { id: 'uk_client_c_1', name: 'UK Client C - Logistics Platform', code: 'UK-CC1', color: '#84CC16' },
-    ],
-  },
-  // Германия проекты
-  de: {
-    client_c: [
-      { id: 'de_client_c_1', name: 'DE Client C - Automotive Software', code: 'DE-CC1', color: '#F97316' },
-      { id: 'de_client_c_2', name: 'DE Client C - IoT Platform', code: 'DE-CC2', color: '#8B5CF6' },
-    ],
-    client_d: [
-      { id: 'de_client_d_1', name: 'DE Client D - Manufacturing ERP', code: 'DE-CD1', color: '#EC4899' },
-    ],
-  },
-  // Франция проекты
-  fr: {
-    client_e: [
-      { id: 'fr_client_e_1', name: 'FR Client E - Fashion E-commerce', code: 'FR-CE1', color: '#14B8A6' },
-    ],
-  },
-  // Япония проекты
-  jp: {
-    client_b: [
-      { id: 'jp_client_b_1', name: 'JP Client B - Gaming Platform', code: 'JP-CB1', color: '#F43F5E' },
-    ],
-    client_d: [
-      { id: 'jp_client_d_1', name: 'JP Client D - Robotics Software', code: 'JP-CD1', color: '#6366F1' },
-    ],
-  },
-  // Канада проекты
-  ca: {
-    client_a: [
-      { id: 'ca_client_a_1', name: 'CA Client A - Education Platform', code: 'CA-CA1', color: '#0EA5E9' },
-    ],
-    client_e: [
-      { id: 'ca_client_e_1', name: 'CA Client E - Real Estate Portal', code: 'CA-CE1', color: '#10B981' },
-    ],
-  },
-  // Австралия проекты
-  au: {
-    client_b: [
-      { id: 'au_client_b_1', name: 'AU Client B - Tourism Platform', code: 'AU-CB1', color: '#F59E0B' },
-    ],
-    client_c: [
-      { id: 'au_client_c_1', name: 'AU Client C - Mining Software', code: 'AU-CC1', color: '#84CC16' },
-    ],
-  },
-  // Другие страны
-  other: {
-    client_a: [
-      { id: 'other_client_a_1', name: 'Other Client A - General Development', code: 'OTH-CA1', color: '#6B7280' },
-    ],
-    client_e: [
-      { id: 'other_client_e_1', name: 'Other Client E - Consulting Platform', code: 'OTH-CE1', color: '#9CA3AF' },
-    ],
-  },
-};
-
-// Задачи, сгруппированные по странам и клиентам
-const TASKS_BY_COUNTRY_CLIENT = {
-  // США задачи
-  us: {
-    client_a: ['feature_development', 'testing', 'deployment', 'support'],
-    client_b: ['bug_fixing', 'code_review', 'analysis', 'maintenance'],
-  },
-  // Великобритания задачи
-  uk: {
-    client_a: ['documentation', 'meeting', 'planning', 'research'],
-    client_c: ['feature_development', 'testing', 'deployment'],
-  },
-  // Германия задачи
-  de: {
-    client_c: ['bug_fixing', 'refactoring', 'analysis', 'design'],
-    client_d: ['feature_development', 'testing', 'documentation'],
-  },
-  // Франция задачи
-  fr: {
-    client_e: ['design', 'research', 'planning', 'deployment'],
-  },
-  // Япония задачи
-  jp: {
-    client_b: ['testing', 'analysis', 'research', 'design'],
-    client_d: ['feature_development', 'bug_fixing', 'maintenance'],
-  },
-  // Канада задачи
-  ca: {
-    client_a: ['documentation', 'training', 'support', 'meeting'],
-    client_e: ['feature_development', 'testing', 'deployment'],
-  },
-  // Австралия задачи
-  au: {
-    client_b: ['research', 'analysis', 'planning', 'design'],
-    client_c: ['feature_development', 'testing', 'deployment'],
-  },
-  // Другие страны
-  other: {
-    client_a: ['general_development', 'support', 'maintenance'],
-    client_e: ['consulting', 'analysis', 'planning'],
-  },
-};
 
 export function TimeEntryForm() {
   const { addMultipleEntries } = useTimeTracker();
   const [inputMode, setInputMode] = useState<InputMode>('single');
   const [activeTab, setActiveTab] = useState<TabType>('internal');
   const [projectId, setProjectId] = useState('');
-  const [task, setTask] = useState('');
+  const [selectedTask, setSelectedTask] = useState('');
+  const [selectedLeaveType, setSelectedLeaveType] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [hours, setHours] = useState('8');
   const [includeWeekends, setIncludeWeekends] = useState(true);
-  const [country, setCountry] = useState('');
+  const [country, setCountry] = useState<string>('');
   const [client, setClient] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCountriesLoading, setIsCountriesLoading] = useState(false);
+  const [isLoadingInternalTasks, setIsLoadingInternalTasks] = useState(false);
+  const [isLoadingLeaves, setIsLoadingLeaves] = useState(false);
+  const [localCountryOptions, setLocalCountryOptions] = useState<Array<{ value: string, label: string, code: string }>>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const countriesLoadedRef = useRef(false);
+  const internalTasksLoadedRef = useRef(false);
+  const leavesLoadedRef = useRef(false);
 
-  // Фильтрованные проекты и задачи
-  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
-  const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
+  const { mutate: sendEntrys } = useSendTimeEntrys();
+  const { mutate: getCountries } = useGetCountries();
+  const { mutate: getClients, isPending: isLoadingClients } = useGetCountryClients();
+  const { mutate: getClientProjects } = useGetCLientProjecs();
+  const { mutate: getProjectTasks } = useGetProjectTasks();
+  const { mutate: getInternalTasks } = useGetInterbalTasks();
+  const { mutate: getLeaves } = useGetLeaves();
+  const { mutate: getTimeEntrys } = useGetTimeEntrys();
 
-  // Эффект для фильтрации проектов и задач при изменении country и client
-  useEffect(() => {
-    if (country && client) {
-      // Получаем проекты для выбранной страны и клиента
-      const countryData = PROJECTS_BY_COUNTRY_CLIENT[country as keyof typeof PROJECTS_BY_COUNTRY_CLIENT];
-      if (countryData) {
-        const clientProjects = countryData[client as keyof typeof countryData];
-        setFilteredProjects(clientProjects || []);
-      } else {
-        setFilteredProjects([]);
-      }
+  // Получаем данные из стора
+  const countries = useUserStore((state) => state.countries);
+  const selectedCountry = useUserStore((s) => s.selectedCountry);
+  const clients = selectedCountry?.clients ?? [];
+  const client_projects = useUserStore((state) => state.client_projects);
+  const setClientProjects = useUserStore((state) => state.setClientProjects);
+  const project_tasks = useUserStore((state) => state.project_tasks);
+  const setProjectTasks = useUserStore((state) => state.setProjectTasks);
+  const clearProjectTasks = useUserStore((state) => state.clearProjectTasks);
+  const internal_tasks = useUserStore((state) => state.internal_tasks);
+  const setInternalTasks = useUserStore((state) => state.setInternalTasks);
+  const leaves = useUserStore((state) => state.leaves);
 
-      // Получаем задачи для выбранной страны и клиента
-      const tasksData = TASKS_BY_COUNTRY_CLIENT[country as keyof typeof TASKS_BY_COUNTRY_CLIENT];
-      if (tasksData) {
-        const clientTasks = tasksData[client as keyof typeof tasksData];
-        if (clientTasks) {
-          const filteredTaskOptions = TASK_OPTIONS.filter(taskOption =>
-            clientTasks.includes(taskOption.value)
-          );
-          setFilteredTasks(filteredTaskOptions);
-        } else {
-          setFilteredTasks([]);
-        }
-      } else {
-        setFilteredTasks([]);
-      }
+  // Преобразуем клиентов в формат для Select
+  const clientOptions = useMemo(() => {
+    if (!Array.isArray(clients) || clients.length === 0) return [];
 
-      // Сбрасываем выбранный проект и задачу при изменении фильтров
-      setProjectId('');
-      setTask('');
-    } else {
-      setFilteredProjects([]);
-      setFilteredTasks([]);
-      setProjectId('');
-      setTask('');
+    return clients
+      .filter(client => client && client.id != null && client.name)
+      .map((client: Client) => ({
+        value: String(client.id),
+        label: client.name || 'Unnamed Client',
+        group: client.group || '',
+        sector: client.sector || '',
+        personal_number: client.personal_number || ''
+      }));
+  }, [clients]);
+
+  // Преобразуем проекты в формат для Select
+  const projectOptions = useMemo(() => {
+    if (!client_projects?.projects || !Array.isArray(client_projects.projects)) return [];
+
+    return client_projects.projects
+      .filter((project: Project) => project && project.id != null && project.name)
+      .map((project: Project) => ({
+        value: String(project.id),
+        label: project.name || 'Unnamed Project',
+        code: project.code || '',
+        description: project.description || '',
+        is_chargeable: project.is_chargeable || false,
+        status: project.status || '',
+        manager: project.manager || ''
+      }));
+  }, [client_projects]);
+
+  // Преобразуем задачи проекта в формат для Select
+  const projectTaskOptions = useMemo(() => {
+    if (!project_tasks?.tasks || !Array.isArray(project_tasks.tasks)) return [];
+
+    return project_tasks.tasks
+      .filter((task: Task) => task && task.id != null && task.name)
+      .map((task: Task) => ({
+        value: String(task.id),
+        label: task.name || 'Unnamed Task',
+        task_type: task.task_type || ''
+      }));
+  }, [project_tasks]);
+
+  // Преобразуем внутренние задачи в формат для Select
+  const internalTaskOptions = useMemo(() => {
+    if (!internal_tasks || !Array.isArray(internal_tasks)) return [];
+
+    return internal_tasks
+      .filter((task: Task) => task && task.id != null && task.name)
+      .map((task: Task) => ({
+        value: String(task.id),
+        label: task.name || 'Unnamed Task',
+        task_type: task.task_type || ''
+      }));
+  }, [internal_tasks]);
+
+  // Преобразуем leaves в формат для Select
+  const leaveOptions = useMemo(() => {
+    if (!leaves || !Array.isArray(leaves)) {
+      return [];
     }
-  }, [country, client]);
 
-  const resetForm = () => {
-    setTask('');
-    setDescription('');
-    setHours('8');
-    setCountry('');
+    return leaves
+      .filter(leave => leave && leave.id != null && leave.name)
+      .map((leave: Leave) => ({
+        value: String(leave.id),
+        label: leave.name || 'Unnamed Leave',
+        task_type: leave.task_type || ''
+      }));
+  }, [leaves]);
+
+  // Функция для преобразования стран в опции
+  const convertCountriesToOptions = (countriesData: any): Array<{ value: string, label: string, code: string }> => {
+    if (!countriesData) return [];
+
+    let countriesArray: Country[] = [];
+
+    if (Array.isArray(countriesData)) {
+      countriesArray = countriesData;
+    } else if (countriesData && typeof countriesData === 'object') {
+      countriesArray = Object.values(countriesData);
+    }
+
+    const options = countriesArray
+      .filter(country => country && country.id != null && country.name)
+      .map((country: Country) => ({
+        value: String(country.id),
+        label: country.name || 'Unknown Country',
+        code: country.code || ''
+      }));
+
+    return options;
+  };
+
+  // Обновляем опции стран при изменении данных в сторе
+  useEffect(() => {
+    if (countries && !countriesLoadedRef.current) {
+      const options = convertCountriesToOptions(countries);
+      if (options.length > 0) {
+        setLocalCountryOptions(options);
+        countriesLoadedRef.current = true;
+        setIsCountriesLoading(false);
+      }
+    }
+  }, [countries]);
+
+  // Загружаем страны при монтировании компонента
+  useEffect(() => {
+    if (!countriesLoadedRef.current) {
+      setIsCountriesLoading(true);
+
+      const hasCountriesInStore = countries &&
+        ((Array.isArray(countries) && countries.length > 0) ||
+          (!Array.isArray(countries) && Object.keys(countries).length > 0));
+
+      if (!hasCountriesInStore) {
+        getCountries(undefined, {
+          onSuccess: () => {
+            // После успешной загрузки, страны будут в сторе
+          },
+          onError: (error) => {
+            console.error('Failed to load countries:', error);
+            toast.error('Failed to load countries');
+            setIsCountriesLoading(false);
+            countriesLoadedRef.current = true;
+          }
+        });
+      } else {
+        const options = convertCountriesToOptions(countries);
+        setLocalCountryOptions(options);
+        setIsCountriesLoading(false);
+        countriesLoadedRef.current = true;
+      }
+    }
+  }, []);
+
+  // Загружаем внутренние задачи при монтировании компонента
+  useEffect(() => {
+    if (!internalTasksLoadedRef.current) {
+      setIsLoadingInternalTasks(true);
+
+      getInternalTasks(undefined, {
+        onSuccess: (data) => {
+          setInternalTasks(data);
+          setIsLoadingInternalTasks(false);
+          internalTasksLoadedRef.current = true;
+
+          if (data && data.length > 0) {
+            toast.success(`Loaded ${data.length} internal tasks`);
+          } else {
+            toast.warning('No internal tasks found');
+          }
+        },
+        onError: (error) => {
+          console.error('Failed to load internal tasks:', error);
+          toast.error('Failed to load internal tasks');
+          setIsLoadingInternalTasks(false);
+          internalTasksLoadedRef.current = true;
+        }
+      });
+    }
+  }, []);
+
+  // Загружаем leaves при монтировании компонента
+  useEffect(() => {
+    if (!leavesLoadedRef.current) {
+      setIsLoadingLeaves(true);
+
+      getLeaves(undefined, {
+        onSuccess: (data) => {
+          setIsLoadingLeaves(false);
+          leavesLoadedRef.current = true;
+
+          if (data && data.length > 0) {
+            toast.success(`Loaded ${data.length} leave types`);
+          } else {
+            toast.warning('No leave types found');
+          }
+        },
+        onError: (error) => {
+          console.error('Failed to load leaves:', error);
+          toast.error('Failed to load leave types');
+          setIsLoadingLeaves(false);
+          leavesLoadedRef.current = true;
+        }
+      });
+    }
+  }, []);
+
+  // Загружаем клиентов при выборе страны
+  useEffect(() => {
+    if (country && activeTab === 'external') {
+      getClients(country);
+    }
+  }, [country, activeTab]);
+
+  // Функция для загрузки проектов при выборе клиента
+  const handleClientChange = (clientId: string) => {
+    setClient(clientId);
+    setProjectId('');
+    setSelectedTask('');
+    clearProjectTasks();
+
+    if (clientId) {
+      setIsLoadingProjects(true);
+
+      getClientProjects(clientId, {
+        onSuccess: (data) => {
+          setClientProjects(data);
+          setIsLoadingProjects(false);
+
+          if (data?.projects?.length > 0) {
+            toast.success(`Loaded ${data.projects.length} projects for the client`);
+          } else {
+            toast.warning('No projects found for this client');
+          }
+        },
+        onError: (error) => {
+          console.error('Failed to load projects:', error);
+          toast.error('Failed to load projects');
+          setIsLoadingProjects(false);
+          setClientProjects(null);
+        }
+      });
+    } else {
+      setClientProjects(null);
+    }
+  };
+
+  // Функция для загрузки задач при выборе проекта
+  const handleProjectChange = (projectId: string) => {
+    setProjectId(projectId);
+    setSelectedTask('');
+
+    if (projectId) {
+      setIsLoadingTasks(true);
+
+      getProjectTasks(projectId, {
+        onSuccess: (data) => {
+          setProjectTasks(data);
+          setIsLoadingTasks(false);
+
+          if (data?.tasks?.length > 0) {
+            toast.success(`Loaded ${data.tasks.length} tasks for the project`);
+          } else {
+            toast.warning('No tasks found for this project');
+          }
+        },
+        onError: (error) => {
+          console.error('Failed to load project tasks:', error);
+          toast.error('Failed to load project tasks');
+          setIsLoadingTasks(false);
+          setProjectTasks(null);
+        }
+      });
+    } else {
+      clearProjectTasks();
+    }
+  };
+
+  const handleCountryChange = (countryId: string) => {
+    setCountry(countryId);
     setClient('');
     setProjectId('');
+    setSelectedTask('');
+    setClientProjects(null);
+    clearProjectTasks();
+  };
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    if (tab !== 'external') {
+      setClientProjects(null);
+      clearProjectTasks();
+    }
+    if (tab !== 'vacations') {
+      setSelectedLeaveType('');
+    }
+  };
+
+  const resetForm = () => {
+    setSelectedTask('');
+    setSelectedLeaveType('');
+    setDescription('');
+    setHours('8');
+    setProjectId('');
+  };
+
+  const createRequestBody = (): any => {
+    // Базовый объект с общими полями
+    const baseBody = {
+      description,
+      hours: parseFloat(hours),
+      ...(inputMode === 'single'
+        ? { start_date: date, end_date: date }
+        : { start_date: startDate, end_date: endDate, weekends_included: includeWeekends }
+      )
+    };
+
+    // Добавляем поля в зависимости от активной вкладки
+    switch (activeTab) {
+      case 'internal':
+        const selectedInternalTask = internalTaskOptions.find(t => t.value === selectedTask);
+        return {
+          ...baseBody,
+          id: 0, // или генерируйте id
+          country: null,
+          client: null,
+          project: null,
+          task_type: selectedInternalTask?.task_type || null,
+          task: selectedInternalTask?.value ? parseInt(selectedInternalTask.value) : null
+        };
+
+      case 'external':
+        const selectedCountryObj = localCountryOptions.find(c => c.value === country);
+        const selectedClient = clientOptions.find(c => c.value === client);
+        const selectedProject = projectOptions.find(p => p.value === projectId);
+        const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
+
+        return {
+          ...baseBody,
+          id: 0,
+          country: selectedCountryObj?.value ? parseInt(selectedCountryObj.value) : null,
+          // ОТПРАВЛЯЕМ ID КЛИЕНТА ВМЕСТО ИМЕНИ
+          client: selectedClient?.value || null, // Изменено здесь
+          project: selectedProject?.value ? parseInt(selectedProject.value) : null,
+          task_type: selectedProjectTask?.task_type || null,
+          task: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : null
+        };
+
+      case 'vacations':
+        const selectedLeave = leaveOptions.find(l => l.value === selectedLeaveType);
+        return {
+          ...baseBody,
+          id: 0,
+          country: null,
+          client: null,
+          project: null,
+          task_type: selectedLeave?.task_type || null,
+          task: selectedLeave?.value ? parseInt(selectedLeave.value) : null
+        };
+
+      default:
+        return baseBody;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Валидация в зависимости от активной вкладки
-    if (activeTab === 'internal') {
-      if (!task || !description || !hours) {
+    // Валидация
+    if (activeTab === 'external') {
+      if (!projectId || !selectedTask || !description || !hours || !country || !client) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
       }
-    } else if (activeTab === 'external') {
-      if (!projectId || !task || !description || !hours || !country || !client) {
+    } else if (activeTab === 'internal') {
+      if (!selectedTask || !description || !hours) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
       }
     } else if (activeTab === 'vacations') {
-      if (!description || !hours) {
+      if (!selectedLeaveType || !description || !hours) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
@@ -274,61 +454,7 @@ export function TimeEntryForm() {
       return;
     }
 
-    // Для internal и external нужна задача
-    if (activeTab !== 'vacations') {
-      const selectedTask = TASK_OPTIONS.find(t => t.value === task);
-      if (!selectedTask) {
-        toast.error('Please select a valid task');
-        setIsSubmitting(false);
-        return;
-      }
-    }
-
-    if (inputMode === 'single') {
-      let entry;
-
-      if (activeTab === 'internal') {
-        entry = {
-          type: 'internal',
-          task: TASK_OPTIONS.find(t => t.value === task)?.label || task,
-          description,
-          date,
-          hours: hoursNum,
-        };
-      } else if (activeTab === 'external') {
-        // Находим выбранный проект
-        const selectedProject = filteredProjects.find(p => p.id === projectId);
-        if (!selectedProject) {
-          toast.error('Selected project not found');
-          setIsSubmitting(false);
-          return;
-        }
-
-        entry = {
-          type: 'external',
-          projectId: selectedProject.id,
-          projectName: selectedProject.name,
-          projectColor: selectedProject.color,
-          projectCode: selectedProject.code,
-          task: TASK_OPTIONS.find(t => t.value === task)?.label || task,
-          description,
-          date,
-          hours: hoursNum,
-          country,
-          client,
-        };
-      } else if (activeTab === 'vacations') {
-        entry = {
-          type: 'vacation',
-          description,
-          date,
-          hours: hoursNum,
-        };
-      }
-
-      addMultipleEntries([entry!]);
-      toast.success('Time entry added successfully');
-    } else {
+    if (inputMode === 'range') {
       const start = new Date(startDate);
       const end = new Date(endDate);
 
@@ -337,76 +463,162 @@ export function TimeEntryForm() {
         setIsSubmitting(false);
         return;
       }
+    }
 
-      const entriesToAdd = [];
-      const currentDate = new Date(start);
-      const endDateForLoop = new Date(end);
-      endDateForLoop.setDate(endDateForLoop.getDate() + 1);
+    // Создаем тело запроса в новом формате
+    const requestBody = createRequestBody();
 
-      while (currentDate < endDateForLoop) {
-        const dayOfWeek = currentDate.getDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    // Отправляем запрос
+    sendEntrys(requestBody, {
+      onSuccess: (data) => {
+        // Создаем записи для локального состояния
+        const entriesToAdd = [];
+        const selectedCountryObj = localCountryOptions.find(c => c.value === country);
+        const selectedClient = clientOptions.find(c => c.value === client);
+        const selectedProject = projectOptions.find(p => p.value === projectId);
+        const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
+        const selectedInternalTask = internalTaskOptions.find(t => t.value === selectedTask);
+        const selectedLeave = leaveOptions.find(l => l.value === selectedLeaveType);
 
-        if (includeWeekends || !isWeekend) {
+        if (inputMode === 'single') {
+          // Одна запись
           let entry;
 
           if (activeTab === 'internal') {
             entry = {
               type: 'internal',
-              task: TASK_OPTIONS.find(t => t.value === task)?.label || task,
+              task: selectedInternalTask?.label || selectedTask,
+              task_id: selectedInternalTask?.value ? parseInt(selectedInternalTask.value) : undefined,
               description,
-              date: currentDate.toISOString().split('T')[0],
+              date,
               hours: hoursNum,
             };
           } else if (activeTab === 'external') {
-            const selectedProject = filteredProjects.find(p => p.id === projectId);
-            if (!selectedProject) {
-              toast.error('Selected project not found');
-              setIsSubmitting(false);
-              return;
-            }
-
             entry = {
               type: 'external',
-              projectId: selectedProject.id,
-              projectName: selectedProject.name,
-              projectColor: selectedProject.color,
-              projectCode: selectedProject.code,
-              task: TASK_OPTIONS.find(t => t.value === task)?.label || task,
+              projectId,
+              projectName: selectedProject?.label || projectId,
+              projectCode: selectedProject?.code || '',
+              task: selectedProjectTask?.label || selectedTask,
+              task_id: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : undefined,
               description,
-              date: currentDate.toISOString().split('T')[0],
+              date,
               hours: hoursNum,
-              country,
-              client,
+              country: selectedCountryObj?.label || country,
+              client: selectedClient?.label || client,
+              // Сохраняем ID клиента для локального состояния
+              client_id: selectedClient?.value ? parseInt(selectedClient.value) : undefined,
             };
           } else if (activeTab === 'vacations') {
             entry = {
               type: 'vacation',
+              leave_type: selectedLeave?.label || selectedLeaveType,
+              leave_type_label: selectedLeave?.label || selectedLeaveType,
+              leave_id: selectedLeave?.value ? parseInt(selectedLeave.value) : undefined,
               description,
-              date: currentDate.toISOString().split('T')[0],
+              date,
               hours: hoursNum,
             };
           }
 
-          entriesToAdd.push(entry!);
+          if (entry) {
+            entriesToAdd.push(entry);
+          }
+        } else {
+          // Диапазон дат
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          const currentDate = new Date(start);
+          const endDateForLoop = new Date(end);
+          endDateForLoop.setDate(endDateForLoop.getDate() + 1);
+
+          while (currentDate < endDateForLoop) {
+            const dayOfWeek = currentDate.getDay();
+            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+            if (includeWeekends || !isWeekend) {
+              let entry;
+
+              if (activeTab === 'internal') {
+                entry = {
+                  type: 'internal',
+                  task: selectedInternalTask?.label || selectedTask,
+                  task_id: selectedInternalTask?.value ? parseInt(selectedInternalTask.value) : undefined,
+                  description,
+                  date: currentDate.toISOString().split('T')[0],
+                  hours: hoursNum,
+                };
+              } else if (activeTab === 'external') {
+                entry = {
+                  type: 'external',
+                  projectId,
+                  projectName: selectedProject?.label || projectId,
+                  projectCode: selectedProject?.code || '',
+                  task: selectedProjectTask?.label || selectedTask,
+                  task_id: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : undefined,
+                  description,
+                  date: currentDate.toISOString().split('T')[0],
+                  hours: hoursNum,
+                  country: selectedCountryObj?.label || country,
+                  client: selectedClient?.label || client,
+                  // Сохраняем ID клиента для локального состояния
+                  client_id: selectedClient?.value ? parseInt(selectedClient.value) : undefined,
+                };
+              } else if (activeTab === 'vacations') {
+                entry = {
+                  type: 'vacation',
+                  leave_type: selectedLeave?.label || selectedLeaveType,
+                  leave_type_label: selectedLeave?.label || selectedLeaveType,
+                  leave_id: selectedLeave?.value ? parseInt(selectedLeave.value) : undefined,
+                  description,
+                  date: currentDate.toISOString().split('T')[0],
+                  hours: hoursNum,
+                };
+              }
+
+              if (entry) {
+                entriesToAdd.push(entry);
+              }
+            }
+
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
         }
 
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+        // Добавляем записи в локальное состояние
+        if (entriesToAdd.length > 0) {
+          addMultipleEntries(entriesToAdd);
+          const message = inputMode === 'single'
+            ? 'Time entry added successfully'
+            : `Added ${entriesToAdd.length} time entries for the period ${startDate} to ${endDate}`;
+          toast.success(message);
+        } else {
+          toast.warning('No time entries were added. Check your date range and weekend settings.');
+        }
 
-      if (entriesToAdd.length > 0) {
-        addMultipleEntries(entriesToAdd);
-        toast.success(`Added ${entriesToAdd.length} time entries for the period ${startDate} to ${endDate}`);
-      } else {
-        toast.warning('No time entries were added. Check your date range and weekend settings.');
-      }
-    }
+        // Обновляем данные тайм-записей после успешной отправки
+        getTimeEntrys(undefined, {
+          onSuccess: (timeEntriesData) => {
+            console.log('Time entries refreshed after submission:', timeEntriesData);
+          },
+          onError: (error) => {
+            console.error('Failed to refresh time entries:', error);
+            // Не показываем ошибку пользователю, чтобы не мешать основному флоу
+          }
+        });
 
-    resetForm();
-    setIsSubmitting(false);
+        resetForm();
+      },
+      onError: (error) => {
+        console.error('Ошибка отправки:', error);
+        toast.error('Failed to add time entry: ' + error.message);
+      },
+      onSettled: () => {
+        setIsSubmitting(false);
+      }
+    });
   };
 
-  // Стили для активного и неактивного таба
   const tabButtonClass = (tab: TabType) =>
     activeTab === tab
       ? "bg-blue-50 text-blue-700 border-blue-200"
@@ -422,12 +634,11 @@ export function TimeEntryForm() {
         <CardDescription>Track your work hours and vacations</CardDescription>
       </CardHeader>
       <CardContent className="pt-6">
-        {/* Табы как кнопки */}
         <div className="mb-6">
           <div className="flex gap-2 p-1 bg-gray-100 rounded-xl w-fit" style={{ display: 'flex', marginBottom: '25px' }}>
             <button
               type="button"
-              onClick={() => setActiveTab('internal')}
+              onClick={() => handleTabChange('internal')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${tabButtonClass('internal')}`}
             >
               <Briefcase className="w-4 h-4" />
@@ -435,7 +646,7 @@ export function TimeEntryForm() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('external')}
+              onClick={() => handleTabChange('external')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${tabButtonClass('external')}`}
             >
               <CalendarIcon className="w-4 h-4" />
@@ -443,7 +654,7 @@ export function TimeEntryForm() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('vacations')}
+              onClick={() => handleTabChange('vacations')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors ${tabButtonClass('vacations')}`}
             >
               <Plane className="w-4 h-4" />
@@ -452,7 +663,6 @@ export function TimeEntryForm() {
           </div>
         </div>
 
-        {/* Internal Tab Content */}
         {activeTab === 'internal' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -475,21 +685,45 @@ export function TimeEntryForm() {
 
             <div className="space-y-2">
               <Label htmlFor="task">Task *</Label>
-              <Select value={task} onValueChange={setTask}>
+              <Select
+                value={selectedTask}
+                onValueChange={setSelectedTask}
+                disabled={isLoadingInternalTasks || internalTaskOptions.length === 0}
+              >
                 <SelectTrigger id="task" className="w-full">
-                  <div className="flex items-center">
-                    <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
-                    <SelectValue placeholder="Select a task type" />
-                  </div>
+                  {isLoadingInternalTasks ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Loading internal tasks...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
+                      <SelectValue
+                        placeholder={
+                          internalTaskOptions.length === 0
+                            ? "No internal tasks available"
+                            : "Select a task"
+                        }
+                      />
+                    </div>
+                  )}
                 </SelectTrigger>
                 <SelectContent>
-                  {TASK_OPTIONS.map(taskOption => (
+                  {internalTaskOptions.map(taskOption => (
                     <SelectItem key={taskOption.value} value={taskOption.value}>
-                      {taskOption.label}
+                      <div className="flex flex-col">
+                        <span className="font-medium">{taskOption.label}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {!isLoadingInternalTasks && internalTaskOptions.length === 0 && (
+                <p className="text-sm text-amber-600">
+                  No internal tasks available. Please contact administrator.
+                </p>
+              )}
             </div>
 
             {inputMode === 'single' ? (
@@ -574,7 +808,7 @@ export function TimeEntryForm() {
               <Button
                 type="submit"
                 style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !selectedTask}
                 className="px-6"
               >
                 {isSubmitting ? (
@@ -590,7 +824,6 @@ export function TimeEntryForm() {
           </form>
         )}
 
-        {/* External Tab Content */}
         {activeTab === 'external' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -614,111 +847,180 @@ export function TimeEntryForm() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="country">Country *</Label>
-                <Select value={country} onValueChange={setCountry}>
+                <Select
+                  value={country}
+                  onValueChange={handleCountryChange}
+                  disabled={isCountriesLoading || localCountryOptions.length === 0}
+                >
                   <SelectTrigger id="country">
-                    <SelectValue placeholder="Select country" />
+                    <SelectValue
+                      placeholder={
+                        isCountriesLoading
+                          ? "Loading countries..."
+                          : localCountryOptions.length === 0
+                            ? "No countries available"
+                            : country
+                              ? localCountryOptions.find(c => c.value === country)?.label || "Select country"
+                              : "Select country"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {COUNTRIES.map(countryOption => (
+                    {localCountryOptions.map(countryOption => (
                       <SelectItem key={countryOption.value} value={countryOption.value}>
                         {countryOption.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {!isCountriesLoading && localCountryOptions.length === 0 && (
+                  <p className="text-sm text-amber-600">No countries available. Please contact administrator.</p>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="client">Client *</Label>
-                <Select value={client} onValueChange={setClient}>
+                <Select
+                  value={client}
+                  onValueChange={handleClientChange}
+                  disabled={!country || clientOptions.length === 0 || isLoadingClients}
+                >
                   <SelectTrigger id="client">
-                    <SelectValue placeholder="Select client" />
+                    {isLoadingClients ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                        Loading clients...
+                      </div>
+                    ) : (
+                      <SelectValue
+                        placeholder={
+                          !country
+                            ? "Select country first"
+                            : clientOptions.length === 0
+                              ? "No clients available for this country"
+                              : "Select client"
+                        }
+                      />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
-                    {CLIENTS.map(clientOption => (
+                    {clientOptions.map(clientOption => (
                       <SelectItem key={clientOption.value} value={clientOption.value}>
-                        {clientOption.label}
+                        <div className="flex flex-col">
+                          <span className="font-medium">{clientOption.label}</span>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {country && clientOptions.length === 0 && !isLoadingClients && (
+                  <p className="text-sm text-amber-600">
+                    No clients available for this country.
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Проекты, зависящие от выбора страны и клиента */}
             <div className="space-y-2">
               <Label htmlFor="project">Project *</Label>
               <Select
                 value={projectId}
-                onValueChange={setProjectId}
-                disabled={!country || !client || filteredProjects.length === 0}
+                onValueChange={handleProjectChange}
+                disabled={!client || projectOptions.length === 0 || isLoadingProjects}
               >
                 <SelectTrigger id="project">
-                  <SelectValue
-                    placeholder={
-                      !country || !client
-                        ? "Select country and client first"
-                        : filteredProjects.length === 0
-                          ? "No projects available for this combination"
-                          : "Select a project"
-                    }
-                  />
+                  {isLoadingProjects ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Loading projects...
+                    </div>
+                  ) : (
+                    <SelectValue
+                      placeholder={
+                        !client
+                          ? "Select client first"
+                          : projectOptions.length === 0
+                            ? "No projects available for this client"
+                            : "Select project"
+                      }
+                    />
+                  )}
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredProjects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: project.color }}
-                        />
-                        <span className="font-mono text-xs text-slate-500">{project.code}</span>
-                        <span>{project.name}</span>
+                  {projectOptions.map(projectOption => (
+                    <SelectItem key={projectOption.value} value={projectOption.value}>
+                      <div className="flex flex-col py-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{projectOption.label}</span>
+                          {projectOption.is_chargeable && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                              Chargeable
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {country && client && filteredProjects.length === 0 && (
+              {client && projectOptions.length === 0 && !isLoadingProjects && (
                 <p className="text-sm text-amber-600">
-                  No projects available for {COUNTRIES.find(c => c.value === country)?.label} - {CLIENTS.find(c => c.value === client)?.label}
+                  No projects available for this client. Please select another client.
                 </p>
               )}
             </div>
 
-            {/* Задачи, зависящие от выбора страны и клиента */}
             <div className="space-y-2">
               <Label htmlFor="task">Task *</Label>
               <Select
-                value={task}
-                onValueChange={setTask}
-                disabled={!country || !client || filteredTasks.length === 0}
+                value={selectedTask}
+                onValueChange={setSelectedTask}
+                disabled={!projectId || projectTaskOptions.length === 0 || isLoadingTasks}
               >
                 <SelectTrigger id="task" className="w-full">
-                  <div className="flex items-center">
-                    <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
-                    <SelectValue
-                      placeholder={
-                        !country || !client
-                          ? "Select country and client first"
-                          : filteredTasks.length === 0
-                            ? "No tasks available for this combination"
-                            : "Select a task type"
-                      }
-                    />
-                  </div>
+                  {isLoadingTasks ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Loading tasks...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
+                      <SelectValue
+                        placeholder={
+                          !projectId
+                            ? "Select project first"
+                            : projectTaskOptions.length === 0
+                              ? "No tasks available for this project"
+                              : "Select task"
+                        }
+                      />
+                    </div>
+                  )}
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredTasks.map(taskOption => (
+                  {projectTaskOptions.map(taskOption => (
                     <SelectItem key={taskOption.value} value={taskOption.value}>
-                      {taskOption.label}
+                      <div className="flex flex-col">
+                        <span className="font-medium">{taskOption.label}</span>
+                      </div>
                     </SelectItem>
                   ))}
+                  {projectTaskOptions.length === 0 && internalTaskOptions.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-xs text-gray-500">Project specific tasks not available</div>
+                      {internalTaskOptions.map(taskOption => (
+                        <SelectItem key={taskOption.value} value={taskOption.value}>
+                          {taskOption.label}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
-              {country && client && filteredTasks.length === 0 && (
+              {projectId && projectTaskOptions.length === 0 && !isLoadingTasks && (
                 <p className="text-sm text-amber-600">
-                  No tasks available for {COUNTRIES.find(c => c.value === country)?.label} - {CLIENTS.find(c => c.value === client)?.label}
+                  No specific tasks found for this project. You can select from internal tasks.
                 </p>
               )}
             </div>
@@ -805,7 +1107,7 @@ export function TimeEntryForm() {
               <Button
                 type="submit"
                 style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitting || !projectId || !task}
+                disabled={isSubmitting || !projectId || !selectedTask || !country || !client}
                 className="px-6"
               >
                 {isSubmitting ? (
@@ -821,7 +1123,6 @@ export function TimeEntryForm() {
           </form>
         )}
 
-        {/* Vacations Tab Content */}
         {activeTab === 'vacations' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -840,6 +1141,49 @@ export function TimeEntryForm() {
                   Date Range
                 </ToggleGroupItem>
               </ToggleGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="leaveType">Leave Type *</Label>
+              <Select
+                value={selectedLeaveType}
+                onValueChange={setSelectedLeaveType}
+                disabled={isLoadingLeaves || leaveOptions.length === 0}
+              >
+                <SelectTrigger id="leaveType" className="w-full">
+                  {isLoadingLeaves ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Loading leave types...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
+                      <SelectValue
+                        placeholder={
+                          leaveOptions.length === 0
+                            ? "No leave types available"
+                            : "Select leave type"
+                        }
+                      />
+                    </div>
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {leaveOptions.map(leaveOption => (
+                    <SelectItem key={leaveOption.value} value={leaveOption.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{leaveOption.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!isLoadingLeaves && leaveOptions.length === 0 && (
+                <p className="text-sm text-amber-600">
+                  No leave types available. Please contact administrator.
+                </p>
+              )}
             </div>
 
             {inputMode === 'single' ? (
@@ -911,7 +1255,7 @@ export function TimeEntryForm() {
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Vacation description (e.g., Annual leave, Sick leave, etc.)"
+                placeholder="Vacation description"
                 rows={3}
                 required
               />
@@ -924,7 +1268,7 @@ export function TimeEntryForm() {
               <Button
                 type="submit"
                 style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !selectedLeaveType}
                 className="px-6"
               >
                 {isSubmitting ? (

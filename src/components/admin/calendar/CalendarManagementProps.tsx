@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Calendar, Settings, FileText, BarChart } from 'lucide-react';
@@ -7,6 +7,7 @@ import { CalendarHolidaysTab } from './CalenarHolidaysTab';
 import { CalendarWeeklyScheduleTab } from './CalendarWeeklyScheduleTabProps ';
 import { CalendarStatisticsTab } from './CalendarStatisticsTabProps ';
 import { CalendarSettingsDialog } from './CalendarSettingsDialog';
+import { useUserStore } from '../../../store/UsersStore';
 
 interface CalendarManagementProps {
     configs: CountryCalendarConfig[];
@@ -34,66 +35,172 @@ export function CalendarManagement({
     onUpdateWeeklySchedule
 }: CalendarManagementProps) {
     const [activeTab, setActiveTab] = useState<'holidays' | 'weekly' | 'statistics'>('holidays');
-    const [selectedCountryId, setSelectedCountryId] = useState<number | 'general'>('general');
+    const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const store_countries = useUserStore((state) => state.countries);
 
-    const selectedConfig = useMemo(() => {
-        return selectedCountryId === 'general'
-            ? configs.find(c => c.countryCode === 'GENERAL')
-            : configs.find(c => c.id === selectedCountryId);
-    }, [configs, selectedCountryId]);
+    // Получаем страны из стора
+    const countriesFromStore = store_countries || [];
 
-    const generalConfig = useMemo(() => {
-        return configs.find(c => c.countryCode === 'GENERAL');
-    }, [configs]);
+    // Исправляем конфиги чтобы они использовали правильные ID из стора
+    const correctedConfigs = useMemo(() => {
+        return configs.map(config => {
+            // Находим соответствующую страну в сторе
+            const matchingCountry = countriesFromStore.find(c =>
+                c.code === config.countryCode ||
+                c.name.toLowerCase() === config.country?.toLowerCase() ||
+                c.id === config.id
+            );
 
-    const countries = useMemo(() => {
-        return [
-            { id: 'general' as const, name: 'General', code: 'GENERAL' },
-            ...configs
-                .filter(c => c.countryCode !== 'GENERAL')
-                .map(c => ({
-                    id: c.id,
-                    name: c.country,
-                    code: c.countryCode
-                }))
-        ];
-    }, [configs]);
+            if (matchingCountry && config.id !== matchingCountry.id) {
+                return {
+                    ...config,
+                    id: matchingCountry.id, // Исправляем ID
+                    country: matchingCountry.name, // Обновляем название
+                    countryCode: matchingCountry.code // Обновляем код
+                };
+            }
 
-    const handleCountrySelect = (id: number | 'general') => {
-        setSelectedCountryId(id);
+            return config;
+        });
+    }, [configs, countriesFromStore]);
+
+    // Синхронизируем ID стран - используем те же ID что и в сторе
+    const displayedCountries = useMemo(() => {
+        if (!countriesFromStore.length) return [];
+
+        // Создаем список стран для отображения
+        const countriesList = countriesFromStore.map(storeCountry => {
+            // Находим конфиг для этой страны (используем исправленные конфиги)
+            const existingConfig = correctedConfigs.find(config => config.id === storeCountry.id);
+
+            return {
+                storeId: storeCountry.id,
+                name: storeCountry.name,
+                code: storeCountry.code,
+                hasConfig: !!existingConfig,
+                config: existingConfig
+            };
+        });
+
+        // Сортируем: сначала страны с конфигами, потом без
+        return countriesList.sort((a, b) => {
+            if (a.hasConfig && !b.hasConfig) return -1;
+            if (!a.hasConfig && b.hasConfig) return 1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [correctedConfigs, countriesFromStore]);
+
+    // Автоматически выбираем первую страну при загрузке
+    useEffect(() => {
+        if (displayedCountries.length > 0 && selectedCountryId === null) {
+            const firstCountry = displayedCountries[0];
+            setSelectedCountryId(firstCountry.storeId);
+        }
+    }, [displayedCountries, selectedCountryId]);
+
+    // Получаем текущий конфиг для выбранной страны
+    const currentConfig = useMemo(() => {
+        if (!selectedCountryId) return null;
+
+        // Находим отображаемую страну по ID из стора
+        const displayedCountry = displayedCountries.find(c => c.storeId === selectedCountryId);
+        if (!displayedCountry) return null;
+
+        // Если у страны есть конфиг, возвращаем его
+        if (displayedCountry.config) {
+            return {
+                ...displayedCountry.config,
+                id: displayedCountry.storeId,
+                country: displayedCountry.name,
+                countryCode: displayedCountry.code
+            };
+        }
+
+        // Если конфига нет, создаем временный конфиг
+        return {
+            id: selectedCountryId,
+            country: displayedCountry.name,
+            countryCode: displayedCountry.code,
+            holidays: [],
+            workWeekends: [],
+            weeklySchedule: {
+                monday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+                tuesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+                wednesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+                thursday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+                friday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+                saturday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' },
+                sunday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' }
+            }
+        } as CountryCalendarConfig;
+    }, [selectedCountryId, displayedCountries]);
+
+    // Получаем все доступные страны для диалога настроек
+    const allAvailableCountries = useMemo(() => {
+        return countriesFromStore.map(country => ({
+            id: country.id,
+            name: country.name,
+            code: country.code
+        }));
+    }, [countriesFromStore]);
+
+    // Получаем страны, которые еще не добавлены в конфиги
+    const availableCountriesForAdding = useMemo(() => {
+        const existingCountryIds = new Set(
+            correctedConfigs.map(c => c.id)
+        );
+
+        return countriesFromStore
+            .filter(country => !existingCountryIds.has(country.id))
+            .map(country => ({
+                id: country.id,
+                name: country.name,
+                code: country.code
+            }));
+    }, [correctedConfigs, countriesFromStore]);
+
+    const handleCountrySelect = (storeId: number) => {
+        setSelectedCountryId(storeId);
     };
 
     const handleAddConfig = (config: CountryCalendarConfig) => {
-        console.log('CalendarManagement: Adding config', config);
         if (onAddConfig) {
-            onAddConfig(config);
-            setSelectedCountryId(config.id);
+            // Убедимся что конфиг имеет правильный ID
+            const country = countriesFromStore.find(c => c.id === config.id);
+            const correctedConfig = country ? {
+                ...config,
+                id: country.id,
+                country: country.name,
+                countryCode: country.code
+            } : config;
+
+            onAddConfig(correctedConfig);
+            setSelectedCountryId(correctedConfig.id);
         } else {
-            console.error('onAddConfig is not provided');
             alert('Cannot add country: Add function is not available');
         }
     };
 
     const handleDeleteConfig = (id: number) => {
-        console.log('CalendarManagement: Deleting config with id', id);
         if (onDeleteConfig) {
             onDeleteConfig(id);
-            if (selectedCountryId === id) {
-                setSelectedCountryId('general');
+            const remainingCountries = displayedCountries.filter(c => c.storeId !== id && c.hasConfig);
+            if (remainingCountries.length > 0) {
+                setSelectedCountryId(remainingCountries[0].storeId);
+            } else if (displayedCountries.length > 0) {
+                setSelectedCountryId(displayedCountries[0].storeId);
             }
         } else {
-            console.error('onDeleteConfig is not provided');
             alert('Cannot delete country: Delete function is not available');
         }
     };
 
-    const currentConfig = selectedConfig || generalConfig;
-
-    if (!currentConfig) {
+    if (!countriesFromStore.length) {
         return (
-            <div className="flex items-center justify-center p-8">
-                <p>No calendar configurations available</p>
+            <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                <p className="text-lg font-medium">No countries available</p>
+                <p className="text-muted-foreground">Please load countries data first</p>
             </div>
         );
     }
@@ -123,14 +230,19 @@ export function CalendarManagement({
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-1">
-                                {countries.map((country) => (
+                                {displayedCountries.map((country) => (
                                     <Button
-                                        key={country.id === 'general' ? 'general' : country.id}
-                                        variant={selectedCountryId === country.id ? "secondary" : "ghost"}
+                                        key={country.storeId}
+                                        variant={selectedCountryId === country.storeId ? "secondary" : "ghost"}
                                         className="w-full justify-start"
-                                        onClick={() => handleCountrySelect(country.id)}
+                                        onClick={() => handleCountrySelect(country.storeId)}
                                     >
-                                        {country.name}
+                                        <div className="flex items-center justify-between w-full">
+                                            <span>{country.name}</span>
+                                            {!country.hasConfig && (
+                                                <span className="text-xs text-muted-foreground ml-2">(No config)</span>
+                                            )}
+                                        </div>
                                     </Button>
                                 ))}
                             </div>
@@ -142,77 +254,99 @@ export function CalendarManagement({
                 <div className="flex-1">
                     <Card>
                         <CardHeader>
-                            {/* Табы как в AdminPanel - простые кнопки */}
-                            <div className="flex gap-1 bg-muted p-1 rounded-md w-fit">
-                                <button
-                                    onClick={() => setActiveTab('holidays')}
-                                    className={`
-                                        flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
-                                        ${activeTab === 'holidays'
-                                            ? " text-black shadow"
-                                            : "text-muted-foreground hover:bg-muted/70"}
-                                    `}
-                                >
-                                    <Calendar className="w-4 h-4" />
-                                    Holidays & Work Weekends
-                                </button>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-semibold">
+                                        {displayedCountries.find(c => c.storeId === selectedCountryId)?.name || 'Select Country'}
+                                    </h3>
+                                    {selectedCountryId && currentConfig && (
+                                        <p className="text-sm text-muted-foreground">
+                                            Country Code: {currentConfig.countryCode}
+                                        </p>
+                                    )}
+                                </div>
 
-                                <button
-                                    onClick={() => setActiveTab('weekly')}
-                                    className={`
-                                        flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
-                                        ${activeTab === 'weekly'
-                                            ? " text-black shadow"
-                                            : "text-muted-foreground hover:bg-muted/70"}
-                                    `}
-                                >
-                                    <FileText className="w-4 h-4" />
-                                    Weekly Schedule
-                                </button>
+                                {/* Табы */}
+                                <div className="flex gap-1 bg-muted p-1 rounded-md">
+                                    <button
+                                        onClick={() => setActiveTab('holidays')}
+                                        className={`
+                                            flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
+                                            ${activeTab === 'holidays'
+                                                ? " text-black shadow"
+                                                : "text-muted-foreground hover:bg-muted/70"}
+                                        `}
+                                    >
+                                        <Calendar className="w-4 h-4" />
+                                        Holidays & Work Weekends
+                                    </button>
 
-                                <button
-                                    onClick={() => setActiveTab('statistics')}
-                                    className={`
-                                        flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
-                                        ${activeTab === 'statistics'
-                                            ? "border-b-black text-black shadow"
-                                            : "text-muted-foreground hover:bg-muted/70"}
-                                    `}
-                                >
-                                    <BarChart className="w-4 h-4" />
-                                    Statistics
-                                </button>
+                                    <button
+                                        onClick={() => setActiveTab('weekly')}
+                                        className={`
+                                            flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
+                                            ${activeTab === 'weekly'
+                                                ? " text-black shadow"
+                                                : "text-muted-foreground hover:bg-muted/70"}
+                                        `}
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        Weekly Schedule
+                                    </button>
+
+                                    <button
+                                        onClick={() => setActiveTab('statistics')}
+                                        className={`
+                                            flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium transition-colors
+                                            ${activeTab === 'statistics'
+                                                ? " text-black shadow"
+                                                : "text-muted-foreground hover:bg-muted/70"}
+                                        `}
+                                    >
+                                        <BarChart className="w-4 h-4" />
+                                        Statistics
+                                    </button>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                            {/* Контент табов */}
-                            {activeTab === 'holidays' && (
-                                <div className="space-y-4">
-                                    <CalendarHolidaysTab
-                                        config={currentConfig}
-                                        onAddHoliday={onAddHoliday}
-                                        onUpdateHoliday={onUpdateHoliday}
-                                        onDeleteHoliday={onDeleteHoliday}
-                                        onAddWorkWeekend={onAddWorkWeekend}
-                                        onDeleteWorkWeekend={onDeleteWorkWeekend}
-                                    />
-                                </div>
-                            )}
+                            {currentConfig ? (
+                                <>
+                                    {activeTab === 'holidays' && (
+                                        <div className="space-y-4">
+                                            <CalendarHolidaysTab
+                                                config={currentConfig}
+                                                onAddHoliday={onAddHoliday}
+                                                onUpdateHoliday={onUpdateHoliday}
+                                                onDeleteHoliday={onDeleteHoliday}
+                                                onAddWorkWeekend={onAddWorkWeekend}
+                                                onDeleteWorkWeekend={onDeleteWorkWeekend}
+                                                isReadOnly={!displayedCountries.find(c => c.storeId === selectedCountryId)?.hasConfig}
+                                            />
+                                        </div>
+                                    )}
 
-                            {activeTab === 'weekly' && (
-                                <div className="space-y-4">
-                                    <CalendarWeeklyScheduleTab
-                                        config={currentConfig}
-                                        onUpdateWeeklySchedule={onUpdateWeeklySchedule}
-                                    />
-                                </div>
-                            )}
+                                    {activeTab === 'weekly' && (
+                                        <div className="space-y-4">
+                                            <CalendarWeeklyScheduleTab
+                                                config={currentConfig}
+                                                onUpdateWeeklySchedule={onUpdateWeeklySchedule}
+                                                isReadOnly={!displayedCountries.find(c => c.storeId === selectedCountryId)?.hasConfig}
+                                            />
+                                        </div>
+                                    )}
 
-                            {activeTab === 'statistics' && (
-                                <div className="space-y-4">
-                                    <CalendarStatisticsTab
-                                        config={currentConfig}
-                                    />
+                                    {activeTab === 'statistics' && (
+                                        <div className="space-y-4">
+                                            <CalendarStatisticsTab
+                                                config={currentConfig}
+                                            />
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <p>Please select a country from the list.</p>
                                 </div>
                             )}
                         </CardContent>
@@ -221,25 +355,16 @@ export function CalendarManagement({
             </div>
 
             {/* CalendarSettingsDialog */}
-            {onAddConfig && onDeleteConfig ? (
-                <CalendarSettingsDialog
-                    open={isSettingsOpen}
-                    onOpenChange={setIsSettingsOpen}
-                    configs={configs}
-                    onAddConfig={handleAddConfig}
-                    onUpdateConfig={onUpdateConfig}
-                    onDeleteConfig={handleDeleteConfig}
-                />
-            ) : (
-                <CalendarSettingsDialog
-                    open={isSettingsOpen}
-                    onOpenChange={setIsSettingsOpen}
-                    configs={configs}
-                    onUpdateConfig={onUpdateConfig}
-                    onAddConfig={undefined}
-                    onDeleteConfig={undefined}
-                />
-            )}
+            <CalendarSettingsDialog
+                open={isSettingsOpen}
+                onOpenChange={setIsSettingsOpen}
+                configs={correctedConfigs}
+                onAddConfig={onAddConfig ? handleAddConfig : undefined}
+                onUpdateConfig={onUpdateConfig}
+                onDeleteConfig={onDeleteConfig ? handleDeleteConfig : undefined}
+                availableCountries={availableCountriesForAdding}
+                allCountries={allAvailableCountries}
+            />
         </div>
     );
 }

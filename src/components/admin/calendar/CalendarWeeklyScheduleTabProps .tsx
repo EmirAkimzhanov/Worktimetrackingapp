@@ -1,9 +1,8 @@
 // src/components/admin/CalendarWeeklyScheduleTab.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Label } from '../../ui/label';
-import { Input } from '../../ui/input';
 import { Switch } from '../../ui/switch';
 import { CountryCalendarConfig, WeeklySchedule } from '../../../types/types';
 import { Save } from 'lucide-react';
@@ -17,41 +16,114 @@ export function CalendarWeeklyScheduleTab({
     config,
     onUpdateWeeklySchedule
 }: CalendarWeeklyScheduleTabProps) {
-    const [schedule, setSchedule] = useState(config.weeklySchedule);
-    const [workHours, setWorkHours] = useState(config.weeklySchedule.workHoursPerDay.toString());
+    // Создаем безопасный schedule с значениями по умолчанию
+    const defaultSchedule: WeeklySchedule = {
+        monday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        tuesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        wednesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        thursday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        friday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        saturday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' },
+        sunday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' }
+    };
+
+    // Безопасно мерджим config.weeklySchedule с дефолтными значениями
+    const initialSchedule = useMemo(() => {
+        if (!config?.weeklySchedule) {
+            return defaultSchedule;
+        }
+
+        return {
+            ...defaultSchedule,
+            ...config.weeklySchedule,
+            // Убедимся что каждый день имеет обязательные поля
+            monday: {
+                isWorkingDay: true,
+                startTime: '09:00',
+                endTime: '18:00',
+                ...config.weeklySchedule.monday
+            },
+            tuesday: {
+                isWorkingDay: true,
+                startTime: '09:00',
+                endTime: '18:00',
+                ...config.weeklySchedule.tuesday
+            },
+            wednesday: {
+                isWorkingDay: true,
+                startTime: '09:00',
+                endTime: '18:00',
+                ...config.weeklySchedule.wednesday
+            },
+            thursday: {
+                isWorkingDay: true,
+                startTime: '09:00',
+                endTime: '18:00',
+                ...config.weeklySchedule.thursday
+            },
+            friday: {
+                isWorkingDay: true,
+                startTime: '09:00',
+                endTime: '18:00',
+                ...config.weeklySchedule.friday
+            },
+            saturday: {
+                isWorkingDay: false,
+                startTime: '09:00',
+                endTime: '18:00',
+                ...config.weeklySchedule.saturday
+            },
+            sunday: {
+                isWorkingDay: false,
+                startTime: '09:00',
+                endTime: '18:00',
+                ...config.weeklySchedule.sunday
+            }
+        };
+    }, [config]);
+
+    const [schedule, setSchedule] = useState<WeeklySchedule>(initialSchedule);
+
+    // Обновляем schedule когда меняется config
+    useEffect(() => {
+        setSchedule(initialSchedule);
+    }, [initialSchedule]);
 
     const daysOfWeek = [
-        { key: 'monday', label: 'Monday' },
-        { key: 'tuesday', label: 'Tuesday' },
-        { key: 'wednesday', label: 'Wednesday' },
-        { key: 'thursday', label: 'Thursday' },
-        { key: 'friday', label: 'Friday' },
-        { key: 'saturday', label: 'Saturday' },
-        { key: 'sunday', label: 'Sunday' }
-    ] as const;
+        { key: 'monday' as const, label: 'Monday' },
+        { key: 'tuesday' as const, label: 'Tuesday' },
+        { key: 'wednesday' as const, label: 'Wednesday' },
+        { key: 'thursday' as const, label: 'Thursday' },
+        { key: 'friday' as const, label: 'Friday' },
+        { key: 'saturday' as const, label: 'Saturday' },
+        { key: 'sunday' as const, label: 'Sunday' }
+    ];
 
     const handleToggleDay = (dayKey: keyof WeeklySchedule) => {
         setSchedule(prev => ({
             ...prev,
-            [dayKey]: !prev[dayKey]
+            [dayKey]: {
+                ...prev[dayKey],
+                isWorkingDay: !prev[dayKey].isWorkingDay
+            }
         }));
     };
 
     const handleSave = () => {
-        onUpdateWeeklySchedule(config.id, {
-            ...schedule,
-            workHoursPerDay: parseFloat(workHours) || 8
-        });
+        if (config?.id) {
+            onUpdateWeeklySchedule(config.id, schedule);
+        } else {
+            console.error('Cannot save: config.id is undefined');
+        }
     };
 
     const calculateStatistics = () => {
-        const workDays = daysOfWeek.filter(day => schedule[day.key]).length;
-        const weeklyHours = workDays * (parseFloat(workHours) || 8);
+        const workDays = daysOfWeek.filter(day => schedule[day.key]?.isWorkingDay).length;
+        const dayOffs = 7 - workDays;
 
         return {
             workDays,
-            weeklyHours,
-            workHoursPerDay: parseFloat(workHours) || 8
+            dayOffs
         };
     };
 
@@ -73,41 +145,28 @@ export function CalendarWeeklyScheduleTab({
                     <CardHeader>
                         <CardTitle className="text-base">Work Days Configuration</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="space-y-4">
-                            <Label>Daily Work Hours</Label>
-                            <div className="flex items-center gap-4">
-                                <Input
-                                    type="number"
-                                    min="1"
-                                    max="24"
-                                    step="0.5"
-                                    value={workHours}
-                                    onChange={(e) => setWorkHours(e.target.value)}
-                                    className="w-32"
-                                />
-                                <span className="text-sm text-muted-foreground">hours per day</span>
-                            </div>
-                        </div>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-3">
+                            {daysOfWeek.map((day) => {
+                                const daySchedule = schedule[day.key];
 
-                        <div className="space-y-4">
-                            <Label>Working Days of the Week</Label>
-                            <div className="space-y-3">
-                                {daysOfWeek.map((day) => (
+                                return (
                                     <div key={day.key} className="flex items-center justify-between p-3 border rounded-lg">
-                                        <span className="font-medium">{day.label}</span>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-sm ${schedule[day.key] ? 'text-green-600' : 'text-red-600'}`}>
-                                                {schedule[day.key] ? 'Working Day' : 'Day Off'}
+                                        <div className="flex flex-col">
+                                            <span className="font-medium">{day.label}</span>
+                                            <span className={`text-sm ${daySchedule?.isWorkingDay ? 'text-green-600' : 'text-red-600'}`}>
+                                                {daySchedule?.isWorkingDay ? 'Working Day' : 'Day Off'}
                                             </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
                                             <Switch
-                                                checked={schedule[day.key]}
+                                                checked={daySchedule?.isWorkingDay || false}
                                                 onCheckedChange={() => handleToggleDay(day.key)}
                                             />
                                         </div>
                                     </div>
-                                ))}
-                            </div>
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>
@@ -124,12 +183,8 @@ export function CalendarWeeklyScheduleTab({
                                 <span className="font-semibold">{stats.workDays} days</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-sm text-muted-foreground">Hours per Day:</span>
-                                <span className="font-semibold">{stats.workHoursPerDay} hours</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-sm text-muted-foreground">Weekly Total Hours:</span>
-                                <span className="font-semibold">{stats.weeklyHours} hours</span>
+                                <span className="text-sm text-muted-foreground">Days Off per Week:</span>
+                                <span className="font-semibold">{stats.dayOffs} days</span>
                             </div>
                         </div>
 
@@ -141,14 +196,14 @@ export function CalendarWeeklyScheduleTab({
                                     className="w-full justify-start"
                                     onClick={() => {
                                         setSchedule({
-                                            ...schedule,
-                                            monday: true,
-                                            tuesday: true,
-                                            wednesday: true,
-                                            thursday: true,
-                                            friday: true,
-                                            saturday: false,
-                                            sunday: false
+                                            ...defaultSchedule,
+                                            monday: { ...defaultSchedule.monday, isWorkingDay: true },
+                                            tuesday: { ...defaultSchedule.tuesday, isWorkingDay: true },
+                                            wednesday: { ...defaultSchedule.wednesday, isWorkingDay: true },
+                                            thursday: { ...defaultSchedule.thursday, isWorkingDay: true },
+                                            friday: { ...defaultSchedule.friday, isWorkingDay: true },
+                                            saturday: { ...defaultSchedule.saturday, isWorkingDay: false },
+                                            sunday: { ...defaultSchedule.sunday, isWorkingDay: false }
                                         });
                                     }}
                                 >
@@ -159,14 +214,14 @@ export function CalendarWeeklyScheduleTab({
                                     className="w-full justify-start"
                                     onClick={() => {
                                         setSchedule({
-                                            ...schedule,
-                                            monday: true,
-                                            tuesday: true,
-                                            wednesday: true,
-                                            thursday: true,
-                                            friday: true,
-                                            saturday: true,
-                                            sunday: false
+                                            ...defaultSchedule,
+                                            monday: { ...defaultSchedule.monday, isWorkingDay: true },
+                                            tuesday: { ...defaultSchedule.tuesday, isWorkingDay: true },
+                                            wednesday: { ...defaultSchedule.wednesday, isWorkingDay: true },
+                                            thursday: { ...defaultSchedule.thursday, isWorkingDay: true },
+                                            friday: { ...defaultSchedule.friday, isWorkingDay: true },
+                                            saturday: { ...defaultSchedule.saturday, isWorkingDay: true },
+                                            sunday: { ...defaultSchedule.sunday, isWorkingDay: false }
                                         });
                                     }}
                                 >
@@ -177,14 +232,14 @@ export function CalendarWeeklyScheduleTab({
                                     className="w-full justify-start"
                                     onClick={() => {
                                         setSchedule({
-                                            ...schedule,
-                                            monday: true,
-                                            tuesday: true,
-                                            wednesday: true,
-                                            thursday: true,
-                                            friday: true,
-                                            saturday: false,
-                                            sunday: true
+                                            ...defaultSchedule,
+                                            monday: { ...defaultSchedule.monday, isWorkingDay: true },
+                                            tuesday: { ...defaultSchedule.tuesday, isWorkingDay: true },
+                                            wednesday: { ...defaultSchedule.wednesday, isWorkingDay: true },
+                                            thursday: { ...defaultSchedule.thursday, isWorkingDay: true },
+                                            friday: { ...defaultSchedule.friday, isWorkingDay: true },
+                                            saturday: { ...defaultSchedule.saturday, isWorkingDay: false },
+                                            sunday: { ...defaultSchedule.sunday, isWorkingDay: true }
                                         });
                                     }}
                                 >

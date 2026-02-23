@@ -1197,13 +1197,13 @@ export function AdminPanel() {
       />
 
       {/* Диалог подтверждения удаления клиента */}
-      <DeleteConfirmationDialog
+      {/* <DeleteConfirmationDialog
         open={deleteClientDialogOpen}
         onOpenChange={setDeleteClientDialogOpen}
         title="Delete Client"
         description="Are you sure you want to delete this client? This action cannot be undone."
         onConfirm={confirmDeleteClient}
-      />
+      /> */}
     </>
   );
 }

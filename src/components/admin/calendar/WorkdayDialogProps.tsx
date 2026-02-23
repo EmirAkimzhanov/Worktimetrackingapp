@@ -6,6 +6,7 @@ import { Label } from '../../ui/label';
 import { Textarea } from '../../ui/textarea';
 import { Checkbox } from '../../ui/checkbox';
 import { Workday, WorkdayFormData } from '../../../types/types';
+import { useEditCalendar } from '../../../hooks/useTimeEntry';
 
 interface WorkdayDialogProps {
     open: boolean;
@@ -24,6 +25,9 @@ export function WorkdayDialog({
     setWorkdayForm,
     onSave
 }: WorkdayDialogProps) {
+
+    const { mutate: editCalendar } = useEditCalendar();
+
     useEffect(() => {
         if (open && editingWorkday) {
             setWorkdayForm({
