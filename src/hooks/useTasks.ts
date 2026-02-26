@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useUserStore } from "../store/UsersStore";
 import { getProjectTasks } from "../services/project";
 import {
+  createTask,
   DeleteTask,
   EditTask,
   getInternalTasks,
@@ -66,6 +67,14 @@ export const useEditTask = () => {
 export const useDeleteTask = () => {
   return useMutation({
     mutationFn: (task_id: string) => DeleteTask(task_id),
+    onSuccess: (data) => {},
+    onError: (error: Error) => {},
+  });
+};
+
+export const useCreateTask = () => {
+  return useMutation({
+    mutationFn: (body: { name: string; task_type: number }) => createTask(body),
     onSuccess: (data) => {},
     onError: (error: Error) => {},
   });

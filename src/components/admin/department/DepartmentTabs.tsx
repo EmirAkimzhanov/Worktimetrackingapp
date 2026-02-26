@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  useCreateTask,
   useDeleteTask,
   useEditTask,
   useGetTasks,
@@ -61,6 +61,7 @@ const SimpleDepartmentsTables = () => {
   const { mutate: getTaskTypes } = useGetTaskTypes();
   const { mutate: editTask } = useEditTask();
   const { mutate: deleteTask } = useDeleteTask();
+  const { mutate: createTask } = useCreateTask();
   const store_tasks = useUserStore((state) => state.tasks);
   const task_types = useUserStore((state) => state.task_types);
 
@@ -122,19 +123,29 @@ const SimpleDepartmentsTables = () => {
     };
   };
 
-  // Добавление новой задачи
+  // Добавление новой задачи - ИСПРАВЛЕНО!
   const handleAddTask = () => {
     if (!newTask.name?.trim() || !selectedTaskType) return;
 
-    // Здесь будет вызов API для создания задачи
-    console.log("Adding task:", {
-      name: newTask.name.trim(),
-      task_type: selectedTaskType,
-    });
-
-    setNewTask({ name: "", task_type: undefined });
-    setSelectedTaskType(null);
-    setNewTaskDialogOpen(false);
+    createTask(
+      {
+        name: newTask.name.trim(),
+        task_type: selectedTaskType,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Task created successfully");
+          getTasks(); // Обновляем список задач
+          setNewTask({ name: "", task_type: undefined });
+          setSelectedTaskType(null);
+          setNewTaskDialogOpen(false);
+        },
+        onError: (error) => {
+          console.error("Error creating task:", error);
+          toast.error("Failed to create task");
+        },
+      },
+    );
   };
 
   // Начало редактирования задачи
@@ -158,7 +169,7 @@ const SimpleDepartmentsTables = () => {
       {
         onSuccess: () => {
           toast.success("Task updated successfully");
-          getTasks(); // Обновляем список задач
+          getTasks();
           setEditTaskDialogOpen(false);
           setEditingTask(null);
           setEditTaskData({});
@@ -177,38 +188,35 @@ const SimpleDepartmentsTables = () => {
     setDeleteTaskDialogOpen(true);
   };
 
-  // Удаление задачи - ИСПРАВЛЕНО!
+  // Удаление задачи
   const handleDeleteTask = () => {
     if (!taskToDelete) return;
 
-    deleteTask(
-      taskToDelete.id.toString(), // ✅ передаём string
-      {
-        onSuccess: () => {
-          toast.success("Task deleted successfully");
-          getTasks();
-          setDeleteTaskDialogOpen(false);
-          setTaskToDelete(null);
-        },
-        onError: (error) => {
-          console.error("Error deleting task:", error);
-          toast.error("Failed to delete task");
-        },
+    deleteTask(taskToDelete.id.toString(), {
+      onSuccess: () => {
+        toast.success("Task deleted successfully");
+        getTasks();
+        setDeleteTaskDialogOpen(false);
+        setTaskToDelete(null);
       },
-    );
+      onError: (error) => {
+        console.error("Error deleting task:", error);
+        toast.error("Failed to delete task");
+      },
+    });
   };
+
   // Фильтруем типы задач, которые нужно показать
   const visibleTaskTypes = React.useMemo(() => {
     return availableTaskTypes.filter((taskType: TaskType) => {
       const typeTasks = getTasksByTypeWithSearch(taskType.id);
-      // Показываем тип, если есть задачи после поиска
       return typeTasks.length > 0;
     });
   }, [availableTaskTypes, searchQuery, tasksByType]);
 
   return (
     <div className="container mx-auto p-6 space-y-8">
-      {/* Заголовок и панель управления */}
+      {/* Заголовок и панель управления - ТОЛЬКО ОДНА КНОПКА ADD TASK */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Tasks by Type</h1>
@@ -228,66 +236,77 @@ const SimpleDepartmentsTables = () => {
             />
           </div>
 
-          <Dialog open={newTaskDialogOpen} onOpenChange={setNewTaskDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Task
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add New Task</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="taskType">Task Type *</Label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={selectedTaskType || ""}
-                    onChange={(e) =>
-                      setSelectedTaskType(Number(e.target.value))
-                    }
-                  >
-                    <option value="">Select task type</option>
-                    {task_types?.map((type: TaskType) => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="taskText">Task Description *</Label>
-                  <Input
-                    id="taskText"
-                    placeholder="Enter task description..."
-                    value={newTask.name}
-                    onChange={(e) =>
-                      setNewTask({ ...newTask, name: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setNewTaskDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleAddTask}
-                  disabled={!newTask.name?.trim() || !selectedTaskType}
-                >
-                  Add Task
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {/* ЧЕРНАЯ КНОПКА ADD TASK */}
+          <Button
+            onClick={() => setNewTaskDialogOpen(true)}
+            style={{
+              backgroundColor: "#111827",
+              color: "white",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = "#1f2937")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = "#111827")
+            }
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Task
+          </Button>
         </div>
       </div>
+
+      {/* Диалог добавления новой задачи */}
+      <Dialog open={newTaskDialogOpen} onOpenChange={setNewTaskDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="taskType">Task Type *</Label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={selectedTaskType || ""}
+                onChange={(e) => setSelectedTaskType(Number(e.target.value))}
+              >
+                <option value="">Select task type</option>
+                {task_types?.map((type: TaskType) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="taskText">Task Description *</Label>
+              <Input
+                id="taskText"
+                placeholder="Enter task description..."
+                value={newTask.name}
+                onChange={(e) =>
+                  setNewTask({ ...newTask, name: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNewTaskDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddTask}
+              disabled={!newTask.name?.trim() || !selectedTaskType}
+            >
+              Add Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Диалог удаления задачи */}
       <Dialog
@@ -433,37 +452,21 @@ const SimpleDepartmentsTables = () => {
               style={{ margin: "30px 0" }}
             >
               <div className="rounded-lg border border-l-4 border-l-blue-500 bg-blue-50">
-                {/* Заголовок таблицы с названием типа */}
+                {/* Заголовок таблицы с названием типа - БЕЗ КНОПКИ ADD TASK */}
                 <div className="p-4 border-b bg-white/50">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-8 bg-blue-500 rounded"></div>
-                      <div>
-                        <h2 className="text-lg font-bold text-gray-900">
-                          {taskType.name}
-                        </h2>
-                        <div className="flex items-center gap-4 mt-1">
-                          <span className="text-sm text-gray-600">
-                            {typeStats.total} task
-                            {typeStats.total !== 1 ? "s" : ""}
-                          </span>
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-8 bg-blue-500 rounded"></div>
+                    <div>
+                      <h2 className="text-lg font-bold text-gray-900">
+                        {taskType.name}
+                      </h2>
+                      <div className="flex items-center gap-4 mt-1">
+                        <span className="text-sm text-gray-600">
+                          {typeStats.total} task
+                          {typeStats.total !== 1 ? "s" : ""}
+                        </span>
                       </div>
                     </div>
-
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => {
-                        setSelectedTaskType(taskType.id);
-                        setNewTaskDialogOpen(true);
-                      }}
-                      className="text-sm"
-                      style={{ width: "15%" }}
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Add Task
-                    </Button>
                   </div>
                 </div>
 
@@ -523,7 +526,7 @@ const SimpleDepartmentsTables = () => {
                   <div className="p-8 text-center text-gray-500">
                     <p className="text-lg">No tasks in this category</p>
                     <p className="text-sm mt-2">
-                      Add tasks using the "Add Task" button
+                      Add tasks using the main "Add Task" button
                     </p>
                   </div>
                 )}

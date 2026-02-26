@@ -1,314 +1,650 @@
 // src/components/positions/Positions.tsx
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Button } from '../../ui/button';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
+import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
+import { Label } from "../../ui/label";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger
-} from '../../ui/dialog';
-import { PlusCircle, Pencil, Trash2, X } from 'lucide-react';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog";
+import {
+  PlusCircle,
+  Trash2,
+  X,
+  AlertTriangle,
+  Plus,
+  Pencil,
+} from "lucide-react";
+import {
+  useCreatePosition,
+  useDeletePosition,
+  useEditPosition,
+  useGetPositions,
+} from "../../../hooks/usePosition";
+import { useUserStore } from "../../../store/UsersStore";
+import {
+  useCreateGrade,
+  useDeleteGrade,
+  useEditGrade,
+} from "../../../hooks/useGrade";
+import { toast } from "sonner";
+
+// Обновленные интерфейсы в соответствии со структурой данных
+interface Grade {
+  id: number;
+  name: string;
+  position: number;
+}
 
 interface Position {
-    id: number;
-    name: string;
-    grades: string[];
+  id: number;
+  name: string;
+  grades: Grade[];
 }
 
 interface PositionsProps {
-    positions?: Position[];
-    onPositionCreated?: (position: Position) => void;
-    onPositionUpdated?: (position: Position) => void;
-    onPositionDeleted?: (positionId: number) => void;
-    onGradeCreated?: (positionId: number, grade: string) => void;
-    onGradeUpdated?: (positionId: number, gradeIndex: number, grade: string) => void;
-    onGradeDeleted?: (positionId: number, gradeIndex: number) => void;
+  onPositionCreated?: (position: Position) => void;
+  onPositionDeleted?: (positionId: number) => void;
+  onGradeCreated?: (positionId: number, grade: Grade) => void;
+  onGradeDeleted?: (positionId: number, gradeId: number) => void;
 }
 
-// Моковые данные по умолчанию
-const defaultPositions: Position[] = [
-    { id: 1, name: 'Notes', grades: ['Notes'] },
-    { id: 2, name: 'Junior', grades: ['Assistant 1', 'Assistant 2'] },
-    { id: 3, name: 'Senior', grades: ['Assistant 3', 'Senior 1', 'Senior 2'] },
-    { id: 4, name: 'Manager', grades: ['Manager 1', 'Manager 2'] },
-    { id: 5, name: 'Senior Manager', grades: ['Senior Manager 1', 'Senior Manager 2'] },
-    { id: 6, name: 'Partner', grades: ['Partner'] },
-    { id: 7, name: 'Director', grades: ['Director'] }
-];
-
 export function Positions({
-    positions = defaultPositions, // Используем моковые данные по умолчанию
-    onPositionCreated,
-    onPositionUpdated,
-    onPositionDeleted,
-    onGradeCreated,
-    onGradeUpdated,
-    onGradeDeleted
+  onPositionCreated,
+  onPositionDeleted,
+  onGradeCreated,
+  onGradeDeleted,
 }: PositionsProps) {
-    // Локальное состояние для управления позициями
-    const [localPositions, setLocalPositions] = useState<Position[]>(positions);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingPosition, setEditingPosition] = useState<Position | null>(null);
-    const [positionName, setPositionName] = useState('');
-    const [grades, setGrades] = useState<string[]>(['']);
+  // Локальное состояние для управления позициями
+  const [localPositions, setLocalPositions] = useState<Position[]>([]);
 
-    // Синхронизируем локальное состояние с переданными позициями
-    useEffect(() => {
-        setLocalPositions(positions);
-    }, [positions]);
+  // Состояние для диалога создания/редактирования позиции
+  const [isPositionDialogOpen, setIsPositionDialogOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
+  const [positionName, setPositionName] = useState("");
 
-    const handleOpenDialog = (position?: Position) => {
-        if (position) {
-            setEditingPosition(position);
-            setPositionName(position.name);
-            setGrades([...position.grades, '']); // Добавляем пустое поле для нового грейда
-        } else {
-            setEditingPosition(null);
-            setPositionName('');
-            setGrades(['']);
-        }
-        setIsDialogOpen(true);
-    };
+  // Состояние для диалога создания/редактирования грейда
+  const [isGradeDialogOpen, setIsGradeDialogOpen] = useState(false);
+  const [editingGrade, setEditingGrade] = useState<Grade | null>(null);
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(
+    null,
+  );
+  const [gradeName, setGradeName] = useState("");
 
-    const handleCloseDialog = () => {
-        setIsDialogOpen(false);
-        setTimeout(() => {
-            setEditingPosition(null);
-            setPositionName('');
-            setGrades(['']);
-        }, 300);
-    };
+  const { mutate: createGrade } = useCreateGrade();
+  const { mutate: createPosition } = useCreatePosition();
+  const { mutate: editPosition } = useEditPosition();
+  const { mutate: deletePosition } = useDeletePosition();
+  const { mutate: editGrade } = useEditGrade();
+  const { mutate: deleteGrade } = useDeleteGrade();
+  const { mutate: getPositions, isPending: isPositionsLoading } =
+    useGetPositions();
+  const store_positions = useUserStore((state) => state.positions);
 
-    const handleSavePosition = () => {
-        if (!positionName.trim()) return;
+  // Состояние для диалога подтверждения удаления позиции
+  const [isDeletePositionDialogOpen, setIsDeletePositionDialogOpen] =
+    useState(false);
+  const [positionToDelete, setPositionToDelete] = useState<{
+    positionId: number;
+    positionName: string;
+    gradesCount: number;
+  } | null>(null);
 
-        const cleanedGrades = grades.filter(grade => grade.trim() !== '');
+  // Состояние для диалога подтверждения удаления грейда
+  const [isDeleteGradeDialogOpen, setIsDeleteGradeDialogOpen] = useState(false);
+  const [gradeToDelete, setGradeToDelete] = useState<{
+    positionId: number;
+    gradeId: number;
+    gradeName: string;
+    positionName: string;
+  } | null>(null);
 
-        if (editingPosition) {
-            const updatedPosition = {
-                ...editingPosition,
-                name: positionName,
-                grades: cleanedGrades
-            };
+  // Загружаем позиции при монтировании компонента
+  useEffect(() => {
+    getPositions();
+  }, [getPositions]);
 
-            // Обновляем локальное состояние
-            setLocalPositions(prev =>
-                prev.map(p => p.id === editingPosition.id ? updatedPosition : p)
-            );
+  // Обновляем локальное состояние при изменении store_positions
+  useEffect(() => {
+    if (store_positions && store_positions.length > 0) {
+      setLocalPositions(store_positions as Position[]);
+    } else {
+      setLocalPositions([]);
+    }
+  }, [store_positions]);
 
-            // Вызываем колбэк если передан
-            onPositionUpdated?.(updatedPosition);
-        } else {
-            const newPosition = {
-                id: Date.now(), // Генерируем уникальный ID
-                name: positionName,
-                grades: cleanedGrades
-            };
+  // Обработчики для создания/редактирования позиции
+  const handleOpenPositionDialog = (position?: Position) => {
+    if (position) {
+      setEditingPosition(position);
+      setPositionName(position.name);
+    } else {
+      setEditingPosition(null);
+      setPositionName("");
+    }
+    setIsPositionDialogOpen(true);
+  };
 
-            // Добавляем новую позицию в локальное состояние
-            setLocalPositions(prev => [...prev, newPosition]);
+  const handleClosePositionDialog = () => {
+    setIsPositionDialogOpen(false);
+    setEditingPosition(null);
+    setPositionName("");
+  };
 
-            // Вызываем колбэк если передан
-            onPositionCreated?.(newPosition);
-        }
+  const handleSavePosition = () => {
+    if (!positionName.trim()) return;
 
-        handleCloseDialog();
-    };
+    if (editingPosition) {
+      // ✅ Используем editPosition из хука
+      editPosition(
+        {
+          positionId: editingPosition.id.toString(),
+          body: { name: positionName.trim() },
+        },
+        {
+          onSuccess: () => {
+            toast.success(`Position "${positionName}" updated successfully`);
+            getPositions();
+            handleClosePositionDialog();
+          },
+          onError: (error) => {
+            console.error("Error updating position:", error);
+            toast.error("Failed to update position");
+          },
+        },
+      );
+    } else {
+      createPosition(
+        { name: positionName.trim() },
+        {
+          onSuccess: (data) => {
+            toast.success(`Position "${positionName}" created successfully`);
+            getPositions();
+            handleClosePositionDialog();
+            onPositionCreated?.(data);
+          },
+          onError: (error) => {
+            console.error("Error creating position:", error);
+            toast.error("Failed to create position");
+          },
+        },
+      );
+    }
+  };
 
-    const handleDeletePosition = (positionId: number) => {
-        if (window.confirm('Are you sure you want to delete this position?')) {
-            // Удаляем из локального состояния
-            setLocalPositions(prev => prev.filter(p => p.id !== positionId));
+  // Обработчики для создания/редактирования грейда
+  const handleOpenGradeDialog = (position: Position, grade?: Grade) => {
+    setSelectedPosition(position);
+    if (grade) {
+      setEditingGrade(grade);
+      setGradeName(grade.name);
+    } else {
+      setEditingGrade(null);
+      setGradeName("");
+    }
+    setIsGradeDialogOpen(true);
+  };
 
-            // Вызываем колбэк если передан
-            onPositionDeleted?.(positionId);
-        }
-    };
+  const handleCloseGradeDialog = () => {
+    setIsGradeDialogOpen(false);
+    setSelectedPosition(null);
+    setEditingGrade(null);
+    setGradeName("");
+  };
 
-    const addGradeField = () => {
-        setGrades([...grades, '']);
-    };
+  const handleSaveGrade = () => {
+    if (!selectedPosition || !gradeName.trim()) return;
 
-    const updateGrade = (index: number, value: string) => {
-        const newGrades = [...grades];
-        newGrades[index] = value;
-        setGrades(newGrades);
-    };
+    if (editingGrade) {
+      // ✅ Используем editGrade из хука
+      editGrade(
+        {
+          gradeId: editingGrade.id.toString(),
+          body: {
+            name: gradeName.trim(),
+            position: selectedPosition.id, // number, не строка
+          },
+        },
+        {
+          onSuccess: () => {
+            toast.success(`Grade "${gradeName}" updated successfully`);
+            getPositions();
+            handleCloseGradeDialog();
+          },
+          onError: (error) => {
+            console.error("Error updating grade:", error);
+            toast.error("Failed to update grade");
+          },
+        },
+      );
+    } else {
+      createGrade(
+        {
+          position: selectedPosition.id,
+          name: gradeName.trim(),
+        },
+        {
+          onSuccess: (data) => {
+            toast.success(`Grade "${gradeName}" added successfully`);
+            getPositions();
+            handleCloseGradeDialog();
+            onGradeCreated?.(selectedPosition.id, data);
+          },
+          onError: (error) => {
+            console.error("Error creating grade:", error);
+            toast.error("Failed to create grade");
+          },
+        },
+      );
+    }
+  };
 
-    const removeGrade = (index: number) => {
-        if (grades.length > 1) {
-            const newGrades = grades.filter((_, i) => i !== index);
-            setGrades(newGrades);
-        }
-    };
+  // Обработчики для удаления позиции
+  const handleDeletePositionClick = (position: Position) => {
+    setPositionToDelete({
+      positionId: position.id,
+      positionName: position.name,
+      gradesCount: position.grades.length,
+    });
+    setIsDeletePositionDialogOpen(true);
+  };
 
-    return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-lg font-semibold">Position Management</h3>
-                    <p className="text-sm text-muted-foreground">
-                        Manage job positions and their grade levels
-                    </p>
-                </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button onClick={() => handleOpenDialog()}>
-                            <PlusCircle className="w-4 h-4 mr-2" />
-                            Add Position
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
-                        <DialogHeader>
-                            <DialogTitle>
-                                {editingPosition ? 'Edit Position' : 'Add New Position'}
-                            </DialogTitle>
-                            <DialogDescription>
-                                Define a position and its associated grade levels.
-                            </DialogDescription>
-                        </DialogHeader>
+  const handleConfirmDeletePosition = () => {
+    if (!positionToDelete) return;
 
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="position-name">Position Name</Label>
-                                <Input
-                                    id="position-name"
-                                    value={positionName}
-                                    onChange={(e) => setPositionName(e.target.value)}
-                                    placeholder="e.g., Senior Developer"
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <Label>Grade Levels</Label>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={addGradeField}
-                                    >
-                                        <PlusCircle className="w-4 h-4 mr-1" />
-                                        Add Grade
-                                    </Button>
-                                </div>
-
-                                <div className="space-y-2 max-h-60 overflow-y-auto p-2 border rounded-md">
-                                    {grades.map((grade, index) => (
-                                        <div key={index} className="flex items-center gap-2">
-                                            <Input
-                                                value={grade}
-                                                onChange={(e) => updateGrade(index, e.target.value)}
-                                                placeholder={`Grade ${index + 1}`}
-                                                className="flex-1"
-                                            />
-                                            {grades.length > 1 && (
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => removeGrade(index)}
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        <DialogFooter>
-                            <Button variant="outline" onClick={handleCloseDialog}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleSavePosition}>
-                                {editingPosition ? 'Save Changes' : 'Create Position'}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Positions & Grades</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        Total positions: {localPositions.length}
-                    </p>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        {localPositions.length === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                No positions defined yet. Add your first position.
-                            </div>
-                        ) : (
-                            localPositions.map((position) => (
-                                <Card key={position.id} className="overflow-hidden">
-                                    <div className="p-4">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-3">
-
-                                                <h4 className="font-semibold text-lg">{position.name}</h4>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleOpenDialog(position)}
-                                                    title="Edit position"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleDeletePosition(position.id)}
-                                                    title="Delete position"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            {position.grades.length === 0 ? (
-                                                <div className="text-sm text-muted-foreground italic">
-                                                    No grades defined for this position.
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <p className="text-sm font-medium text-muted-foreground">
-                                                        Grade levels ({position.grades.length}):
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {position.grades.map((grade, index) => (
-                                                            <div
-                                                                key={`${position.id}-${index}`}
-                                                                className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-medium border border-primary/20"
-                                                            >
-                                                                {grade}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </Card>
-                            ))
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
+    // ✅ Используем deletePosition из хука
+    deletePosition(
+      { positionId: positionToDelete.positionId.toString() },
+      {
+        onSuccess: () => {
+          toast.success(
+            `Position "${positionToDelete.positionName}" deleted successfully`,
+          );
+          getPositions();
+          setIsDeletePositionDialogOpen(false);
+          setPositionToDelete(null);
+          onPositionDeleted?.(positionToDelete.positionId);
+        },
+      },
     );
+  };
+
+  const handleCancelDeletePosition = () => {
+    setIsDeletePositionDialogOpen(false);
+    setPositionToDelete(null);
+  };
+
+  // Обработчики для удаления грейда
+  const handleDeleteGradeClick = (
+    positionId: number,
+    gradeId: number,
+    gradeName: string,
+    positionName: string,
+  ) => {
+    setGradeToDelete({
+      positionId,
+      gradeId,
+      gradeName,
+      positionName,
+    });
+    setIsDeleteGradeDialogOpen(true);
+  };
+
+  const handleConfirmDeleteGrade = () => {
+    if (!gradeToDelete) return;
+
+    // ✅ Используем deleteGrade из хука
+    deleteGrade(
+      { gradeId: gradeToDelete.gradeId.toString() },
+      {
+        onSuccess: () => {
+          toast.success(
+            `Grade "${gradeToDelete.gradeName}" deleted successfully`,
+          );
+          getPositions();
+          setIsDeleteGradeDialogOpen(false);
+          setGradeToDelete(null);
+          onGradeDeleted?.(gradeToDelete.positionId, gradeToDelete.gradeId);
+        },
+      },
+    );
+  };
+
+  const handleCancelDeleteGrade = () => {
+    setIsDeleteGradeDialogOpen(false);
+    setGradeToDelete(null);
+  };
+
+  // Показываем загрузку, если данные еще загружаются
+  if (isPositionsLoading && !store_positions) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading positions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Диалог подтверждения удаления позиции */}
+      <AlertDialog
+        open={isDeletePositionDialogOpen}
+        onOpenChange={setIsDeletePositionDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Delete Position
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              {positionToDelete && (
+                <>
+                  <p>
+                    Are you sure you want to delete the position{" "}
+                    <span className="font-semibold">
+                      {positionToDelete.positionName}
+                    </span>
+                    ?
+                  </p>
+                  <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                    <p className="font-medium text-gray-900">
+                      This position has {positionToDelete.gradesCount} grade
+                      {positionToDelete.gradesCount !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    This action cannot be undone. All grades associated with
+                    this position will be permanently deleted.
+                  </p>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDeletePosition}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeletePosition}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete Position
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Диалог подтверждения удаления грейда */}
+      <AlertDialog
+        open={isDeleteGradeDialogOpen}
+        onOpenChange={setIsDeleteGradeDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              Delete Grade
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              {gradeToDelete && (
+                <>
+                  <p>
+                    Are you sure you want to delete this grade from{" "}
+                    <span className="font-semibold">
+                      {gradeToDelete.positionName}
+                    </span>
+                    ?
+                  </p>
+                  <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                    <p className="font-medium text-gray-900">
+                      Grade: {gradeToDelete.gradeName}
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    This action cannot be undone. This grade will be permanently
+                    removed from the position.
+                  </p>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDeleteGrade}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteGrade}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete Grade
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Диалог создания/редактирования позиции */}
+      <Dialog
+        open={isPositionDialogOpen}
+        onOpenChange={setIsPositionDialogOpen}
+      >
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPosition ? "Edit Position" : "Add New Position"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingPosition
+                ? "Update the job position name."
+                : "Create a new job position. You can add grades to it later."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="position-name">Position Name</Label>
+              <Input
+                id="position-name"
+                value={positionName}
+                onChange={(e) => setPositionName(e.target.value)}
+                placeholder="e.g., Senior Developer"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClosePositionDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePosition}
+              disabled={!positionName.trim()}
+            >
+              {editingPosition ? "Save Changes" : "Create Position"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Диалог создания/редактирования грейда */}
+      <Dialog open={isGradeDialogOpen} onOpenChange={setIsGradeDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingGrade ? "Edit Grade" : "Add New Grade"}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedPosition && (
+                <>
+                  {editingGrade
+                    ? `Update grade for position "${selectedPosition.name}"`
+                    : `Add a new grade level to position "${selectedPosition.name}"`}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="grade-name">Grade Name</Label>
+              <Input
+                id="grade-name"
+                value={gradeName}
+                onChange={(e) => setGradeName(e.target.value)}
+                placeholder="e.g., Junior 1"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseGradeDialog}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveGrade} disabled={!gradeName.trim()}>
+              {editingGrade ? "Save Changes" : "Create Grade"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Position Management</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage job positions and their grade levels
+          </p>
+        </div>
+        <Button onClick={() => handleOpenPositionDialog()}>
+          <PlusCircle className="w-4 h-4 mr-2" />
+          Add Position
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Positions & Grades</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Total positions: {localPositions.length}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {localPositions.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No positions defined yet. Add your first position.
+              </div>
+            ) : (
+              localPositions.map((position) => (
+                <Card key={position.id} className="overflow-hidden">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <h4 className="font-semibold text-lg">
+                          {position.name}
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenGradeDialog(position)}
+                          title="Add grade"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenPositionDialog(position)}
+                          title="Edit position"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeletePositionClick(position)}
+                          title="Delete position"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {position.grades.length === 0 ? (
+                        <div className="text-sm text-muted-foreground italic">
+                          No grades defined for this position. Click the +
+                          button to add a grade.
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Grade levels ({position.grades.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {position.grades.map((grade) => (
+                              <div
+                                key={grade.id}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-medium border border-primary/20 group hover:bg-primary/20 transition-colors"
+                              >
+                                <span>{grade.name}</span>
+                                <button
+                                  onClick={() =>
+                                    handleOpenGradeDialog(position, grade)
+                                  }
+                                  className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-500"
+                                  title="Edit grade"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleDeleteGradeClick(
+                                      position.id,
+                                      grade.id,
+                                      grade.name,
+                                      position.name,
+                                    )
+                                  }
+                                  className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+                                  title="Delete grade"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

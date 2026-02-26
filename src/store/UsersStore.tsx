@@ -14,6 +14,14 @@ import { DepartmentRole } from "../types/user";
 import { DepartmentsResponse } from "../types/deaprtments";
 import { Calendar } from "../types/calendar";
 
+// Определяем тип для роли (можно заменить на импорт из types, если есть)
+export interface Role {
+  id: number;
+  name: string;
+  description?: string;
+  permissions?: string[];
+}
+
 interface User {
   id: number;
   username: string;
@@ -67,8 +75,9 @@ interface UserState {
 
   calendar: Calendar[] | null;
 
-  // ✅ Добавляем tasks в состояние
   tasks: Task[] | null;
+
+  roles: Role[] | null;
 
   setUser: (
     user: User,
@@ -131,12 +140,22 @@ interface UserState {
   // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ TASKS
   setTasks: (tasks: Task[] | null) => void;
 
+  // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ ROLES
+  setRoles: (roles: Role[] | null) => void;
+
   // ✅ Хелпер функции для работы с tasks
   getTaskById: (taskId: number) => Task | undefined;
   getTasksByType: (taskType: string) => Task[];
   addTask: (task: Task) => void;
   updateTask: (taskId: number, updates: Partial<Task>) => void;
   removeTask: (taskId: number) => void;
+
+  // ✅ Хелпер функции для работы с roles
+  getRoleById: (roleId: number) => Role | undefined;
+  getRoleByName: (roleName: string) => Role | undefined;
+  addRole: (role: Role) => void;
+  updateRole: (roleId: number, updates: Partial<Role>) => void;
+  removeRole: (roleId: number) => void;
 
   logout: () => void;
 }
@@ -171,9 +190,8 @@ export const useUserStore = create<UserState>()(
       sectors: null,
       department_workers: null,
       calendar: null,
-
-      // ✅ Инициализируем tasks
       tasks: null,
+      roles: null, // ✅ Инициализируем roles
 
       setUser: (userData, tokens) =>
         set({
@@ -242,6 +260,9 @@ export const useUserStore = create<UserState>()(
       // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ TASKS
       setTasks: (tasks) => set({ tasks }),
 
+      // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ ROLES
+      setRoles: (roles) => set({ roles }),
+
       getInternalTaskById: (taskId: number) => {
         const state = get();
         if (!state.internal_tasks) return undefined;
@@ -293,6 +314,45 @@ export const useUserStore = create<UserState>()(
         set({ tasks: filteredTasks });
       },
 
+      // ✅ Хелпер функции для roles
+      getRoleById: (roleId: number) => {
+        const state = get();
+        if (!state.roles) return undefined;
+        return state.roles.find((role) => role.id === roleId);
+      },
+
+      getRoleByName: (roleName: string) => {
+        const state = get();
+        if (!state.roles) return undefined;
+        return state.roles.find(
+          (role) => role.name.toLowerCase() === roleName.toLowerCase(),
+        );
+      },
+
+      addRole: (role: Role) => {
+        const state = get();
+        const currentRoles = state.roles || [];
+        set({ roles: [...currentRoles, role] });
+      },
+
+      updateRole: (roleId: number, updates: Partial<Role>) => {
+        const state = get();
+        if (!state.roles) return;
+
+        const updatedRoles = state.roles.map((role) =>
+          role.id === roleId ? { ...role, ...updates } : role,
+        );
+        set({ roles: updatedRoles });
+      },
+
+      removeRole: (roleId: number) => {
+        const state = get();
+        if (!state.roles) return;
+
+        const filteredRoles = state.roles.filter((role) => role.id !== roleId);
+        set({ roles: filteredRoles });
+      },
+
       logout: () => {
         localStorage.removeItem("authToken");
         localStorage.removeItem("refreshToken");
@@ -321,7 +381,8 @@ export const useUserStore = create<UserState>()(
           sectors: null,
           department_workers: null,
           calendar: null,
-          tasks: null, // ✅ Очищаем tasks при выходе
+          tasks: null,
+          roles: null, // ✅ Очищаем roles при выходе
         });
       },
     }),
@@ -350,7 +411,8 @@ export const useUserStore = create<UserState>()(
         sectors: state.sectors,
         department_workers: state.department_workers,
         calendar: state.calendar,
-        tasks: state.tasks, // ✅ Добавляем tasks в persist
+        tasks: state.tasks,
+        roles: state.roles, // ✅ Добавляем roles в persist
       }),
     },
   ),

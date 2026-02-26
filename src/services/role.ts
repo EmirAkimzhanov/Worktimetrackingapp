@@ -2,7 +2,7 @@ import axios from "axios";
 import { api } from "../consts/api";
 import { useUserStore } from "../store/UsersStore";
 
-export const getInternalTasks = async () => {
+export const getRoles = async () => {
   const token = useUserStore.getState().access_token;
 
   if (!token) {
@@ -10,7 +10,7 @@ export const getInternalTasks = async () => {
   }
 
   const res = await axios(
-    `${api}api/projects/tasks/internal/`,
+    `${api}api/accounts/roles/`,
 
     {
       headers: {
@@ -21,53 +21,15 @@ export const getInternalTasks = async () => {
   return res.data;
 };
 
-export const getTaskTypes = async () => {
+export const createRole = async (body: { name: string }) => {
   const token = useUserStore.getState().access_token;
 
   if (!token) {
     throw new Error("No access token available");
   }
 
-  const res = await axios(
-    `${api}api/projects/task-types/`,
-
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
-  return res.data;
-};
-
-export const getTasks = async () => {
-  const token = useUserStore.getState().access_token;
-
-  if (!token) {
-    throw new Error("No access token available");
-  }
-
-  const res = await axios(
-    `${api}api/projects/tasks/`,
-
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
-  return res.data;
-};
-
-export const EditTask = async (task_id: string, body: { name: string }) => {
-  const token = useUserStore.getState().access_token;
-
-  if (!token) {
-    throw new Error("No access token available");
-  }
-
-  const res = await axios.patch(
-    `${api}api/projects/tasks/${task_id}/`,
+  const res = await axios.post(
+    `${api}api/accounts/roles/`,
     body,
 
     {
@@ -79,15 +41,16 @@ export const EditTask = async (task_id: string, body: { name: string }) => {
   return res.data;
 };
 
-export const DeleteTask = async (task_id: string) => {
+export const editRole = async (roleId: string, body: { name: string }) => {
   const token = useUserStore.getState().access_token;
 
   if (!token) {
     throw new Error("No access token available");
   }
 
-  const res = await axios.delete(
-    `${api}api/projects/tasks/${task_id}/`,
+  const res = await axios.patch(
+    `${api}api/accounts/roles/${roleId}/`,
+    body,
 
     {
       headers: {
@@ -98,17 +61,21 @@ export const DeleteTask = async (task_id: string) => {
   return res.data;
 };
 
-export const createTask = async (body: { name: string; task_type: number }) => {
+export const deleteRole = async (roleId: string) => {
   const token = useUserStore.getState().access_token;
 
   if (!token) {
     throw new Error("No access token available");
   }
 
-  const res = await axios.post(`${api}api/projects/tasks/`, body, {
-    headers: {
-      Authorization: `Bearer ${token}`,
+  const res = await axios.delete(
+    `${api}api/accounts/roles/${roleId}/`,
+
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     },
-  });
+  );
   return res.data;
 };
