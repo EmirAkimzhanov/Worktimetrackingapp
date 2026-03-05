@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, X, FolderKanban, FileText, User, CalendarDays, ChevronUp, ChevronDown } from 'lucide-react';
@@ -6,14 +6,43 @@ import { useTimeTracker } from './TimeTrackerContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { useUserStore } from '../store/UsersStore';
 
+// Интерфейс для записи времени в новом формате
+interface TimeEntry {
+  id: number;
+  user: string;
+  country: string | null;
+  client: string | null;
+  project: string | null;
+  project_color: string | null;
+  project_code: string | null;
+  task_type: string | null;
+  task: string | null;
+  weekends_included: boolean;
+  date: string;  // Изменено с start_date на date
+  hours: number;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export function CalendarView() {
   const { filters } = useTimeTracker();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedDateEntries, setSelectedDateEntries] = useState<any[]>([]);
+  const [selectedDateEntries, setSelectedDateEntries] = useState<TimeEntry[]>([]);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
-  const time_entries = useUserStore((state) => state.time_entries);
+  const time_entries = useUserStore((state) => state.time_entries) as TimeEntry[];
+
+  // Отладка: смотрим, что приходит из стора
+  useEffect(() => {
+    if (time_entries && time_entries.length > 0) {
+      console.log('✅ time_entries is not empty, length:', time_entries.length);
+      console.log('📝 First entry example:', time_entries[0]);
+      console.log('📝 All entries have date field?', time_entries.every(entry => entry.date));
+    } else {
+    }
+  }, [time_entries]);
 
   // Получаем все записи времени из хранилища
   const allEntries = useMemo(() => {
@@ -21,10 +50,13 @@ export function CalendarView() {
   }, [time_entries]);
 
   const filteredEntries = useMemo(() => {
-    return allEntries.filter(entry => {
-      if (!entry) return false;
 
-      // Фильтрация по проектам
+    const filtered = allEntries.filter(entry => {
+      if (!entry) {
+        return false;
+      }
+
+      // Фильтрация по проектам (по ID проекта)
       if (filters.projects.length > 0 && entry.project &&
         !filters.projects.includes(entry.project)) {
         return false;
@@ -38,15 +70,15 @@ export function CalendarView() {
 
       // Фильтрация по диапазону часов
       if (filters.hoursRange !== 'all' && entry.hours) {
-        const hours = parseFloat(entry.hours);
+        const hours = entry.hours;
         if (filters.hoursRange === 'low' && hours >= 4) return false;
         if (filters.hoursRange === 'medium' && (hours < 4 || hours > 8)) return false;
         if (filters.hoursRange === 'high' && hours <= 8) return false;
       }
 
-      // Фильтрация по диапазону дат
-      if (filters.dateRange && entry.start_date) {
-        const entryDate = new Date(entry.start_date);
+      // Фильтрация по диапазону дат (используем date вместо start_date)
+      if (filters.dateRange && entry.date) {
+        const entryDate = new Date(entry.date);
         const [start, end] = filters.dateRange;
         if (entryDate < new Date(start) || entryDate > new Date(end)) {
           return false;
@@ -55,6 +87,8 @@ export function CalendarView() {
 
       return true;
     });
+
+    return filtered;
   }, [allEntries, filters]);
 
   const year = currentDate.getFullYear();
@@ -73,41 +107,29 @@ export function CalendarView() {
 
   const getEntriesForDate = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return filteredEntries.filter(entry => {
-      // Проверяем, попадает ли день в диапазон start_date - end_date
-      if (!entry.start_date) return false;
 
-      const startDate = new Date(entry.start_date);
-      const endDate = entry.end_date ? new Date(entry.end_date) : new Date(entry.start_date);
-      const targetDate = new Date(dateStr);
 
-      // Проверяем, находится ли целевая дата в диапазоне
-      return targetDate >= startDate && targetDate <= endDate;
+    const entriesForDate = filteredEntries.filter(entry => {
+      if (!entry.date) {
+        return false;
+      }
+
+      // Просто сравниваем date строки, без сложной логики с диапазонами
+      const isMatch = entry.date === dateStr;
+
+      if (isMatch) {
+      }
+
+      return isMatch;
     });
+
+    return entriesForDate;
   };
 
   const getTotalHoursForDate = (day: number) => {
     const dayEntries = getEntriesForDate(day);
     return dayEntries.reduce((sum, entry) => {
-      const hours = parseFloat(entry.hours) || 0;
-
-      // Если запись растянута на несколько дней, нужно разделить часы
-      if (entry.start_date && entry.end_date) {
-        const startDate = new Date(entry.start_date);
-        const endDate = new Date(entry.end_date);
-
-        // Если это один день, возвращаем все часы
-        if (startDate.toDateString() === endDate.toDateString()) {
-          return sum + hours;
-        }
-
-        // Если запись на несколько дней, делим часы равномерно
-        const dayDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
-        const hoursPerDay = hours / dayDiff;
-        return sum + hoursPerDay;
-      }
-
-      return sum + hours;
+      return sum + (entry.hours || 0);
     }, 0);
   };
 
@@ -125,9 +147,11 @@ export function CalendarView() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const dayEntries = getEntriesForDate(day);
 
+    console.log(`👆 Day clicked: ${day}, found ${dayEntries.length} entries`);
+
     setSelectedDate(dateStr);
     setSelectedDateEntries(dayEntries);
-    setExpandedEntries(new Set()); // Сбрасываем раскрытые записи
+    setExpandedEntries(new Set());
     setIsDetailsOpen(true);
   };
 
@@ -166,20 +190,8 @@ export function CalendarView() {
     const hoursMap = new Map<string, number>();
     selectedDateEntries.forEach(entry => {
       if (!entry) return;
-      const projectName = entry.project || 'Unknown Project';
-      let hours = parseFloat(entry.hours) || 0;
-
-      // Если запись на несколько дней, корректируем часы
-      if (entry.start_date && entry.end_date && selectedDate) {
-        const startDate = new Date(entry.start_date);
-        const endDate = new Date(entry.end_date);
-        const targetDate = new Date(selectedDate);
-
-        if (startDate.toDateString() !== endDate.toDateString()) {
-          const dayDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
-          hours = hours / dayDiff;
-        }
-      }
+      const projectName = entry.project_code || entry.project || 'Unknown Project';
+      const hours = entry.hours || 0;
 
       const current = hoursMap.get(projectName) || 0;
       hoursMap.set(projectName, current + hours);
@@ -191,7 +203,7 @@ export function CalendarView() {
     const tasksMap = new Map<string, number>();
     selectedDateEntries.forEach(entry => {
       if (!entry) return;
-      const taskName = entry.task || 'No task';
+      const taskName = entry.task || entry.task_type || 'No task';
       const current = tasksMap.get(taskName) || 0;
       tasksMap.set(taskName, current + 1);
     });
@@ -199,46 +211,49 @@ export function CalendarView() {
   };
 
   // Получение цвета проекта
-  const getProjectColor = (entry: any) => {
+  const getProjectColor = (entry: TimeEntry) => {
     if (!entry) return '#0066CC';
     return entry.project_color || '#0066CC';
   };
 
   // Получение кода проекта
-  const getProjectCode = (entry: any) => {
+  const getProjectCode = (entry: TimeEntry) => {
     if (!entry) return 'PRJ';
     return entry.project_code || 'PRJ';
   };
 
-  // Получение названия проекта
-  const getProjectName = (entry: any) => {
+  // Получение названия проекта (используем project_code или project)
+  const getProjectName = (entry: TimeEntry) => {
     if (!entry) return 'Unknown Project';
-    return entry.project || 'Unknown Project';
+    return entry.project_code || entry.project || 'Unknown Project';
   };
 
   // Получение клиента
-  const getClient = (entry: any) => {
+  const getClient = (entry: TimeEntry) => {
     if (!entry) return 'No client';
     return entry.client || 'No client';
   };
 
   // Получение типа задачи
-  const getTaskType = (entry: any) => {
+  const getTaskType = (entry: TimeEntry) => {
     if (!entry) return 'No type';
     return entry.task_type || 'No type';
   };
 
-  // Форматирование даты диапазона
-  const formatDateRange = (entry: any) => {
-    if (!entry.start_date) return '';
+  // Получение названия задачи
+  const getTaskName = (entry: TimeEntry) => {
+    if (!entry) return 'No task';
+    return entry.task || entry.task_type || 'No task';
+  };
 
-    const startDate = new Date(entry.start_date);
-    if (!entry.end_date || entry.start_date === entry.end_date) {
-      return startDate.toLocaleDateString();
-    }
-
-    const endDate = new Date(entry.end_date);
-    return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+  // Форматирование даты (просто возвращаем отформатированную дату)
+  const formatEntryDate = (entry: TimeEntry) => {
+    if (!entry.date) return '';
+    return new Date(entry.date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   return (
@@ -251,7 +266,11 @@ export function CalendarView() {
                 <CalendarIcon className="w-5 h-5" />
                 Calendar View
               </CardTitle>
-              <CardDescription>Click on a day to see task details</CardDescription>
+              <CardDescription>
+                {allEntries.length > 0
+                  ? `Click on a day to see task details (${allEntries.length} total entries)`
+                  : 'No time entries yet'}
+              </CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" onClick={previousMonth}>
@@ -329,6 +348,24 @@ export function CalendarView() {
               );
             })}
           </div>
+
+          {/* Отладочная информация */}
+          {allEntries.length > 0 && filteredEntries.length === 0 && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-700">
+                ⚠️ Found {allEntries.length} entries, but none match the current filters.
+                Try resetting filters in the Time Entries tab.
+              </p>
+            </div>
+          )}
+
+          {allEntries.length === 0 && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-blue-700">
+                ℹ️ No time entries found. Add some using the form above.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -358,23 +395,7 @@ export function CalendarView() {
                     <div>
                       <p className="text-sm text-gray-600">Total hours</p>
                       <p className="text-2xl font-bold text-blue-700">
-                        {selectedDateEntries.reduce((sum, entry) => {
-                          let hours = parseFloat(entry.hours) || 0;
-
-                          // Корректируем часы для многодневных записей
-                          if (entry.start_date && entry.end_date && selectedDate) {
-                            const startDate = new Date(entry.start_date);
-                            const endDate = new Date(entry.end_date);
-                            const targetDate = new Date(selectedDate);
-
-                            if (startDate.toDateString() !== endDate.toDateString()) {
-                              const dayDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
-                              hours = hours / dayDiff;
-                            }
-                          }
-
-                          return sum + hours;
-                        }, 0).toFixed(1)}h
+                        {selectedDateEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0).toFixed(1)}h
                       </p>
                     </div>
                     <div>
@@ -390,19 +411,6 @@ export function CalendarView() {
                       const projectName = getProjectName(entry);
                       const projectCode = getProjectCode(entry);
                       const isExpanded = expandedEntries.has(entry.id);
-                      let hours = parseFloat(entry.hours) || 0;
-
-                      // Корректируем часы для многодневных записей
-                      if (entry.start_date && entry.end_date && selectedDate) {
-                        const startDate = new Date(entry.start_date);
-                        const endDate = new Date(entry.end_date);
-                        const targetDate = new Date(selectedDate);
-
-                        if (startDate.toDateString() !== endDate.toDateString()) {
-                          const dayDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
-                          hours = hours / dayDiff;
-                        }
-                      }
 
                       return (
                         <div key={entry.id} className="border rounded-lg overflow-hidden">
@@ -425,7 +433,7 @@ export function CalendarView() {
                                     <div className="flex items-center gap-2">
                                       <span className="flex items-center gap-1 text-sm font-medium text-gray-700">
                                         <Clock className="w-4 h-4" />
-                                        {hours.toFixed(1)}h
+                                        {entry.hours?.toFixed(1)}h
                                       </span>
                                       <Button
                                         variant="ghost"
@@ -465,10 +473,11 @@ export function CalendarView() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                   <div>
                                     <div className="flex items-center gap-2 mb-1">
-                                      <span className="text-sm font-medium text-gray-700">Date Range</span>
+                                      <CalendarDays className="w-4 h-4 text-gray-500" />
+                                      <span className="text-sm font-medium text-gray-700">Date</span>
                                     </div>
                                     <p className="text-gray-900 bg-white p-2 rounded-lg border">
-                                      {formatDateRange(entry)}
+                                      {formatEntryDate(entry)}
                                     </p>
                                   </div>
                                   {entry.user && (
@@ -478,7 +487,7 @@ export function CalendarView() {
                                         <span className="text-sm font-medium text-gray-700">User</span>
                                       </div>
                                       <p className="text-gray-900 bg-white p-2 rounded-lg border">
-                                        {entry.user.split('@')[0]}
+                                        {entry.user}
                                       </p>
                                     </div>
                                   )}
@@ -491,7 +500,7 @@ export function CalendarView() {
                                       <span className="text-sm font-medium text-gray-700">Task</span>
                                     </div>
                                     <p className="text-gray-900 bg-white p-3 rounded-lg border">
-                                      {entry.task}
+                                      {getTaskName(entry)}
                                     </p>
                                   </div>
                                 )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -24,6 +24,12 @@ interface UserDialogProps {
     onSave: () => void;
 }
 
+interface Country {
+    id: number;
+    name: string;
+    code: string;
+}
+
 export function UserDialog({
     open,
     onOpenChange,
@@ -35,12 +41,37 @@ export function UserDialog({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const department_roles = useUserStore((state) => state.department_roles) || [];
     const user_grades = useUserStore((state) => state.user_grades) || [];
-    const countries = useUserStore((state) => state.countries) || [];
+    const countriesData = useUserStore((state) => state.countries);
     const store_departments = useUserStore((state) => state.departments) || [];
     const store_positions = useUserStore((state) => state.positions) || [];
     const { mutate: sendUser } = useSendUsers();
     const { mutate: getUsers } = useGetUsers();
     const { mutate: editUser } = useEditUsers();
+
+    // Преобразуем countries в массив, если это объект
+    const countries = useMemo(() => {
+        console.log('Raw countries data:', countriesData);
+
+        if (!countriesData) return [];
+
+        // Если это массив, возвращаем как есть
+        if (Array.isArray(countriesData)) {
+            return countriesData;
+        }
+
+        // Если это объект, преобразуем в массив
+        if (typeof countriesData === 'object') {
+            // Проверяем, есть ли у объекта метод map (значит это массив)
+            if (countriesData && 'map' in countriesData && typeof countriesData.map === 'function') {
+                return countriesData as Country[];
+            }
+
+            // Если это объект с ключами, преобразуем значения в массив
+            return Object.values(countriesData);
+        }
+
+        return [];
+    }, [countriesData]);
 
     const resetForm = () => {
         setUserForm({
@@ -176,6 +207,9 @@ export function UserDialog({
             });
         }
     };
+
+    // Для отладки
+    console.log('Countries after conversion:', countries);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -326,11 +360,17 @@ export function UserDialog({
                                 <SelectValue placeholder="Select country" />
                             </SelectTrigger>
                             <SelectContent>
-                                {countries.map(country => (
-                                    <SelectItem key={country.id} value={safeToString(country.id)}>
-                                        {country.name} ({country.code})
+                                {countries.length > 0 ? (
+                                    countries.map((country: Country) => (
+                                        <SelectItem key={country.id} value={safeToString(country.id)}>
+                                            {country.name} {country.code ? `(${country.code})` : ''}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <SelectItem value="1" disabled>
+                                        No countries available
                                     </SelectItem>
-                                ))}
+                                )}
                             </SelectContent>
                         </Select>
                     </div>

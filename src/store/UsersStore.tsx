@@ -1,3 +1,4 @@
+// src/store/userStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Countries } from "../types/countries";
@@ -13,6 +14,7 @@ import { ServiceLines } from "../types/serviceLines";
 import { DepartmentRole } from "../types/user";
 import { DepartmentsResponse } from "../types/deaprtments";
 import { Calendar } from "../types/calendar";
+import { Monitoring } from "../types/monitoring";
 
 // Определяем тип для роли (можно заменить на импорт из types, если есть)
 export interface Role {
@@ -20,6 +22,98 @@ export interface Role {
   name: string;
   description?: string;
   permissions?: string[];
+}
+
+// Типы для отчетов
+export interface TimeReport {
+  id: number;
+  userId: number;
+  userName: string;
+  date: string;
+  hours: number;
+  projectId?: number;
+  projectName?: string;
+  taskId?: number;
+  taskName?: string;
+  status: 'approved' | 'pending' | 'rejected';
+  approvedBy?: number;
+  approvedAt?: string;
+}
+
+export interface ProjectReport {
+  id: number;
+  projectId: number;
+  projectName: string;
+  clientId: number;
+  clientName: string;
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  utilization: number;
+  teamMembers: number;
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'completed' | 'on_hold';
+}
+
+export interface UserReport {
+  userId: number;
+  userName: string;
+  userEmail: string;
+  departmentId?: number;
+  departmentName?: string;
+  position?: string;
+  totalHoursWorked: number;
+  overtimeHours: number;
+  leaveDays: number;
+  sickDays: number;
+  utilization: number;
+  periodStart: string;
+  periodEnd: string;
+}
+
+export interface FinancialReport {
+  id: number;
+  period: string;
+  revenue: number;
+  costs: number;
+  profit: number;
+  margin: number;
+  projectsCount: number;
+  clientsCount: number;
+  billableHours: number;
+  nonBillableHours: number;
+}
+
+export interface ReportFilters {
+  startDate?: string;
+  endDate?: string;
+  userId?: number;
+  projectId?: number;
+  clientId?: number;
+  departmentId?: number;
+  status?: string;
+}
+
+export interface ReportSummary {
+  totalHours: number;
+  totalProjects: number;
+  totalUsers: number;
+  totalRevenue: number;
+  averageUtilization: number;
+  billablePercentage: number;
+}
+
+export type ReportType = 'time' | 'project' | 'user' | 'financial' | 'custom';
+
+// Единый тип для всех отчетов
+export interface ReportsData {
+  timeReports: TimeReport[] | null;
+  projectReports: ProjectReport[] | null;
+  userReports: UserReport[] | null;
+  financialReports: FinancialReport[] | null;
+  reportFilters: ReportFilters | null;
+  reportSummary: ReportSummary | null;
 }
 
 interface User {
@@ -79,6 +173,10 @@ interface UserState {
 
   roles: Role[] | null;
 
+  reports: ReportsData | null;
+
+  monitoring: Monitoring[] | null; // ✅ Только одно объявление monitoring
+
   setUser: (
     user: User,
     tokens: { access_token: string; refresh_token: string },
@@ -134,14 +232,16 @@ interface UserState {
     department_workers: DepartmentsResponse | null,
   ) => void;
 
-  // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ КАЛЕНДАРЯ
   setCalendar: (calendar: Calendar[] | null) => void;
 
-  // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ TASKS
   setTasks: (tasks: Task[] | null) => void;
 
-  // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ ROLES
   setRoles: (roles: Role[] | null) => void;
+
+  setMonitoring: (monitoring: Monitoring[] | null) => void; // ✅ Исправлено: добавляем setMonitoring
+
+  // ✅ ОДНА ФУНКЦИЯ ДЛЯ ОТЧЕТОВ
+  setReports: (reports: ReportsData | null) => void;
 
   // ✅ Хелпер функции для работы с tasks
   getTaskById: (taskId: number) => Task | undefined;
@@ -156,6 +256,22 @@ interface UserState {
   addRole: (role: Role) => void;
   updateRole: (roleId: number, updates: Partial<Role>) => void;
   removeRole: (roleId: number) => void;
+
+  // ✅ Хелпер функции для работы с отчетами
+  getTimeReportById: (reportId: number) => TimeReport | undefined;
+  getProjectReportById: (projectId: number) => ProjectReport | undefined;
+  getUserReportByUserId: (userId: number) => UserReport | undefined;
+  getReportsByDateRange: (type: ReportType, startDate: string, endDate: string) => any[];
+  getReportsByUser: (userId: number) => {
+    timeReports: TimeReport[];
+    userReport: UserReport | undefined;
+  };
+  getReportsByProject: (projectId: number) => {
+    projectReport: ProjectReport | undefined;
+    timeReports: TimeReport[];
+  };
+  generateReportSummary: (type: ReportType, filters?: ReportFilters) => ReportSummary;
+  clearAllReports: () => void;
 
   logout: () => void;
 }
@@ -191,7 +307,16 @@ export const useUserStore = create<UserState>()(
       department_workers: null,
       calendar: null,
       tasks: null,
-      roles: null, // ✅ Инициализируем roles
+      roles: null,
+      monitoring: null, // ✅ Только одно объявление monitoring в начальном состоянии
+      reports: {
+        timeReports: null,
+        projectReports: null,
+        userReports: null,
+        financialReports: null,
+        reportFilters: null,
+        reportSummary: null
+      },
 
       setUser: (userData, tokens) =>
         set({
@@ -209,6 +334,8 @@ export const useUserStore = create<UserState>()(
         })),
 
       setCountries: (countries) => set({ countries }),
+
+      setMonitoring: (monitoring) => set({ monitoring }), // ✅ Исправлено: правильное имя параметра
 
       setSelectedCountry: (country) => set({ selectedCountry: country }),
 
@@ -254,14 +381,14 @@ export const useUserStore = create<UserState>()(
 
       setDepartmentWorkers: (department_workers) => set({ department_workers }),
 
-      // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ КАЛЕНДАРЯ
       setCalendar: (calendar) => set({ calendar }),
 
-      // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ TASKS
       setTasks: (tasks) => set({ tasks }),
 
-      // ✅ ТОЛЬКО 1 СЕТ ФУНКЦИЯ ДЛЯ ROLES
       setRoles: (roles) => set({ roles }),
+
+      // ✅ ОДНА ПРОСТАЯ ФУНКЦИЯ ДЛЯ ОТЧЕТОВ
+      setReports: (reports) => set({ reports }),
 
       getInternalTaskById: (taskId: number) => {
         const state = get();
@@ -353,6 +480,195 @@ export const useUserStore = create<UserState>()(
         set({ roles: filteredRoles });
       },
 
+      // ✅ Хелпер функции для отчетов
+      getTimeReportById: (reportId: number) => {
+        const state = get();
+        return state.reports?.timeReports?.find((report) => report.id === reportId);
+      },
+
+      getProjectReportById: (projectId: number) => {
+        const state = get();
+        return state.reports?.projectReports?.find((report) => report.projectId === projectId);
+      },
+
+      getUserReportByUserId: (userId: number) => {
+        const state = get();
+        return state.reports?.userReports?.find((report) => report.userId === userId);
+      },
+
+      getReportsByDateRange: (type: ReportType, startDate: string, endDate: string) => {
+        const state = get();
+
+        switch (type) {
+          case 'time':
+            return state.reports?.timeReports?.filter(
+              (report) => report.date >= startDate && report.date <= endDate
+            ) || [];
+
+          case 'project':
+            return state.reports?.projectReports?.filter(
+              (report) => report.startDate >= startDate && report.endDate <= endDate
+            ) || [];
+
+          case 'user':
+            return state.reports?.userReports?.filter(
+              (report) => report.periodStart >= startDate && report.periodEnd <= endDate
+            ) || [];
+
+          case 'financial':
+            return state.reports?.financialReports?.filter(
+              (report) => report.period >= startDate && report.period <= endDate
+            ) || [];
+
+          default:
+            return [];
+        }
+      },
+
+      getReportsByUser: (userId: number) => {
+        const state = get();
+        return {
+          timeReports: state.reports?.timeReports?.filter((report) => report.userId === userId) || [],
+          userReport: state.reports?.userReports?.find((report) => report.userId === userId)
+        };
+      },
+
+      getReportsByProject: (projectId: number) => {
+        const state = get();
+        return {
+          projectReport: state.reports?.projectReports?.find((report) => report.projectId === projectId),
+          timeReports: state.reports?.timeReports?.filter((report) => report.projectId === projectId) || []
+        };
+      },
+
+      generateReportSummary: (type: ReportType, filters?: ReportFilters) => {
+        const state = get();
+        let summary: ReportSummary = {
+          totalHours: 0,
+          totalProjects: 0,
+          totalUsers: 0,
+          totalRevenue: 0,
+          averageUtilization: 0,
+          billablePercentage: 0
+        };
+
+        switch (type) {
+          case 'time': {
+            const reports = filters
+              ? state.reports?.timeReports?.filter(r => {
+                if (filters.startDate && r.date < filters.startDate) return false;
+                if (filters.endDate && r.date > filters.endDate) return false;
+                if (filters.userId && r.userId !== filters.userId) return false;
+                if (filters.projectId && r.projectId !== filters.projectId) return false;
+                return true;
+              })
+              : state.reports?.timeReports;
+
+            if (reports) {
+              summary.totalHours = reports.reduce((sum, r) => sum + r.hours, 0);
+              summary.totalUsers = new Set(reports.map(r => r.userId)).size;
+              summary.totalProjects = new Set(reports.map(r => r.projectId).filter(Boolean)).size;
+
+              const billableHours = reports
+                .filter(r => r.status === 'approved')
+                .reduce((sum, r) => sum + r.hours, 0);
+
+              summary.billablePercentage = summary.totalHours > 0
+                ? (billableHours / summary.totalHours) * 100
+                : 0;
+            }
+            break;
+          }
+
+          case 'project': {
+            const reports = filters
+              ? state.reports?.projectReports?.filter(r => {
+                if (filters.startDate && r.startDate < filters.startDate) return false;
+                if (filters.endDate && r.endDate > filters.endDate) return false;
+                if (filters.projectId && r.projectId !== filters.projectId) return false;
+                if (filters.clientId && r.clientId !== filters.clientId) return false;
+                return true;
+              })
+              : state.reports?.projectReports;
+
+            if (reports) {
+              summary.totalProjects = reports.length;
+              summary.totalHours = reports.reduce((sum, r) => sum + r.totalHours, 0);
+
+              const totalBillable = reports.reduce((sum, r) => sum + r.billableHours, 0);
+              summary.billablePercentage = summary.totalHours > 0
+                ? (totalBillable / summary.totalHours) * 100
+                : 0;
+
+              summary.averageUtilization = reports.length > 0
+                ? reports.reduce((sum, r) => sum + r.utilization, 0) / reports.length
+                : 0;
+            }
+            break;
+          }
+
+          case 'user': {
+            const reports = filters
+              ? state.reports?.userReports?.filter(r => {
+                if (filters.startDate && r.periodStart < filters.startDate) return false;
+                if (filters.endDate && r.periodEnd > filters.endDate) return false;
+                if (filters.userId && r.userId !== filters.userId) return false;
+                if (filters.departmentId && r.departmentId !== filters.departmentId) return false;
+                return true;
+              })
+              : state.reports?.userReports;
+
+            if (reports) {
+              summary.totalUsers = reports.length;
+              summary.totalHours = reports.reduce((sum, r) => sum + r.totalHoursWorked, 0);
+              summary.averageUtilization = reports.length > 0
+                ? reports.reduce((sum, r) => sum + r.utilization, 0) / reports.length
+                : 0;
+            }
+            break;
+          }
+
+          case 'financial': {
+            const reports = filters
+              ? state.reports?.financialReports?.filter(r => {
+                if (filters.startDate && r.period < filters.startDate) return false;
+                if (filters.endDate && r.period > filters.endDate) return false;
+                return true;
+              })
+              : state.reports?.financialReports;
+
+            if (reports) {
+              summary.totalRevenue = reports.reduce((sum, r) => sum + r.revenue, 0);
+              summary.totalProjects = reports.reduce((sum, r) => sum + r.projectsCount, 0);
+
+              const totalHours = reports.reduce((sum, r) => sum + r.billableHours + r.nonBillableHours, 0);
+              const totalBillable = reports.reduce((sum, r) => sum + r.billableHours, 0);
+
+              summary.billablePercentage = totalHours > 0 ? (totalBillable / totalHours) * 100 : 0;
+            }
+            break;
+          }
+        }
+
+        set((state) => ({
+          reports: state.reports ? { ...state.reports, reportSummary: summary } : null
+        }));
+
+        return summary;
+      },
+
+      clearAllReports: () =>
+        set({
+          reports: {
+            timeReports: null,
+            projectReports: null,
+            userReports: null,
+            financialReports: null,
+            reportFilters: null,
+            reportSummary: null
+          }
+        }),
+
       logout: () => {
         localStorage.removeItem("authToken");
         localStorage.removeItem("refreshToken");
@@ -382,7 +698,18 @@ export const useUserStore = create<UserState>()(
           department_workers: null,
           calendar: null,
           tasks: null,
-          roles: null, // ✅ Очищаем roles при выходе
+          roles: null,
+          monitoring: null, // ✅ Добавлено очищение monitoring
+
+          // ✅ ОЧИЩАЕМ ОДИН СТЕЙТ ОТЧЕТОВ ПРИ ВЫХОДЕ
+          reports: {
+            timeReports: null,
+            projectReports: null,
+            userReports: null,
+            financialReports: null,
+            reportFilters: null,
+            reportSummary: null
+          },
         });
       },
     }),
@@ -412,7 +739,9 @@ export const useUserStore = create<UserState>()(
         department_workers: state.department_workers,
         calendar: state.calendar,
         tasks: state.tasks,
-        roles: state.roles, // ✅ Добавляем roles в persist
+        roles: state.roles,
+        reports: state.reports,
+        monitoring: state.monitoring, // ✅ Добавлено monitoring в persist
       }),
     },
   ),

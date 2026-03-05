@@ -1,5 +1,9 @@
-// components/monitoring/MonitoringTable.tsx
-import React, { useState } from 'react';
+// components/admin/monitoring/MonitoringTable.tsx
+import React, { useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Button } from '../../ui/button';
+import { Input } from '../../ui/input';
+import { Badge } from '../../ui/badge';
 import {
     Table,
     TableBody,
@@ -7,445 +11,238 @@ import {
     TableHead,
     TableHeader,
     TableRow
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+} from '../../ui/table';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-    Mail,
-    Eye,
-    MoreVertical,
-    Filter,
-    Search,
-    Calendar,
-    Download,
-    Send,
-    AlertCircle,
-    CheckCircle2,
-    Clock,
-    XCircle
-} from 'lucide-react';
-import { TimeSheetMonitoring } from '@/types/types';
-import { toast } from 'sonner@2.0.3';
+} from '../../ui/dropdown-menu';
+import { Search, MoreHorizontal, Mail, Eye, Calendar, AlertCircle } from 'lucide-react';
+import { TimeSheetMonitoring } from '../../../types/types';
+import { format } from 'date-fns';
 
 interface MonitoringTableProps {
     data: TimeSheetMonitoring[];
-    onSendReminder: (userIds: string[], period: { start: string; end: string }) => void;
-    onViewDetails: (userId: string) => void;
+    onSendReminder: (userIds: number[], period: { start: string; end: string }) => void;
+    onViewDetails: (userId: number) => void;
 }
 
 export function MonitoringTable({ data, onSendReminder, onViewDetails }: MonitoringTableProps) {
-    const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-    const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false);
-    const [notificationSubject, setNotificationSubject] = useState('');
-    const [notificationMessage, setNotificationMessage] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
 
-    const filteredData = data.filter(item => {
-        const matchesSearch =
-            item.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.user_email.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-
-        return matchesSearch && matchesStatus;
-    });
-
-    const toggleUserSelection = (userId: string) => {
-        setSelectedUsers(prev =>
-            prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
-        );
+    // Определяем статус на основе процента завершения (только 3 статуса)
+    const getStatus = (completion: number) => {
+        if (completion >= 100) return 'completed';
+        if (completion === 0) return 'missing';
+        return 'partial';
     };
 
-    const toggleSelectAll = () => {
-        if (selectedUsers.length === filteredData.length) {
-            setSelectedUsers([]);
-        } else {
-            setSelectedUsers(filteredData.map(item => item.user_id));
-        }
-    };
-
-    const handleSendReminder = () => {
-        if (selectedUsers.length === 0) {
-            toast.error('Please select at least one user');
-            return;
-        }
-
-        // Находим первый период для примера
-        const period = {
-            start: data[0]?.period_start || '',
-            end: data[0]?.period_end || ''
-        };
-
-        // Используем кастомный диалог для настройки уведомления
-        setNotificationSubject(`Time Sheet Reminder: ${period.start} to ${period.end}`);
-        setNotificationMessage(`Dear Team Member,\n\nThis is a reminder to complete your time sheet for the period ${period.start} to ${period.end}.\n\nPlease ensure all hours are logged accurately.\n\nBest regards,\nManagement Team`);
-        setIsNotificationDialogOpen(true);
-    };
-
-    const confirmSendNotification = () => {
-        if (selectedUsers.length === 0) {
-            toast.error('No users selected');
-            return;
-        }
-
-        if (!notificationSubject.trim() || !notificationMessage.trim()) {
-            toast.error('Please fill in subject and message');
-            return;
-        }
-
-        // Отправляем уведомления
-        onSendReminder(selectedUsers, {
-            start: data[0]?.period_start || '',
-            end: data[0]?.period_end || ''
-        });
-
-        // Имитируем отправку
-        toast.success(`Reminders sent to ${selectedUsers.length} user(s)`);
-
-        // Сбрасываем выбор
-        setSelectedUsers([]);
-        setIsNotificationDialogOpen(false);
-    };
-
-    const getStatusBadge = (status: string) => {
+    // Получаем цвет статуса
+    const getStatusColor = (status: string) => {
         switch (status) {
             case 'completed':
-                return (
-                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Completed
-                    </Badge>
-                );
+                return 'bg-green-100 text-green-800 border-green-200';
             case 'partial':
-                return (
-                    <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-                        <Clock className="w-3 h-3 mr-1" />
-                        Partial
-                    </Badge>
-                );
+                return 'bg-yellow-100 text-yellow-800 border-yellow-200';
             case 'missing':
-                return (
-                    <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-                        <AlertCircle className="w-3 h-3 mr-1" />
-                        Missing
-                    </Badge>
-                );
-            case 'overdue':
-                return (
-                    <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
-                        <XCircle className="w-3 h-3 mr-1" />
-                        Overdue
-                    </Badge>
-                );
+                return 'bg-red-100 text-red-800 border-red-200';
             default:
-                return <Badge variant="outline">{status}</Badge>;
+                return 'bg-gray-100 text-gray-800 border-gray-200';
         }
     };
 
-    const getCompletionColor = (percentage: number) => {
-        if (percentage >= 90) return 'text-green-600';
-        if (percentage >= 70) return 'text-amber-600';
-        return 'text-red-600';
+    // Получаем текст статуса
+    const getStatusText = (status: string) => {
+        switch (status) {
+            case 'completed':
+                return 'Completed';
+            case 'partial':
+                return 'Partial';
+            case 'missing':
+                return 'Missing';
+            default:
+                return 'Unknown';
+        }
     };
 
+    // Фильтрация данных
+    const filteredData = useMemo(() => {
+        return data.filter(item => {
+            // Поиск по email
+            const matchesSearch = item.user_email.toLowerCase().includes(searchTerm.toLowerCase());
+
+            // Фильтр по статусу
+            const status = getStatus(item.completion);
+            const matchesStatus = statusFilter === 'all' || status === statusFilter;
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [data, searchTerm, statusFilter]);
+
+    // Статистика (только 3 категории)
+    const stats = useMemo(() => {
+        const total = data.length;
+        const completed = data.filter(item => item.completion >= 100).length;
+        const partial = data.filter(item => item.completion > 0 && item.completion < 100).length;
+        const missing = data.filter(item => item.completion === 0).length;
+
+        return {
+            total,
+            completed,
+            partial,
+            missing
+        };
+    }, [data]);
+
+    if (!data || data.length === 0) {
+        return (
+            <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Calendar className="w-12 h-12 text-gray-400 mb-4" />
+                    <p className="text-gray-500 text-lg">No monitoring data available</p>
+                    <p className="text-gray-400 text-sm">Select country and date range to load data</p>
+                </CardContent>
+            </Card>
+        );
+    }
+
     return (
-        <div className="space-y-4">
-            {/* Toolbar */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="relative">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Card>
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <CardTitle>Time Sheet Monitoring</CardTitle>
+                    <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-green-50">
+                            Completed: {stats.completed}
+                        </Badge>
+                        <Badge variant="outline" className="bg-yellow-50">
+                            Partial: {stats.partial}
+                        </Badge>
+                        <Badge variant="outline" className="bg-red-50">
+                            Missing: {stats.missing}
+                        </Badge>
+                    </div>
+                </div>
+                <div className="flex items-center gap-4 mt-4">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
-                            placeholder="Search users..."
-                            className="pl-8 w-64"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by email..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10"
                         />
                     </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="gap-2">
-                                <Filter className="w-4 h-4" />
-                                Status: {statusFilter === 'all' ? 'All' : statusFilter}
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <DropdownMenuItem onClick={() => setStatusFilter('all')}>
-                                All Statuses
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('completed')}>
-                                Completed
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('partial')}>
-                                Partial
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('missing')}>
-                                Missing
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStatusFilter('overdue')}>
-                                Overdue
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-                <div className="flex items-center gap-2">
-                    {selectedUsers.length > 0 && (
-                        <Badge variant="secondary" className="mr-2">
-                            {selectedUsers.length} selected
-                        </Badge>
-                    )}
-                    <Button
-                        variant="outline"
-                        className="gap-2"
-                        onClick={handleSendReminder}
-                        disabled={selectedUsers.length === 0}
+                    <select
+                        className="px-3 py-2 border rounded-md text-sm"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
                     >
-                        <Send className="w-4 h-4" />
-                        Send Reminder
-                    </Button>
-                    <Button variant="outline" className="gap-2">
-                        <Download className="w-4 h-4" />
-                        Export
-                    </Button>
+                        <option value="all">All Status</option>
+                        <option value="completed">Completed</option>
+                        <option value="partial">Partial</option>
+                        <option value="missing">Missing</option>
+                    </select>
                 </div>
-            </div>
-
-            {/* Table */}
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-12">
-                                <Checkbox
-                                    checked={selectedUsers.length === filteredData.length && filteredData.length > 0}
-                                    onCheckedChange={toggleSelectAll}
-                                />
-                            </TableHead>
-                            <TableHead>User</TableHead>
-                            <TableHead>Period</TableHead>
-                            <TableHead>Hours</TableHead>
-                            <TableHead>Completion</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Last Updated</TableHead>
-                            <TableHead>Missing Days</TableHead>
-                            <TableHead className="w-20">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredData.length === 0 ? (
+            </CardHeader>
+            <CardContent>
+                <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                                    No users found matching your criteria
-                                </TableCell>
+                                <TableHead>User</TableHead>
+                                <TableHead>Required Hours</TableHead>
+                                <TableHead>Logged Hours</TableHead>
+                                <TableHead>Completion</TableHead>
+                                <TableHead>Missing Days</TableHead>
+                                <TableHead>Last Updated</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="w-[100px]">Actions</TableHead>
                             </TableRow>
-                        ) : (
-                            filteredData.map((item) => (
-                                <TableRow key={item.id} className="hover:bg-slate-50">
-                                    <TableCell>
-                                        <Checkbox
-                                            checked={selectedUsers.includes(item.user_id)}
-                                            onCheckedChange={() => toggleUserSelection(item.user_id)}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <div>
-                                            <div className="font-medium">{item.user_name}</div>
-                                            <div className="text-sm text-gray-500">{item.user_email}</div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-1">
-                                            <Calendar className="w-4 h-4 text-gray-400" />
-                                            <span className="text-sm">
-                                                {item.period_start} to {item.period_end}
-                                            </span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="font-medium">
-                                            {item.total_hours_logged} / {item.total_hours_required}h
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-32 bg-gray-200 rounded-full h-2">
-                                                <div
-                                                    className={`h-2 rounded-full ${item.completion_percentage >= 90 ? 'bg-green-500' :
-                                                            item.completion_percentage >= 70 ? 'bg-amber-500' :
-                                                                'bg-red-500'
-                                                        }`}
-                                                    style={{ width: `${item.completion_percentage}%` }}
-                                                />
+                        </TableHeader>
+                        <TableBody>
+                            {filteredData.map((item) => {
+                                const status = getStatus(item.completion);
+                                const statusColor = getStatusColor(status);
+                                const statusText = getStatusText(status);
+
+                                return (
+                                    <TableRow key={item.user_id}>
+                                        <TableCell>
+                                            <div>
+                                                <div className="font-medium">{item.user_email}</div>
+                                                <div className="text-sm text-gray-500">
+                                                    ID: {item.user_id}
+                                                </div>
                                             </div>
-                                            <span className={`font-medium ${getCompletionColor(item.completion_percentage)}`}>
-                                                {item.completion_percentage}%
-                                            </span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {getStatusBadge(item.status)}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="text-sm text-gray-600">
-                                            {new Date(item.last_updated).toLocaleString()}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {item.missing_days.length > 0 ? (
-                                            <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                                {item.missing_days.slice(0, 3).map((day, index) => (
-                                                    <Badge key={index} variant="outline" className="text-xs">
-                                                        {day}
-                                                    </Badge>
-                                                ))}
-                                                {item.missing_days.length > 3 && (
-                                                    <Badge variant="outline" className="text-xs">
-                                                        +{item.missing_days.length - 3} more
-                                                    </Badge>
-                                                )}
+                                        </TableCell>
+                                        <TableCell>{item.required_hours}h</TableCell>
+                                        <TableCell>{item.total_hours}h</TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-16 bg-gray-200 rounded-full h-2">
+                                                    <div
+                                                        className="bg-blue-600 h-2 rounded-full"
+                                                        style={{ width: `${Math.min(item.completion, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-sm">{item.completion.toFixed(1)}%</span>
                                             </div>
-                                        ) : (
-                                            <span className="text-sm text-gray-400">None</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => onViewDetails(item.user_id)}
-                                                title="View Details"
-                                            >
-                                                <Eye className="w-4 h-4" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => {
-                                                    setSelectedUsers([item.user_id]);
-                                                    handleSendReminder();
-                                                }}
-                                                title="Send Reminder"
-                                            >
-                                                <Mail className="w-4 h-4" />
-                                            </Button>
+                                        </TableCell>
+                                        <TableCell>
+                                            {item.missing_days_count > 0 ? (
+                                                <div className="flex items-center gap-1">
+                                                    <AlertCircle className="w-4 h-4 text-red-500" />
+                                                    <span className="text-sm font-medium text-red-600">
+                                                        {item.missing_days_count} days
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-sm text-green-600">None</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {format(new Date(item.last_updated), 'dd.MM.yyyy HH:mm')}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge className={statusColor}>
+                                                {statusText}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button variant="ghost" size="icon">
-                                                        <MoreVertical className="w-4 h-4" />
+                                                        <MoreHorizontal className="w-4 h-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem onClick={() => onViewDetails(item.user_id)}>
-                                                        View Time Sheet
+                                                        <Eye className="w-4 h-4 mr-2" />
+                                                        View Details
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => {
-                                                        setSelectedUsers([item.user_id]);
-                                                        handleSendReminder();
-                                                    }}>
+                                                    <DropdownMenuItem
+                                                        onClick={() => onSendReminder(
+                                                            [item.user_id],
+                                                            { start: '', end: '' }
+                                                        )}
+                                                        disabled={item.completion >= 100}
+                                                    >
+                                                        <Mail className="w-4 h-4 mr-2" />
                                                         Send Reminder
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem>Export Data</DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-red-600">
-                                                        Mark as Reviewed
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-
-            {/* Notification Dialog */}
-            <Dialog open={isNotificationDialogOpen} onOpenChange={setIsNotificationDialogOpen}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Send Time Sheet Reminder</DialogTitle>
-                        <DialogDescription>
-                            Send email reminders to {selectedUsers.length} selected user(s)
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="subject">Email Subject *</Label>
-                            <Input
-                                id="subject"
-                                value={notificationSubject}
-                                onChange={(e) => setNotificationSubject(e.target.value)}
-                                placeholder="Enter email subject"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="message">Email Message *</Label>
-                            <Textarea
-                                id="message"
-                                value={notificationMessage}
-                                onChange={(e) => setNotificationMessage(e.target.value)}
-                                placeholder="Enter email message"
-                                rows={6}
-                                className="resize-y"
-                            />
-                            <p className="text-sm text-gray-500">
-                                Available variables: {"{user_name}"}, {"{period_start}"}, {"{period_end}"}, {"{completion_percentage}"}
-                            </p>
-                        </div>
-                        <div className="rounded-md bg-gray-50 p-4">
-                            <h4 className="font-medium mb-2">Selected Users ({selectedUsers.length}):</h4>
-                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                                {data
-                                    .filter(item => selectedUsers.includes(item.user_id))
-                                    .map(item => (
-                                        <Badge key={item.user_id} variant="secondary">
-                                            {item.user_name} ({item.user_email})
-                                        </Badge>
-                                    ))
-                                }
-                            </div>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsNotificationDialogOpen(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={confirmSendNotification}
-                            style={{ backgroundColor: '#1F4E78' }}
-                            className="gap-2"
-                        >
-                            <Send className="w-4 h-4" />
-                            Send Reminders
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
     );
 }
