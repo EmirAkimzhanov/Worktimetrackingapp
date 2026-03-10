@@ -13,21 +13,20 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner';
-import { useGetTimeEntrys } from '../hooks/useTimeEntry';
+import { useDeleteTimeEntry, useEditTimeEntry, useGetTimeEntrys } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
 
 // Интерфейс для сгруппированной записи
 interface GroupedTimeEntry {
   id: string;
-  key: string; // Уникальный ключ для группы
-  dates: string[]; // Массив всех дат
+  key: string;
+  dates: string[];
   startDate: string;
   endDate: string;
   count: number;
   totalHours: number;
-  // Поля, которые одинаковы для всей группы
   user: string;
-  hours: number; // Часы за один день
+  hours: number;
   description: string;
   country: string | null;
   client: string | null;
@@ -42,8 +41,13 @@ interface GroupedTimeEntry {
   weekends_included: boolean;
   type: string;
   country_name: string;
-  // IDs всех записей в группе для массовых операций
   entryIds: string[];
+}
+
+// Интерфейс для удаляемой записи
+interface DeleteTarget {
+  id: string;
+  isGroup: boolean;
 }
 
 export function TimeEntryList() {
@@ -61,15 +65,24 @@ export function TimeEntryList() {
   const [editingEntry, setEditingEntry] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
-  const [entryToDelete, setEntryToDelete] = useState<number | null>(null);
+  const [entryToDelete, setEntryToDelete] = useState<DeleteTarget | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Состояния для формы редактирования
   const [editProjectId, setEditProjectId] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editHours, setEditHours] = useState('');
+  const [editTaskType, setEditTaskType] = useState('');
+  const [editTask, setEditTask] = useState('');
+  const [editCountry, setEditCountry] = useState('');
+  const [editClient, setEditClient] = useState('');
+  const [editWeekendsIncluded, setEditWeekendsIncluded] = useState(false);
 
-  const { mutate: getTimeEntrys } = useGetTimeEntrys();
+  const { mutate: getTimeEntrys, isLoading: isLoadingEntries } = useGetTimeEntrys();
+  const { mutate: editTimeEntry, isLoading: isEditing } = useEditTimeEntry();
+  const { mutate: deleteTimeEntry, isLoading: isDeleting } = useDeleteTimeEntry();
   const time_entries = useUserStore((state) => state.time_entries);
 
   // Вспомогательная функция для получения названия задачи
@@ -82,7 +95,6 @@ export function TimeEntryList() {
   const getCountryName = (countryId: string | number | null): string => {
     if (!countryId) return 'Unknown Country';
 
-    // Маппинг кодов стран
     const countryMap: Record<string, string> = {
       'KZ': 'Kazakhstan',
       'KG': 'Kyrgyzstan',
@@ -92,7 +104,6 @@ export function TimeEntryList() {
       'TM': 'Turkmenistan'
     };
 
-    // Если countryId это строка с кодом страны
     if (typeof countryId === 'string') {
       return countryMap[countryId] || countryId;
     }
@@ -102,12 +113,10 @@ export function TimeEntryList() {
 
   // Функция для определения типа записи
   const determineEntryType = (entry: any): string => {
-    // Если есть task_type, используем его
     if (entry.task_type) {
       return entry.task_type;
     }
 
-    // Логика определения типа
     const lowerTaskType = (entry.task_type || '').toLowerCase();
 
     if (lowerTaskType.includes('internal')) {
@@ -123,17 +132,14 @@ export function TimeEntryList() {
   const getEntryColor = (taskType: string) => {
     const lowerType = taskType.toLowerCase();
 
-    // internal - фиолетовый
     if (lowerType.includes('internal')) {
       return '#8B5CF6';
     }
 
-    // leave/vacation - оранжевый
     if (lowerType.includes('leave') || lowerType.includes('vacation') || lowerType.includes('holiday')) {
       return '#F59E0B';
     }
 
-    // все остальное - external (зеленый)
     return '#10B981';
   };
 
@@ -141,17 +147,14 @@ export function TimeEntryList() {
   const getEntryIcon = (taskType: string) => {
     const lowerType = taskType.toLowerCase();
 
-    // internal - Briefcase
     if (lowerType.includes('internal')) {
       return <Briefcase className="w-4 h-4" />;
     }
 
-    // leave/vacation - Plane
     if (lowerType.includes('leave') || lowerType.includes('vacation') || lowerType.includes('holiday')) {
       return <Plane className="w-4 h-4" />;
     }
 
-    // все остальное - external (Calendar)
     return <Calendar className="w-4 h-4" />;
   };
 
@@ -190,6 +193,10 @@ export function TimeEntryList() {
 
   // Загружаем записи при монтировании компонента
   useEffect(() => {
+    loadTimeEntries();
+  }, []);
+
+  const loadTimeEntries = () => {
     getTimeEntrys(undefined, {
       onSuccess: (data) => {
         console.log('Loaded time entries:', data);
@@ -199,7 +206,7 @@ export function TimeEntryList() {
         toast.error('Failed to load time entries');
       }
     });
-  }, []);
+  };
 
   // Получаем реальные записи из стора и группируем их
   const groupedEntries = useMemo(() => {
@@ -207,9 +214,7 @@ export function TimeEntryList() {
       return [];
     }
 
-    // Сначала преобразуем все записи
     const transformedEntries = time_entries.map(entry => {
-      // Определяем правильное поле для даты
       const dateValue = entry.date || entry.start_date;
 
       return {
@@ -236,19 +241,16 @@ export function TimeEntryList() {
       };
     });
 
-    // Группируем записи по уникальному ключу (все поля кроме даты)
     const groups = new Map<string, GroupedTimeEntry>();
 
     transformedEntries.forEach(entry => {
-      // Создаем ключ группы из всех полей, которые должны совпадать
       const groupKey = `${entry.user}|${entry.hours}|${entry.description}|${entry.country}|${entry.client}|${entry.project}|${entry.projectId}|${entry.projectColor}|${entry.projectCode}|${entry.projectName}|${entry.task_type}|${entry.task}|${entry.taskName}|${entry.weekends_included}|${entry.type}|${entry.country_name}`;
 
       if (groups.has(groupKey)) {
-        // Добавляем к существующей группе
         const group = groups.get(groupKey)!;
         group.dates.push(entry.date);
         group.entryIds.push(entry.id);
-        // Обновляем startDate и endDate
+
         if (entry.date < group.startDate) {
           group.startDate = entry.date;
         }
@@ -258,7 +260,6 @@ export function TimeEntryList() {
         group.count++;
         group.totalHours += entry.hours;
       } else {
-        // Создаем новую группу
         groups.set(groupKey, {
           id: entry.id,
           key: groupKey,
@@ -288,7 +289,6 @@ export function TimeEntryList() {
       }
     });
 
-    // Преобразуем Map в массив и сортируем по дате
     return Array.from(groups.values()).sort((a, b) => {
       return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
     });
@@ -297,12 +297,10 @@ export function TimeEntryList() {
   // Применяем фильтры к сгруппированным записям
   const filteredGroups = useMemo(() => {
     return groupedEntries.filter(group => {
-      // Фильтрация по проектам
       if (filters.projects.length > 0 && !filters.projects.includes(group.projectId)) {
         return false;
       }
 
-      // Фильтрация по поисковому запросу
       if (filters.searchText) {
         const searchLower = filters.searchText.toLowerCase();
         const matchesSearch =
@@ -314,14 +312,12 @@ export function TimeEntryList() {
         if (!matchesSearch) return false;
       }
 
-      // Фильтрация по диапазону часов (используем часы за день, а не общие)
       if (filters.hoursRange !== 'all') {
         if (filters.hoursRange === 'low' && group.hours >= 4) return false;
         if (filters.hoursRange === 'medium' && (group.hours < 4 || group.hours > 8)) return false;
         if (filters.hoursRange === 'high' && group.hours <= 8) return false;
       }
 
-      // Фильтрация по диапазону дат (проверяем, пересекается ли группа с диапазоном)
       if (filters.dateRange) {
         const [start, end] = filters.dateRange;
         const groupStart = new Date(group.startDate);
@@ -329,7 +325,6 @@ export function TimeEntryList() {
         const filterStart = new Date(start);
         const filterEnd = new Date(end);
 
-        // Группа пересекается с диапазоном, если хотя бы одна дата в группе попадает в диапазон
         const hasOverlap = group.dates.some(date => {
           const dateObj = new Date(date);
           return dateObj >= filterStart && dateObj <= filterEnd;
@@ -350,14 +345,13 @@ export function TimeEntryList() {
     return filteredGroups
       .filter(group => group.entryIds.some(id => selectedEntries.includes(id)))
       .reduce((sum, group) => {
-        // Считаем только выбранные записи в группе
         const selectedInGroup = group.entryIds.filter(id => selectedEntries.includes(id));
         return sum + (selectedInGroup.length * group.hours);
       }, 0);
   }, [filteredGroups, selectedEntries]);
 
+  // Обработчик редактирования
   const handleEdit = (group: GroupedTimeEntry) => {
-    // Для редактирования используем первую запись в группе
     setEditingEntry({
       ...group,
       id: group.entryIds[0],
@@ -367,8 +361,14 @@ export function TimeEntryList() {
     setEditDescription(group.description);
     setEditDate(group.startDate);
     setEditHours(group.hours.toString());
+    setEditTaskType(group.task_type || '');
+    setEditTask(group.task || '');
+    setEditCountry(group.country || '');
+    setEditClient(group.client || '');
+    setEditWeekendsIncluded(group.weekends_included);
   };
 
+  // Обработчик обновления записи
   const handleUpdate = () => {
     if (!editingEntry) return;
 
@@ -378,60 +378,164 @@ export function TimeEntryList() {
       return;
     }
 
-    updateEntry(editingEntry.id, {
-      projectId: editProjectId,
-      projectName: editingEntry.projectName,
-      projectColor: editingEntry.projectColor,
-      projectCode: editingEntry.projectCode,
-      description: editDescription,
+    setIsSubmitting(true);
+
+    // Подготавливаем данные для отправки на сервер
+    const editData: any = {
       date: editDate,
       hours: hoursNum,
-    });
+      description: editDescription,
+    };
 
-    toast.success('Entry updated successfully');
-    setEditingEntry(null);
+    // Добавляем опциональные поля, если они изменились
+    if (editTaskType !== editingEntry.task_type) {
+      editData.task_type = editTaskType;
+    }
+
+    if (editTask && editTask !== editingEntry.task) {
+      editData.task = parseInt(editTask);
+    }
+
+    if (editCountry && editCountry !== editingEntry.country) {
+      editData.country = parseInt(editCountry);
+    }
+
+    if (editClient && editClient !== editingEntry.client) {
+      editData.client = parseInt(editClient);
+    }
+
+    if (editProjectId && editProjectId !== editingEntry.projectId) {
+      editData.project = parseInt(editProjectId);
+    }
+
+    if (editWeekendsIncluded !== editingEntry.weekends_included) {
+      editData.weekends_included = editWeekendsIncluded;
+    }
+
+    // Вызываем мутацию для обновления на сервере
+    editTimeEntry(
+      {
+        day_id: editingEntry.id,
+        body: editData,
+      },
+      {
+        onSuccess: (data) => {
+          console.log('Entry updated successfully:', data);
+
+          // Обновляем локальный state
+          updateEntry(editingEntry.id, {
+            projectId: editProjectId,
+            projectName: editingEntry.projectName,
+            projectColor: editingEntry.projectColor,
+            projectCode: editingEntry.projectCode,
+            description: editDescription,
+            date: editDate,
+            hours: hoursNum,
+          });
+
+          toast.success('Entry updated successfully');
+          setEditingEntry(null);
+
+          // Перезагружаем список записей
+          loadTimeEntries();
+        },
+        onError: (error: any) => {
+          console.error('Failed to update entry:', error);
+          toast.error(error?.message || 'Failed to update entry. Please try again.');
+        },
+        onSettled: () => {
+          setIsSubmitting(false);
+        }
+      }
+    );
   };
 
-  const handleDelete = (group: GroupedTimeEntry) => {
-    if (group.count === 1) {
-      // Если в группе одна запись, удаляем её
-      setEntryToDelete(parseInt(group.entryIds[0]));
-      setDeleteDialogOpen(true);
-    } else {
-      // Если несколько, спрашиваем что делать
-      // Здесь можно добавить диалог с выбором: удалить все или одну
-      toast.info('Multiple entries found. Please expand the group to delete individual entries.');
-    }
+  // Обработчик удаления отдельной записи из развернутой группы
+  const handleDeleteSingle = (entryId: string) => {
+    setEntryToDelete({
+      id: entryId,
+      isGroup: false
+    });
+    setDeleteDialogOpen(true);
   };
 
   const confirmDelete = () => {
-    if (entryToDelete !== null) {
-      deleteEntry(entryToDelete.toString());
-      toast.success('Entry deleted successfully');
-      setEntryToDelete(null);
-    }
-    setDeleteDialogOpen(false);
+    if (!entryToDelete) return;
+
+    setIsSubmitting(true);
+
+    deleteTimeEntry(entryToDelete.id, {
+      onSuccess: (data) => {
+        console.log('Entry deleted successfully:', data);
+
+        // Удаляем из локального state
+        deleteEntry(entryToDelete.id);
+
+        toast.success('Entry deleted successfully');
+        setEntryToDelete(null);
+        setDeleteDialogOpen(false);
+
+        // Перезагружаем список записей
+        loadTimeEntries();
+      },
+      onError: (error: any) => {
+        console.error('Failed to delete entry:', error);
+        toast.error(error?.message || 'Failed to delete entry. Please try again.');
+      },
+      onSettled: () => {
+        setIsSubmitting(false);
+      }
+    });
   };
 
+  // Массовое удаление
   const handleBulkDelete = () => {
     setBulkDeleteDialogOpen(true);
   };
 
   const confirmBulkDelete = () => {
-    deleteEntries(selectedEntries);
-    toast.success(`Deleted ${selectedEntries.length} entries`);
-    setBulkDeleteDialogOpen(false);
+    setIsSubmitting(true);
+
+    const deletePromises = selectedEntries.map(id =>
+      new Promise((resolve, reject) => {
+        deleteTimeEntry(id, {
+          onSuccess: resolve,
+          onError: reject
+        });
+      })
+    );
+
+    Promise.all(deletePromises)
+      .then(() => {
+        deleteEntries(selectedEntries);
+        toast.success(`Deleted ${selectedEntries.length} entries`);
+        setBulkDeleteDialogOpen(false);
+        loadTimeEntries();
+      })
+      .catch((error) => {
+        console.error('Failed to delete some entries:', error);
+        toast.error('Failed to delete some entries');
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+      });
   };
 
   const toggleSelectGroup = (group: GroupedTimeEntry) => {
     const allSelected = group.entryIds.every(id => selectedEntries.includes(id));
 
     if (allSelected) {
-      // Убираем все записи группы из выбранных
       setSelectedEntries(selectedEntries.filter(id => !group.entryIds.includes(id)));
     } else {
-      // Добавляем все записи группы в выбранные
       setSelectedEntries([...selectedEntries, ...group.entryIds]);
+    }
+  };
+
+  const toggleSelectEntry = (entryId: string) => {
+    if (selectedEntries.includes(entryId)) {
+      setSelectedEntries(selectedEntries.filter(id => id !== entryId));
+    } else {
+      setSelectedEntries([...selectedEntries, entryId]);
     }
   };
 
@@ -499,6 +603,7 @@ export function TimeEntryList() {
               <CardDescription>
                 {filteredGroups.length} groups · {totalHours.toFixed(1)} total hours
                 {time_entries && ` · ${time_entries.length} total entries in database`}
+                {(isLoadingEntries || isSubmitting) && ' · Loading...'}
               </CardDescription>
             </div>
             {selectedEntries.length > 0 && (
@@ -506,7 +611,13 @@ export function TimeEntryList() {
                 <span className="text-sm text-slate-600 bg-white px-3 py-1 rounded-full border">
                   Selected: {selectedEntries.length} entries · {selectedTotalHours.toFixed(1)}h
                 </span>
-                <Button onClick={handleBulkDelete} size="sm" style={{ backgroundColor: '#EF4444' }} className="text-white hover:opacity-90">
+                <Button
+                  onClick={handleBulkDelete}
+                  size="sm"
+                  style={{ backgroundColor: '#EF4444' }}
+                  className="text-white hover:opacity-90"
+                  disabled={isSubmitting}
+                >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete Selected
                 </Button>
@@ -525,6 +636,7 @@ export function TimeEntryList() {
                         <Checkbox
                           checked={selectedEntries.length === filteredGroups.flatMap(g => g.entryIds).length && filteredGroups.length > 0}
                           onCheckedChange={toggleSelectAll}
+                          disabled={isSubmitting}
                         />
                       </TableHead>
                       <TableHead>Date Range</TableHead>
@@ -533,7 +645,7 @@ export function TimeEntryList() {
                       <TableHead>Task</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead className="text-right">Hours</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
+                      <TableHead className="w-24">Expand</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -548,12 +660,14 @@ export function TimeEntryList() {
                     ) : (
                       filteredGroups.map(group => (
                         <React.Fragment key={group.key}>
+                          {/* Основная строка группы - без кнопок редактирования/удаления */}
                           {/* Основная строка группы */}
                           <TableRow className="hover:bg-slate-50 bg-slate-50/30">
                             <TableCell>
                               <Checkbox
                                 checked={group.entryIds.every(id => selectedEntries.includes(id))}
                                 onCheckedChange={() => toggleSelectGroup(group)}
+                                disabled={isSubmitting}
                               />
                             </TableCell>
                             <TableCell>
@@ -613,11 +727,13 @@ export function TimeEntryList() {
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-1">
-                                {group.count > 1 && (
+                                {group.count > 1 ? (
+                                  // Для групп с несколькими записями - только кнопка раскрытия
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => toggleGroupExpand(group.key)}
+                                    disabled={isSubmitting}
                                   >
                                     {expandedGroups.has(group.key) ? (
                                       <ChevronUp className="w-4 h-4" />
@@ -625,32 +741,41 @@ export function TimeEntryList() {
                                       <ChevronDown className="w-4 h-4" />
                                     )}
                                   </Button>
+                                ) : (
+                                  // Для одиночных записей - кнопки редактирования и удаления
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleEdit(group)}
+                                      disabled={isSubmitting}
+                                      className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDeleteSingle(group.entryIds[0])}
+                                      disabled={isSubmitting}
+                                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </>
                                 )}
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEdit(group)}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDelete(group)}
-                                >
-                                  <Trash2 className="w-4 h-4 text-red-500" />
-                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
 
-                          {/* Развернутые отдельные записи группы */}
+                          {/* Развернутые отдельные записи группы - здесь есть кнопки редактирования/удаления */}
                           {expandedGroups.has(group.key) && group.dates.sort().map((date, idx) => (
                             <TableRow key={`${group.key}-${idx}`} className="bg-slate-100/50 text-sm">
                               <TableCell>
                                 <Checkbox
                                   checked={selectedEntries.includes(group.entryIds[idx])}
                                   onCheckedChange={() => toggleSelectEntry(group.entryIds[idx])}
+                                  disabled={isSubmitting}
                                 />
                               </TableCell>
                               <TableCell>
@@ -675,7 +800,7 @@ export function TimeEntryList() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6"
+                                    className="h-6 w-6 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                                     onClick={() => {
                                       const entry = {
                                         ...group,
@@ -687,20 +812,24 @@ export function TimeEntryList() {
                                       setEditDescription(group.description);
                                       setEditDate(date);
                                       setEditHours(group.hours.toString());
+                                      setEditTaskType(group.task_type || '');
+                                      setEditTask(group.task || '');
+                                      setEditCountry(group.country || '');
+                                      setEditClient(group.client || '');
+                                      setEditWeekendsIncluded(group.weekends_included);
                                     }}
+                                    disabled={isSubmitting}
                                   >
                                     <Edit className="w-3 h-3" />
                                   </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => {
-                                      setEntryToDelete(parseInt(group.entryIds[idx]));
-                                      setDeleteDialogOpen(true);
-                                    }}
+                                    className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => handleDeleteSingle(group.entryIds[idx])}
+                                    disabled={isSubmitting}
                                   >
-                                    <Trash2 className="w-3 h-3 text-red-500" />
+                                    <Trash2 className="w-3 h-3" />
                                   </Button>
                                 </div>
                               </TableCell>
@@ -743,41 +872,41 @@ export function TimeEntryList() {
         </CardContent>
       </Card>
 
+      {/* Диалог редактирования */}
       <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Edit Time Entry</DialogTitle>
-            <DialogDescription>Update the details of your time entry</DialogDescription>
+            <DialogDescription>
+              Update the details of your time entry. Click save when you're done.
+            </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="edit-type">Entry Type</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 p-2 border rounded-md bg-slate-50">
                 {getEntryIcon(editingEntry?.task_type || editingEntry?.type || '')}
-                <span className="capitalize">{editingEntry?.task_type || editingEntry?.type || 'Unknown'}</span>
+                <span className="capitalize font-medium">
+                  {editingEntry?.task_type || editingEntry?.type || 'Unknown'}
+                </span>
               </div>
             </div>
-            {editingEntry?.type === 'external' && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-client">Client</Label>
-                <Input
-                  id="edit-client"
-                  value={editingEntry?.client || ''}
-                  disabled
-                />
-              </div>
-            )}
+
             <div className="space-y-2">
-              <Label htmlFor="edit-date">Date</Label>
+              <Label htmlFor="edit-date">Date *</Label>
               <Input
                 id="edit-date"
                 type="date"
                 value={editDate}
                 onChange={(e) => setEditDate(e.target.value)}
+                disabled={isSubmitting}
+                required
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="edit-hours">Hours</Label>
+              <Label htmlFor="edit-hours">Hours *</Label>
               <Input
                 id="edit-hours"
                 type="number"
@@ -786,35 +915,114 @@ export function TimeEntryList() {
                 max="24"
                 value={editHours}
                 onChange={(e) => setEditHours(e.target.value)}
+                disabled={isSubmitting}
+                required
+              />
+              <p className="text-xs text-slate-500">Min: 0.5, Max: 24</p>
+            </div>
+
+            {editingEntry?.type === 'external' && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-client">Client</Label>
+                <Input
+                  id="edit-client"
+                  value={editClient || editingEntry?.client || ''}
+                  onChange={(e) => setEditClient(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Client ID"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-project">Project</Label>
+              <Input
+                id="edit-project"
+                value={editProjectId || editingEntry?.projectId || ''}
+                onChange={(e) => setEditProjectId(e.target.value)}
+                disabled={isSubmitting}
+                placeholder="Project ID"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="edit-task">Task</Label>
+              <Label htmlFor="edit-task-type">Task Type</Label>
+              <Input
+                id="edit-task-type"
+                value={editTaskType || editingEntry?.task_type || ''}
+                onChange={(e) => setEditTaskType(e.target.value)}
+                disabled={isSubmitting}
+                placeholder="Task type"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-task">Task ID</Label>
               <Input
                 id="edit-task"
-                value={editingEntry?.taskName || ''}
-                disabled
+                value={editTask || editingEntry?.task || ''}
+                onChange={(e) => setEditTask(e.target.value)}
+                disabled={isSubmitting}
+                placeholder="Task ID"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
+              <Label htmlFor="edit-country">Country</Label>
+              <Input
+                id="edit-country"
+                value={editCountry || editingEntry?.country || ''}
+                onChange={(e) => setEditCountry(e.target.value)}
+                disabled={isSubmitting}
+                placeholder="Country ID"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Description *</Label>
               <Textarea
                 id="edit-description"
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
                 rows={3}
+                disabled={isSubmitting}
+                required
               />
             </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="edit-weekends"
+                checked={editWeekendsIncluded}
+                onCheckedChange={(checked) => setEditWeekendsIncluded(checked as boolean)}
+                disabled={isSubmitting}
+              />
+              <Label htmlFor="edit-weekends" className="text-sm font-normal">
+                Include weekends
+              </Label>
+            </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingEntry(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setEditingEntry(null)}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button onClick={handleUpdate} style={{ backgroundColor: '#1F4E78' }}>Save Changes</Button>
+            <Button
+              onClick={handleUpdate}
+              style={{ backgroundColor: '#1F4E78' }}
+              disabled={isSubmitting || !editDate || !editHours || !editDescription}
+            >
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Диалог подтверждения удаления */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -824,12 +1032,20 @@ export function TimeEntryList() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isSubmitting}
+              className="bg-red-500 hover:bg-red-600"
+              style={{ backgroundColor: '#EF4444' }}
+            >
+              {isSubmitting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Диалог массового удаления */}
       <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -839,8 +1055,15 @@ export function TimeEntryList() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBulkDelete}>Delete</AlertDialogAction>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkDelete}
+              disabled={isSubmitting}
+              className="bg-red-500 hover:bg-red-600"
+              style={{ backgroundColor: '#EF4444' }}
+            >
+              {isSubmitting ? 'Deleting...' : 'Delete All'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

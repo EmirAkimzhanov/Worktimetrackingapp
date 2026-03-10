@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { deleteCalendar, editCalendar, getCalendar, getTimeEntry, sendCalendar, sendTimeEntry } from "../services/timeEntry";
-import { TimeBody } from '../types/timeEntrys';
+import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getTimeEntry, sendCalendar, sendTimeEntry } from "../services/timeEntry";
+import { EditDate, TimeBody } from '../types/timeEntrys';
 import { useUserStore } from '../store/UsersStore';
 import { CalendarEvent } from '../types/calendar';
 
@@ -22,6 +22,30 @@ export const useGetTimeEntrys = () => {
         mutationFn: () => getTimeEntry(),
         onSuccess: (data) => {
             setTimeEntries(data);
+            console.log(data);
+        },
+        onError: (error) => {
+            console.error("Send supports error:", error);
+        },
+    });
+};
+
+export const useEditTimeEntry = () => {
+    return useMutation({
+        mutationFn: ({ day_id, body }: { day_id: string, body: EditDate }) => editTimeEntry(day_id, body),
+        onSuccess: (data) => {
+            console.log(data);
+        },
+        onError: (error) => {
+            console.error("Send supports error:", error);
+        },
+    });
+};
+
+export const useDeleteTimeEntry = () => {
+    return useMutation({
+        mutationFn: (day_id: string) => deleteTimeEntry(day_id),
+        onSuccess: (data) => {
             console.log(data);
         },
         onError: (error) => {

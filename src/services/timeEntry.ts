@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { api } from '../consts/api';
 import { useUserStore } from '../store/UsersStore';
-import { TimeBody } from '../types/timeEntrys';
+import { EditDate, TimeBody } from '../types/timeEntrys';
 import { TimeEntry } from '../components/TimeTrackerContext';
 import { CalendarEvent } from '../types/calendar';
 
@@ -43,6 +43,47 @@ export const getTimeEntry = async () => {
     );
     return res.data;
 }
+
+export const editTimeEntry = async (day_id: string, body: EditDate) => {
+    const token = useUserStore.getState().access_token;
+    console.log(token);
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.patch(`${api}api/calendars/time-entries/${day_id}/`, body,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+
+export const deleteTimeEntry = async (day_id: string) => {
+    const token = useUserStore.getState().access_token;
+    console.log(token);
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.delete(`${api}api/calendars/time-entries/${day_id}/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+
 
 export const getCalendar = async () => {
     const token = useUserStore.getState().access_token;
