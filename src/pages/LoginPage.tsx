@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
-import { useLogin } from '../hooks/UseAuth';
+import { useActivateAccount, useLogin } from '../hooks/UseAuth';
 
 const LoginContainer = styled.div`
   min-height: 100vh;
@@ -17,7 +17,7 @@ const LoginCard = styled(motion.div)`
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   width: 100%;
-  max-width: 420px;
+  max-width: 480px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
 `;
@@ -37,7 +37,6 @@ const LoginHeader = styled.div`
     left: 0;
     right: 0;
     height: 4px;
-
   }
 `;
 
@@ -89,17 +88,43 @@ const Tagline = styled.p`
   line-height: 1.5;
 `;
 
+const TabsContainer = styled.div`
+  display: flex;
+  border-bottom: 2px solid #f0f2f5;
+  padding: 0 32px;
+  background: white;
+`;
+
+const Tab = styled.button<{ active: boolean }>`
+  flex: 1;
+  padding: 20px 0 16px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  font-weight: 600;
+  color: ${props => props.active ? '#1F4E78' : '#9ca3af'};
+  border-bottom: 3px solid ${props => props.active ? '#1F4E78' : 'transparent'};
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  bottom: -2px;
+  
+  &:hover {
+    color: #1F4E78;
+  }
+`;
+
 const LoginForm = styled.form`
   padding: 40px 32px 32px;
 `;
 
 const FormGroup = styled.div`
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 `;
 
 const InputLabel = styled.label`
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: #374151;
   font-weight: 500;
   font-size: 14px;
@@ -108,7 +133,7 @@ const InputLabel = styled.label`
 
 const Input = styled.input`
   width: 100%;
-  padding: 15px 18px;
+  padding: 14px 18px;
   border: 2px solid #e5e7eb;
   border-radius: 10px;
   font-size: 15px;
@@ -133,7 +158,7 @@ const Input = styled.input`
 
 const LoginButton = styled.button`
   width: 100%;
-  padding: 17px;
+  padding: 16px;
   background: linear-gradient(135deg, #1F4E78 0%, #00A3A1 100%);
   color: white;
   border: none;
@@ -178,9 +203,22 @@ const ErrorMessage = styled.div`
   border-left: 4px solid #c62828;
 `;
 
+const SuccessMessage = styled.div`
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-left: 4px solid #2e7d32;
+`;
+
 const FooterLinks = styled.div`
   text-align: center;
-  margin-top: 32px;
+  margin-top: 28px;
   padding-top: 24px;
   border-top: 1px solid #f3f4f6;
 `;
@@ -211,110 +249,356 @@ const LoadingSpinner = styled.div`
   }
 `;
 
+const PasswordStrengthIndicator = styled.div<{ strength: number }>`
+  height: 4px;
+  background: ${props => {
+    if (props.strength === 0) return '#e5e7eb';
+    if (props.strength === 1) return '#f44336';
+    if (props.strength === 2) return '#ff9800';
+    if (props.strength === 3) return '#4caf50';
+    return '#e5e7eb';
+  }};
+  width: ${props => (props.strength / 3) * 100}%;
+  border-radius: 2px;
+  margin-top: 6px;
+  transition: all 0.3s ease;
+`;
+
+type TabType = 'signin' | 'activate';
+
 const TimeTrackerLogin = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [formError, setFormError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('signin');
 
-    const { mutate: login, isPending, error } = useLogin();
+  // Sign In form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setFormError(null);
+  // Activate Account form state
+  const [activateEmail, setActivateEmail] = useState('');
+  const [activatePassword, setActivatePassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [activationKey, setActivationKey] = useState('');
 
-        // Basic validation
-        if (!email.trim() || !password.trim()) {
-            setFormError('Please enter both email and password');
-            return;
-        }
+  const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [passwordStrength, setPasswordStrength] = useState(0);
 
-        if (!email.includes('@')) {
-            setFormError('Please enter a valid email address');
-            return;
-        }
+  const { mutate: login, isPending: isLoginPending, error: loginError } = useLogin();
+  const { mutate: activate, isPending: isActivatePending, error: activateError, isSuccess: isActivateSuccess } = useActivateAccount();
 
-        // Call the login mutation
-        login({ email, password });
-    };
+  const calculatePasswordStrength = (pass: string) => {
+    let strength = 0;
+    if (pass.length >= 8) strength++;
+    if (pass.match(/[A-Z]/) && pass.match(/[a-z]/)) strength++;
+    if (pass.match(/[0-9]/) && pass.match(/[^A-Za-z0-9]/)) strength++;
+    return strength;
+  };
 
-    // Use the error from mutation if it exists, otherwise use form error
-    const displayError = error?.message || formError;
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setActivatePassword(newPassword);
+    setPasswordStrength(calculatePasswordStrength(newPassword));
+    setFormError(null);
+  };
 
-    return (
-        <LoginContainer>
-            <LoginCard
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
+  const handleSignInSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormError(null);
+    setSuccessMessage(null);
+
+    if (!email.trim() || !password.trim()) {
+      setFormError('Please enter both email and password');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      setFormError('Please enter a valid email address');
+      return;
+    }
+
+    login({ email, password });
+  };
+
+  const handleActivateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormError(null);
+    setSuccessMessage(null);
+
+    // Validation
+    if (!activateEmail.trim()) {
+      setFormError('Please enter your email address');
+      return;
+    }
+
+    if (!activateEmail.includes('@')) {
+      setFormError('Please enter a valid email address');
+      return;
+    }
+
+    if (!activatePassword.trim()) {
+      setFormError('Please create a password');
+      return;
+    }
+
+    if (activatePassword.length < 8) {
+      setFormError('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (activatePassword !== confirmPassword) {
+      setFormError('Passwords do not match');
+      return;
+    }
+
+    if (!activationKey.trim()) {
+      setFormError('Please enter your activation key');
+      return;
+    }
+
+    if (activationKey.length < 6) {
+      setFormError('Activation key must be at least 6 characters');
+      return;
+    }
+
+    // Call the activation API
+    activate({
+      email: activateEmail,
+      activation_code: activationKey,
+      password: activatePassword,
+      password_confirm: confirmPassword
+    });
+  };
+
+  // Handle successful activation
+  React.useEffect(() => {
+    if (isActivateSuccess) {
+      setSuccessMessage('Account activated successfully! You can now sign in.');
+
+      // Clear form
+      setActivateEmail('');
+      setActivatePassword('');
+      setConfirmPassword('');
+      setActivationKey('');
+      setPasswordStrength(0);
+
+      // Switch to sign in tab after 2 seconds
+      setTimeout(() => {
+        setActiveTab('signin');
+        setSuccessMessage(null);
+      }, 2000);
+    }
+  }, [isActivateSuccess]);
+
+  // Determine which error to show based on active tab
+  const displayError = activeTab === 'signin'
+    ? loginError?.message || formError
+    : activateError?.message || formError;
+
+  return (
+    <LoginContainer>
+      <LoginCard
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <LoginHeader>
+          <Logo>
+            <LogoIcon>⏱</LogoIcon>
+            <LogoText>
+              <CompanyName>Professional</CompanyName>
+              <AppName>TIME TRACKER</AppName>
+            </LogoText>
+          </Logo>
+          <Tagline>Track your work hours and manage projects efficiently</Tagline>
+        </LoginHeader>
+
+        <TabsContainer>
+          <Tab
+            active={activeTab === 'signin'}
+            onClick={() => {
+              setActiveTab('signin');
+              setFormError(null);
+              setSuccessMessage(null);
+            }}
+          >
+            Sign In
+          </Tab>
+          <Tab
+            active={activeTab === 'activate'}
+            onClick={() => {
+              setActiveTab('activate');
+              setFormError(null);
+              setSuccessMessage(null);
+            }}
+          >
+            Activate Account
+          </Tab>
+        </TabsContainer>
+
+        {activeTab === 'signin' ? (
+          <LoginForm onSubmit={handleSignInSubmit}>
+            {displayError && (
+              <ErrorMessage>
+                ⚠️ {displayError}
+              </ErrorMessage>
+            )}
+
+            <FormGroup>
+              <InputLabel>Email Address</InputLabel>
+              <Input
+                type="email"
+                placeholder="Enter your work email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setFormError(null);
+                }}
+                required
+                disabled={isLoginPending}
+              />
+            </FormGroup>
+
+            <FormGroup>
+              <InputLabel>Password</InputLabel>
+              <Input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setFormError(null);
+                }}
+                required
+                disabled={isLoginPending}
+              />
+            </FormGroup>
+
+            <LoginButton type="submit" disabled={isLoginPending}>
+              {isLoginPending ? (
+                <>
+                  <LoadingSpinner />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In to Dashboard'
+              )}
+            </LoginButton>
+
+            <FooterLinks>
+              <FooterLink href="#forgot">Forgot Password?</FooterLink>
+              <span style={{ margin: '0 12px', color: '#d1d5db' }}>•</span>
+              <FooterLink href="#support">Need Help?</FooterLink>
+            </FooterLinks>
+          </LoginForm>
+        ) : (
+          <LoginForm onSubmit={handleActivateSubmit}>
+            {displayError && (
+              <ErrorMessage>
+                ⚠️ {displayError}
+              </ErrorMessage>
+            )}
+
+            {successMessage && (
+              <SuccessMessage>
+                ✓ {successMessage}
+              </SuccessMessage>
+            )}
+
+            <FormGroup>
+              <InputLabel>Email Address</InputLabel>
+              <Input
+                type="email"
+                placeholder="Enter your email address"
+                value={activateEmail}
+                onChange={(e) => {
+                  setActivateEmail(e.target.value);
+                  setFormError(null);
+                }}
+                required
+                disabled={isActivatePending || isActivateSuccess}
+              />
+            </FormGroup>
+
+            <FormGroup>
+              <InputLabel>Create Password</InputLabel>
+              <Input
+                type="password"
+                placeholder="Create a strong password"
+                value={activatePassword}
+                onChange={handlePasswordChange}
+                required
+                disabled={isActivatePending || isActivateSuccess}
+              />
+              {activatePassword && !isActivateSuccess && (
+                <PasswordStrengthIndicator strength={passwordStrength} />
+              )}
+              {activatePassword && passwordStrength < 3 && !isActivateSuccess && (
+                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Password strength: {
+                    passwordStrength === 0 ? 'Too weak' :
+                      passwordStrength === 1 ? 'Weak' :
+                        passwordStrength === 2 ? 'Medium' : 'Strong'
+                  }
+                </p>
+              )}
+            </FormGroup>
+
+            <FormGroup>
+              <InputLabel>Confirm Password</InputLabel>
+              <Input
+                type="password"
+                placeholder="Confirm your password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setFormError(null);
+                }}
+                required
+                disabled={isActivatePending || isActivateSuccess}
+              />
+            </FormGroup>
+
+            <FormGroup>
+              <InputLabel>Activation Key</InputLabel>
+              <Input
+                type="text"
+                placeholder="Enter your activation key"
+                value={activationKey}
+                onChange={(e) => {
+                  setActivationKey(e.target.value);
+                  setFormError(null);
+                }}
+                required
+                disabled={isActivatePending || isActivateSuccess}
+              />
+            </FormGroup>
+
+            <LoginButton
+              type="submit"
+              disabled={isActivatePending || isActivateSuccess}
             >
-                <LoginHeader>
-                    <Logo>
-                        <LogoIcon>⏱</LogoIcon>
-                        <LogoText>
-                            <CompanyName>Professional</CompanyName>
-                            <AppName>TIME TRACKER</AppName>
-                        </LogoText>
-                    </Logo>
-                    <Tagline>Sign in to track your work hours and manage projects</Tagline>
-                </LoginHeader>
+              {isActivatePending ? (
+                <>
+                  <LoadingSpinner />
+                  Activating...
+                </>
+              ) : isActivateSuccess ? (
+                'Activation Complete!'
+              ) : (
+                'Activate Account'
+              )}
+            </LoginButton>
 
-                <LoginForm onSubmit={handleSubmit}>
-                    {displayError && (
-                        <ErrorMessage>
-                            ⚠️ {displayError}
-                        </ErrorMessage>
-                    )}
-
-                    <FormGroup>
-                        <InputLabel>Email Address</InputLabel>
-                        <Input
-                            type="email"
-                            placeholder="Enter your work email"
-                            value={email}
-                            onChange={(e) => {
-                                setEmail(e.target.value);
-                                setFormError(null);
-                            }}
-                            required
-                            disabled={isPending}
-                        />
-                    </FormGroup>
-
-                    <FormGroup>
-                        <InputLabel>Password</InputLabel>
-                        <Input
-                            type="password"
-                            placeholder="Enter your password"
-                            value={password}
-                            onChange={(e) => {
-                                setPassword(e.target.value);
-                                setFormError(null);
-                            }}
-                            required
-                            disabled={isPending}
-                        />
-                    </FormGroup>
-
-                    <LoginButton type="submit" disabled={isPending}>
-                        {isPending ? (
-                            <>
-                                <LoadingSpinner />
-                                Signing in...
-                            </>
-                        ) : (
-                            'Sign In to Dashboard'
-                        )}
-                    </LoginButton>
-
-                    <FooterLinks>
-                        <FooterLink href="#forgot">Forgot Password?</FooterLink>
-                        <span style={{ margin: '0 12px', color: '#d1d5db' }}>•</span>
-                        <FooterLink href="#support">Need Help?</FooterLink>
-                    </FooterLinks>
-                </LoginForm>
-            </LoginCard>
-        </LoginContainer>
-    );
+            <FooterLinks>
+              <FooterLink href="#resend-key">Resend Activation Key</FooterLink>
+              <span style={{ margin: '0 12px', color: '#d1d5db' }}>•</span>
+              <FooterLink href="#support">Contact Support</FooterLink>
+            </FooterLinks>
+          </LoginForm>
+        )}
+      </LoginCard>
+    </LoginContainer>
+  );
 };
 
 export default TimeTrackerLogin;

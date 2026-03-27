@@ -1,8 +1,9 @@
 // hooks/useAuth.ts
 import { useMutation } from "@tanstack/react-query";
-import { login } from "../services/auth";
+import { activateAccount, login } from "../services/auth";
 import { useNavigate } from "react-router-dom";
 import { useUserStore } from "../store/UsersStore";
+import { Activate } from "../types/auth";
 
 export const useLogin = () => {
     const navigate = useNavigate();
@@ -65,6 +66,19 @@ export const useLogin = () => {
             }
 
             throw new Error(errorMessage);
+        },
+    });
+};
+
+
+export const useActivateAccount = () => {
+
+    return useMutation({
+        mutationFn: (body: Activate) => activateAccount(body),
+        onSuccess: (data) => {
+        },
+        onError: (error: Error) => {
+            console.error("activate error:", error.message);
         },
     });
 };

@@ -6,7 +6,7 @@ import { CountryWithClients, MainEntity, OnlyClient } from "../types/client";
 import { Project, ProjectBody, ProjectTasks } from "../types/project";
 import { Task, TasksArray } from "../types/task";
 import { LeaveArray } from "../types/leave";
-import { TimeEntry } from "../types/timeEntrys";
+import { Holidays, TimeEntry } from "../types/timeEntrys";
 import { Department, Position } from "../types/types";
 import { DepartmentWithMembers } from "../types/departments";
 import { Status, StatusesArray } from "../types/statuses";
@@ -15,6 +15,7 @@ import { DepartmentRole } from "../types/user";
 import { DepartmentsResponse } from "../types/deaprtments";
 import { Calendar } from "../types/calendar";
 import { Monitoring } from "../types/monitoring";
+import { GlobalSettings } from "../types/settings";
 
 // Определяем тип для роли (можно заменить на импорт из types, если есть)
 export interface Role {
@@ -175,7 +176,11 @@ interface UserState {
 
   reports: ReportsData | null;
 
-  monitoring: Monitoring[] | null; // ✅ Только одно объявление monitoring
+  monitoring: Monitoring[] | null;
+
+  globalSettings: GlobalSettings | null;
+
+  calendar_holidays: Holidays[] | null;
 
   setUser: (
     user: User,
@@ -228,6 +233,8 @@ interface UserState {
 
   setSectors: (sectors: Status[] | null) => void;
 
+  setGlobalSettings: (globalSettings: GlobalSettings | null) => void;
+
   setDepartmentWorkers: (
     department_workers: DepartmentsResponse | null,
   ) => void;
@@ -238,7 +245,9 @@ interface UserState {
 
   setRoles: (roles: Role[] | null) => void;
 
-  setMonitoring: (monitoring: Monitoring[] | null) => void; // ✅ Исправлено: добавляем setMonitoring
+  setCalendarHolidays: (calendar_holidays: Holidays[] | null) => void;
+
+  setMonitoring: (monitoring: Monitoring[] | null) => void;
 
   // ✅ ОДНА ФУНКЦИЯ ДЛЯ ОТЧЕТОВ
   setReports: (reports: ReportsData | null) => void;
@@ -308,14 +317,17 @@ export const useUserStore = create<UserState>()(
       calendar: null,
       tasks: null,
       roles: null,
-      monitoring: null, // ✅ Только одно объявление monitoring в начальном состоянии
+      monitoring: null,
+      globalSettings: null,
+      calendar_holidays: null,
       reports: {
         timeReports: null,
         projectReports: null,
         userReports: null,
         financialReports: null,
         reportFilters: null,
-        reportSummary: null
+        reportSummary: null,
+        globalSettings: null,
       },
 
       setUser: (userData, tokens) =>
@@ -339,6 +351,8 @@ export const useUserStore = create<UserState>()(
 
       setSelectedCountry: (country) => set({ selectedCountry: country }),
 
+      setGlobalSettings: (globalSettings) => set({ globalSettings }),
+
       setClientProjects: (clientProjects) =>
         set({ client_projects: clientProjects }),
 
@@ -351,6 +365,8 @@ export const useUserStore = create<UserState>()(
       clearInternalTasks: () => set({ internal_tasks: null }),
 
       setLeaves: (leaves) => set({ leaves }),
+
+      setCalendarHolidays: (calendar_holidays) => set({ calendar_holidays }),
 
       setTimeEntries: (timeEntries) => set({ time_entries: timeEntries }),
 
@@ -699,8 +715,8 @@ export const useUserStore = create<UserState>()(
           calendar: null,
           tasks: null,
           roles: null,
-          monitoring: null, // ✅ Добавлено очищение monitoring
-
+          monitoring: null,
+          calendar_holidays: null,
           // ✅ ОЧИЩАЕМ ОДИН СТЕЙТ ОТЧЕТОВ ПРИ ВЫХОДЕ
           reports: {
             timeReports: null,
@@ -741,7 +757,9 @@ export const useUserStore = create<UserState>()(
         tasks: state.tasks,
         roles: state.roles,
         reports: state.reports,
-        monitoring: state.monitoring, // ✅ Добавлено monitoring в persist
+        monitoring: state.monitoring,
+        globalSettings: state.globalSettings,
+        calendar_holidays: state.calendar_holidays,
       }),
     },
   ),

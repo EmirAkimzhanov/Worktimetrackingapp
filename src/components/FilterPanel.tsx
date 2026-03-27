@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -8,15 +8,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Filter, X, Search } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
+import { useUserStore } from '../store/UsersStore';
+import { useGetProjects } from '../hooks/useProject';
+import { toast } from 'sonner';
 
 export function FilterPanel() {
-  const { projects, filters, setFilters } = useTimeTracker();
+  const { filters, setFilters } = useTimeTracker();
+  const { mutate: getProjects } = useGetProjects();
+  const store_projects = useUserStore((state) => state.projects);
+
+  // Загружаем проекты при монтировании компонента
+  useEffect(() => {
+    getProjects(undefined, {
+      onSuccess: (data) => {
+      },
+      onError: (error) => {
+        console.error('Failed to load projects:', error);
+        toast.error('Failed to load projects');
+      }
+    });
+  }, []);
 
   const handleQuickFilter = (value: string) => {
     if (!value) return;
-    
+
     setFilters({ quickFilter: value as 'all' | 'today' | 'week' | 'month' });
-    
+
     const today = new Date();
     let dateRange: [string, string] | null = null;
 
@@ -66,9 +83,21 @@ export function FilterPanel() {
     setFilters({ projects: newProjects });
   };
 
-  const hasActiveFilters = 
-    filters.projects.length > 0 || 
-    filters.dateRange !== null || 
+  const handleProjectSelect = (value: string) => {
+    if (value === 'all') {
+      setFilters({ projects: [] });
+    } else {
+      // Для мультивыбора добавляем/убираем проект
+      const newProjects = filters.projects.includes(value)
+        ? filters.projects.filter(id => id !== value)
+        : [...filters.projects, value];
+      setFilters({ projects: newProjects });
+    }
+  };
+
+  const hasActiveFilters =
+    filters.projects.length > 0 ||
+    filters.dateRange !== null ||
     filters.searchText !== '' ||
     filters.hoursRange !== 'all' ||
     filters.quickFilter !== 'all';
@@ -82,8 +111,8 @@ export function FilterPanel() {
             Filters & Search
           </CardTitle>
           {hasActiveFilters && (
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               onClick={handleClearFilters}
             >
@@ -97,8 +126,8 @@ export function FilterPanel() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="space-y-2">
             <Label>Quick Filters</Label>
-            <ToggleGroup 
-              type="single" 
+            <ToggleGroup
+              type="single"
               value={filters.quickFilter}
               onValueChange={handleQuickFilter}
               className="grid grid-cols-4 w-full"
@@ -128,33 +157,42 @@ export function FilterPanel() {
             <Label htmlFor="projects">Projects</Label>
             <Select
               value={filters.projects.length > 0 ? filters.projects[0] : 'all'}
-              onValueChange={(value) => {
-                if (value === 'all') {
-                  setFilters({ projects: [] });
-                } else {
-                  toggleProject(value);
-                }
-              }}
+              onValueChange={handleProjectSelect}
             >
               <SelectTrigger id="projects">
                 <SelectValue placeholder="All projects" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Projects</SelectItem>
-                {projects.map(project => (
-                  <SelectItem key={project.id} value={project.id}>
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
-                        style={{ backgroundColor: project.color }}
-                      />
-                      <span className="font-mono text-xs text-slate-500">{project.code}</span>
-                      <span>{project.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {store_projects?.map(project => {
+                  const isSelected = filters.projects.includes(project.id.toString());
+                  return (
+                    <SelectItem
+                      key={project.id}
+                      value={project.id.toString()}
+                      className={isSelected ? 'bg-blue-50' : ''}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: project.project_color || '#0066CC' }}
+                        />
+                        <span className="font-mono text-xs text-slate-500">{project.code}</span>
+                        <span>{project.name}</span>
+                        {isSelected && (
+                          <Badge variant="outline" className="ml-2 text-xs">Selected</Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
+            {filters.projects.length > 1 && (
+              <p className="text-xs text-blue-600 mt-1">
+                {filters.projects.length} projects selected
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -184,8 +222,8 @@ export function FilterPanel() {
                 id="startDate"
                 type="date"
                 value={filters.dateRange?.[0] || ''}
-                onChange={(e) => setFilters({ 
-                  dateRange: [e.target.value, filters.dateRange?.[1] || e.target.value] 
+                onChange={(e) => setFilters({
+                  dateRange: [e.target.value, filters.dateRange?.[1] || e.target.value]
                 })}
               />
             </div>
@@ -195,8 +233,8 @@ export function FilterPanel() {
                 id="endDate"
                 type="date"
                 value={filters.dateRange?.[1] || ''}
-                onChange={(e) => setFilters({ 
-                  dateRange: [filters.dateRange?.[0] || e.target.value, e.target.value] 
+                onChange={(e) => setFilters({
+                  dateRange: [filters.dateRange?.[0] || e.target.value, e.target.value]
                 })}
               />
             </div>
@@ -206,11 +244,14 @@ export function FilterPanel() {
         {hasActiveFilters && (
           <div className="flex flex-wrap gap-2 pt-2 border-t">
             {filters.projects.map(projectId => {
-              const project = projects.find(p => p.id === projectId);
+              const project = store_projects?.find(p => p.id.toString() === projectId);
               return project ? (
                 <Badge
                   key={projectId}
-                  style={{ backgroundColor: project.color }}
+                  style={{
+                    backgroundColor: project.project_color || '#0066CC',
+                    color: '#ffffff'
+                  }}
                   className="gap-1 cursor-pointer"
                   onClick={() => toggleProject(projectId)}
                 >
@@ -221,14 +262,20 @@ export function FilterPanel() {
             })}
             {filters.hoursRange !== 'all' && (
               <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ hoursRange: 'all' })}>
-                {filters.hoursRange === 'low' ? '< 4 hours' : 
-                 filters.hoursRange === 'medium' ? '4-8 hours' : '> 8 hours'}
+                {filters.hoursRange === 'low' ? '< 4 hours' :
+                  filters.hoursRange === 'medium' ? '4-8 hours' : '> 8 hours'}
                 <X className="w-3 h-3" />
               </Badge>
             )}
             {filters.searchText && (
               <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ searchText: '' })}>
                 Search: {filters.searchText}
+                <X className="w-3 h-3" />
+              </Badge>
+            )}
+            {filters.dateRange && (
+              <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ dateRange: null })}>
+                {filters.dateRange[0]} to {filters.dateRange[1]}
                 <X className="w-3 h-3" />
               </Badge>
             )}

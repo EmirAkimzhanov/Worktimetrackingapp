@@ -1,5 +1,5 @@
-interface Country {
-    id: number;
+export interface Country {
+    id?: number;
     name: string;
     code: number;
 }
@@ -7,3 +7,4 @@ interface Country {
 export interface Countries {
     [id: string]: Country;
 }
+

@@ -154,3 +154,22 @@ export const deleteCalendar = async (day_id: string) => {
     );
     return res.data;
 }
+
+export const getHolidayCalendar = async () => {
+    const token = useUserStore.getState().access_token;
+    console.log(token);
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios(`${api}api/calendars/calendars/holidays/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}

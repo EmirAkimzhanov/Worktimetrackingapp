@@ -1,6 +1,7 @@
 // services/auth.ts
 import { api } from '../consts/api';
 import axios from 'axios';
+import { Activate } from '../types/auth';
 
 interface LoginCredentials {
     email: string;
@@ -63,3 +64,9 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
         throw error;
     }
 };
+
+export const activateAccount = async (body: Activate) => {
+    const res = await axios.post(`${api}api/accounts/activate/`, body,
+    );
+    return res.data;
+}

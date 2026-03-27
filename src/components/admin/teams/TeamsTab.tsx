@@ -52,8 +52,10 @@ import { toast } from "sonner";
 import { useUserStore } from "../../../store/UsersStore";
 import {
   useCreateDepartment,
+  useDeleteDepartment,
   useEditDepartmentName,
   useEditDepartmentRoles,
+  useGetDepartments,
 } from "../../../hooks/useDepartments";
 
 interface OrganizationMember {
@@ -132,6 +134,7 @@ const AddMemberModal = ({
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [employeeRoleId, setEmployeeRoleId] = useState<string>("1");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const { mutate: getDepartments } = useGetDepartments();
 
   const getAvailableEmployees = () => {
     const currentDepartment = businessUnits[0].departments.find(
@@ -170,6 +173,10 @@ const AddMemberModal = ({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    getDepartments();
+  }, []);
 
   const handleAdd = () => {
     if (!selectedEmployee) return;
@@ -299,11 +306,10 @@ const AddMemberModal = ({
                   {availableEmployees.map((employee) => (
                     <div
                       key={employee.id}
-                      className={`p-3 cursor-pointer transition-colors ${
-                        selectedEmployeeId === employee.id.toString()
+                      className={`p-3 cursor-pointer transition-colors ${selectedEmployeeId === employee.id.toString()
                           ? "bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500"
                           : "hover:bg-gray-50 dark:hover:bg-gray-900/50"
-                      }`}
+                        }`}
                       onClick={() =>
                         setSelectedEmployeeId(employee.id.toString())
                       }
@@ -462,6 +468,66 @@ const AddDepartmentModal = ({
   );
 };
 
+// Компонент модального окна подтверждения удаления
+const ConfirmDeleteModal = ({
+  departmentName,
+  onClose,
+  onConfirm,
+}: {
+  departmentName: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => {
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <AlertCircle className="h-5 w-5" />
+            Delete Department
+          </DialogTitle>
+          <DialogDescription className="pt-2">
+            Are you sure you want to delete the department{" "}
+            <span className="font-semibold text-foreground">
+              "{departmentName}"
+            </span>
+            ?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+              <div className="text-sm text-yellow-800 dark:text-yellow-300">
+                <p className="font-medium">Warning:</p>
+                <p>
+                  This action cannot be undone. All members and data associated
+                  with this department will be affected.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Department
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // Компонент уведомления
 const NotificationToast = ({
   notification,
@@ -536,6 +602,23 @@ export function TeamsTab() {
   const department_roles = useUserStore((state) => state.department_roles);
   const { mutate: editDepartmentName } = useEditDepartmentName();
   const { mutate: editDepartmentRole } = useEditDepartmentRoles();
+  const { mutate: deleteDepartment } = useDeleteDepartment();
+  const { mutate: getDepartments } = useGetDepartments();
+
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState<{
+    show: boolean;
+    departmentId: number;
+    departmentName: string;
+  }>({
+    show: false,
+    departmentId: 0,
+    departmentName: "",
+  });
+
+  // Вызов getDepartments при монтировании компонента
+  useEffect(() => {
+    getDepartments();
+  }, []);
 
   const convertToBusinessUnits = (depts: any[] | null): BusinessUnit[] => {
     if (!depts || depts.length === 0) {
@@ -1069,28 +1152,30 @@ export function TeamsTab() {
     forceUpdate({});
   };
 
-  const removeDepartment = (departmentId: number) => {
-    let departmentName = "";
+  const handleDeleteDepartment = (departmentId: number) => {
+    deleteDepartment(
+      { department_id: departmentId },
+      {
+        onSuccess: () => {
+          toast.success("Department has been deleted successfully");
+          // Обновляем список департаментов
+          getDepartments();
+        },
+        onError: (error) => {
+          toast.error(
+            `Failed to delete department: ${error.message || "Unknown error"}`,
+          );
+        },
+      },
+    );
+  };
 
-    setBusinessUnits((prev) => {
-      const updated = [...prev];
-      const department = updated[0].departments.find(
-        (d) => d.id === departmentId,
-      );
-      if (department) {
-        departmentName = department.name;
-        updated[0].departments = updated[0].departments.filter(
-          (d) => d.id !== departmentId,
-        );
-      }
-      return updated;
+  const removeDepartment = (departmentId: number, departmentName: string) => {
+    setShowDeleteConfirmModal({
+      show: true,
+      departmentId,
+      departmentName,
     });
-
-    if (departmentName) {
-      toast.success(`Department "${departmentName}" has been deleted`);
-    }
-
-    forceUpdate({});
   };
 
   const toggleEmployeeManager = (
@@ -1423,7 +1508,9 @@ export function TeamsTab() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => removeDepartment(department.id)}
+                        onClick={() =>
+                          removeDepartment(department.id, department.name)
+                        }
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1631,6 +1718,16 @@ export function TeamsTab() {
         <ManagerManagementModal
           departmentId={showManagerModal}
           onClose={() => setShowManagerModal(null)}
+        />
+      )}
+
+      {showDeleteConfirmModal.show && (
+        <ConfirmDeleteModal
+          departmentName={showDeleteConfirmModal.departmentName}
+          onClose={() =>
+            setShowDeleteConfirmModal({ show: false, departmentId: 0, departmentName: "" })
+          }
+          onConfirm={() => handleDeleteDepartment(showDeleteConfirmModal.departmentId)}
         />
       )}
     </div>

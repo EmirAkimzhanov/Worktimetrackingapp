@@ -9,7 +9,21 @@ interface CalendarStatisticsTabProps {
 }
 
 export function CalendarStatisticsTab({ config }: CalendarStatisticsTabProps) {
-    const stats = config.statistics;
+    // Проверяем наличие statistics и устанавливаем значения по умолчанию
+    const stats = config.statistics || {
+        yearlyWorkDays: 0,
+        yearlyHours: 0,
+        daysInWeek: 0,
+        hoursInWeek: 0,
+        vacationDays: 0,
+        lastUpdated: new Date().toISOString()
+    };
+
+    // Проверяем наличие holidays
+    const holidays = config.holidays || [];
+
+    // Проверяем наличие workWeekends
+    const workWeekends = config.workWeekends || [];
 
     return (
         <div className="space-y-6">
@@ -22,7 +36,7 @@ export function CalendarStatisticsTab({ config }: CalendarStatisticsTabProps) {
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.yearlyWorkDays}</div>
+                        <div className="text-2xl font-bold">{stats.yearlyWorkDays || 0}</div>
                         <p className="text-xs text-muted-foreground">Days per year</p>
                     </CardContent>
                 </Card>
@@ -33,7 +47,7 @@ export function CalendarStatisticsTab({ config }: CalendarStatisticsTabProps) {
                         <Clock className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.yearlyHours}</div>
+                        <div className="text-2xl font-bold">{stats.yearlyHours || 0}</div>
                         <p className="text-xs text-muted-foreground">Hours per year</p>
                     </CardContent>
                 </Card>
@@ -44,7 +58,7 @@ export function CalendarStatisticsTab({ config }: CalendarStatisticsTabProps) {
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.daysInWeek}/{stats.hoursInWeek}</div>
+                        <div className="text-2xl font-bold">{stats.daysInWeek || 0}/{stats.hoursInWeek || 0}</div>
                         <p className="text-xs text-muted-foreground">Days/Hours per week</p>
                     </CardContent>
                 </Card>
@@ -55,7 +69,7 @@ export function CalendarStatisticsTab({ config }: CalendarStatisticsTabProps) {
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.vacationDays}</div>
+                        <div className="text-2xl font-bold">{stats.vacationDays || 0}</div>
                         <p className="text-xs text-muted-foreground">Standard vacation</p>
                     </CardContent>
                 </Card>
@@ -77,11 +91,11 @@ export function CalendarStatisticsTab({ config }: CalendarStatisticsTabProps) {
                         </div>
                         <div className="flex justify-between">
                             <span>Holidays (configured):</span>
-                            <span className="font-medium">{config.holidays.length} days</span>
+                            <span className="font-medium">{holidays.length} days</span>
                         </div>
                         <div className="flex justify-between pt-2 border-t">
                             <span className="font-semibold">Available work days:</span>
-                            <span className="font-semibold">{stats.yearlyWorkDays} days</span>
+                            <span className="font-semibold">{stats.yearlyWorkDays || 0} days</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -92,19 +106,25 @@ export function CalendarStatisticsTab({ config }: CalendarStatisticsTabProps) {
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">
-                            Last updated: {new Date(stats.lastUpdated).toLocaleDateString()}
+                            Last updated: {stats.lastUpdated
+                                ? new Date(stats.lastUpdated).toLocaleDateString()
+                                : 'Never'
+                            }
                         </p>
-                        {config.workWeekends.length > 0 && (
+                        {workWeekends.length > 0 && (
                             <div className="mt-4">
                                 <p className="text-sm font-medium mb-2">Special work days:</p>
                                 <ul className="text-sm space-y-1">
-                                    {config.workWeekends.slice(0, 3).map((ww) => (
+                                    {workWeekends.slice(0, 3).map((ww) => (
                                         <li key={ww.id} className="text-muted-foreground">
-                                            {new Date(ww.date).toLocaleDateString()}: {ww.description || 'Working day'}
+                                            {ww.date ? new Date(ww.date).toLocaleDateString() : 'Unknown date'}: {ww.description || 'Working day'}
                                         </li>
                                     ))}
                                 </ul>
                             </div>
+                        )}
+                        {workWeekends.length === 0 && (
+                            <p className="text-sm text-muted-foreground mt-4">No special work days configured</p>
                         )}
                     </CardContent>
                 </Card>

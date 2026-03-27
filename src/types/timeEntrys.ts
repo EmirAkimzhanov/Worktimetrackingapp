@@ -28,3 +28,28 @@ export interface TimeEntry {
     hours: number;
     description: string;
 }
+
+export interface EditDate {
+    date: string;
+    start_date?: string;
+    end_date?: string;
+    country?: number;
+    client?: number;
+    project?: number;
+    task_type?: number;
+    task?: number;
+    weekends_included?: boolean;
+    hours?: number;
+    description?: string;
+}
+
+export interface Holidays {
+    id: number;
+    date: string;
+    input_date: string;
+    holiday_name: string | null;
+    day_type: 'holiday' | 'working_weekend' | 'working_day';
+    description: string;
+    is_recurring: boolean;
+    country: number;
+}

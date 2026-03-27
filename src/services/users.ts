@@ -93,3 +93,5 @@ export const deleteUser = async (user_id: string) => {
     );
     return res.data;
 }
+
+

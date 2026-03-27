@@ -1,5 +1,5 @@
 // src/components/admin/SettingsTab.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '../../ui/card';
 import { Settings, Users, Calendar, Briefcase, Shield, Layers } from 'lucide-react';
 import { TeamsTab } from '../teams/TeamsTab';
@@ -7,6 +7,7 @@ import { CalendarManagement } from '../calendar/CalendarManagementProps';
 import SimpleDepartmentsTables from "../department/DepartmentTabs";
 import { RoleManagementTab } from '../role/RoleManagementTab';
 import { Positions } from '../positions/Positions';
+import { useGetDepartments } from '../../../hooks/useDepartments';
 
 interface SettingsTabProps {
     // Teams props
@@ -110,6 +111,12 @@ export function SettingsTab({
     onGradeDeleted
 }: SettingsTabProps) {
     const [activeSubTab, setActiveSubTab] = useState<'teams' | 'calendar' | 'departments' | 'roles' | 'positions'>('teams');
+
+    const { mutate: getDepartments } = useGetDepartments();
+
+    useEffect(() => {
+        getDepartments();
+    }, [])
 
     // Обработчики для Positions
     const handlePositionCreated = (position: any) => {

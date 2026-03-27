@@ -104,5 +104,21 @@ export const editDepartmentName = async (
     return res.data;
 };
 
+export const deleteDepartment = async (
+    department_id: number,
+) => {
+    const token = useUserStore.getState().access_token;
+
+    const res = await axios.delete(
+        `${api}api/accounts/departments/${department_id}/`,
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    return res.data;
+};
 
 

@@ -13,8 +13,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner';
-import { useDeleteTimeEntry, useEditTimeEntry, useGetTimeEntrys } from '../hooks/useTimeEntry';
+import { useDeleteTimeEntry, useEditTimeEntry, useGetHolidayTimeEntrys, useGetTimeEntrys } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
+import { useGetProjects } from '../hooks/useProject';
 
 // Интерфейс для сгруппированной записи
 interface GroupedTimeEntry {
@@ -81,8 +82,11 @@ export function TimeEntryList() {
   const [editWeekendsIncluded, setEditWeekendsIncluded] = useState(false);
 
   const { mutate: getTimeEntrys, isLoading: isLoadingEntries } = useGetTimeEntrys();
+  const { mutate: getCalendarHolidays } = useGetHolidayTimeEntrys();
   const { mutate: editTimeEntry, isLoading: isEditing } = useEditTimeEntry();
   const { mutate: deleteTimeEntry, isLoading: isDeleting } = useDeleteTimeEntry();
+  const { mutate: getProjects } = useGetProjects();
+  const store_projects = useUserStore((state) => state.projects);
   const time_entries = useUserStore((state) => state.time_entries);
 
   // Вспомогательная функция для получения названия задачи
@@ -194,6 +198,7 @@ export function TimeEntryList() {
   // Загружаем записи при монтировании компонента
   useEffect(() => {
     loadTimeEntries();
+    getCalendarHolidays();
   }, []);
 
   const loadTimeEntries = () => {
