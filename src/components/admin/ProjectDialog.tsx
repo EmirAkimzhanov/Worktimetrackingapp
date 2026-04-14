@@ -64,7 +64,7 @@ export function ProjectDialog({
     useEffect(() => {
         if (open && (!store_departments || store_departments.length === 0)) {
             console.log('Fetching all departments...');
-            getDepartments(); // без параметра - получить все департаменты
+            getDepartments();
         }
     }, [open, store_departments, getDepartments]);
 
@@ -114,7 +114,6 @@ export function ProjectDialog({
         if (!store_statuses || !Array.isArray(store_statuses)) {
             return [];
         }
-        // Фильтруем активные статусы, если есть поле is_active, иначе возвращаем все
         return store_statuses.filter(status =>
             status.is_active !== undefined ? status.is_active : true
         );
@@ -125,7 +124,6 @@ export function ProjectDialog({
         if (!store_clients || !Array.isArray(store_clients)) {
             return [];
         }
-        // Фильтруем активных клиентов, если есть поле is_active, иначе возвращаем все
         return store_clients.filter(client =>
             client.is_active !== undefined ? client.is_active : true
         );
@@ -136,7 +134,6 @@ export function ProjectDialog({
         if (!store_countries || !Array.isArray(store_countries)) {
             return [];
         }
-        // Фильтруем активные страны, если есть поле is_active, иначе возвращаем все
         return store_countries.filter(country =>
             country.is_active !== undefined ? country.is_active : true
         );
@@ -147,7 +144,6 @@ export function ProjectDialog({
         if (!store_service_lines || !Array.isArray(store_service_lines)) {
             return [];
         }
-        // Фильтруем активные сервис лайны, если есть поле is_active, иначе возвращаем все
         return store_service_lines.filter(serviceLine =>
             serviceLine.is_active !== undefined ? serviceLine.is_active : true
         );
@@ -158,7 +154,6 @@ export function ProjectDialog({
         if (!store_task_types || !Array.isArray(store_task_types)) {
             return [];
         }
-        // Фильтруем активные таск тайпы, если есть поле is_active, иначе возвращаем все
         return store_task_types.filter(taskType =>
             taskType.is_active !== undefined ? taskType.is_active : true
         );
@@ -168,7 +163,6 @@ export function ProjectDialog({
     const loadDepartmentMembers = async (departmentId: number) => {
         setIsLoadingMembers(true);
         try {
-            // Отправляем запрос с ID департамента
             getDepartments(departmentId.toString(), {
                 onSuccess: () => {
                     setIsLoadingMembers(false);
@@ -209,7 +203,6 @@ export function ProjectDialog({
     const resetForm = () => {
         setProjectForm({
             name: '',
-            code: '',
             description: '',
             project_color: '#1F4E78',
             status_id: undefined,
@@ -220,6 +213,7 @@ export function ProjectDialog({
             service_line_id: undefined,
             task_type_id: undefined,
             is_chargeable: true,
+            is_code_recurring: false,
             status: undefined,
             country: undefined,
             manager: undefined,
@@ -229,7 +223,7 @@ export function ProjectDialog({
             task_type: undefined
         });
         setCustomColor('#1F4E78');
-        setDepartmentMembers(null); // Сбрасываем members при закрытии
+        setDepartmentMembers(null);
     };
 
     // Синхронизируем customColor с project_color из формы
@@ -257,17 +251,14 @@ export function ProjectDialog({
     const handleDepartmentChange = async (value: string) => {
         const departmentId = value !== "none" ? parseInt(value) : undefined;
 
-        // Обновляем форму
         setProjectForm({
             ...projectForm,
             department_id: departmentId,
-            manager_id: undefined // Сбрасываем выбранного менеджера
+            manager_id: undefined
         });
 
-        // Сбрасываем текущих members
         setDepartmentMembers(null);
 
-        // Если выбран департамент, загружаем его members
         if (departmentId) {
             await loadDepartmentMembers(departmentId);
         }
@@ -276,23 +267,23 @@ export function ProjectDialog({
     // Функция для отправки проекта
     const handleSubmit = async () => {
         // Проверяем обязательные поля
-        if (!projectForm.name || !projectForm.code || !projectForm.description) {
+        if (!projectForm.name || !projectForm.description) {
             toast.error('Please fill in all required fields');
             return;
         }
 
         setIsSubmitting(true);
 
-        // Подготавливаем данные для отправки (без суффиксов _id)
+        // Подготавливаем данные для отправки
         const projectData = {
             // Обязательные поля
             name: projectForm.name,
-            code: projectForm.code,
             description: projectForm.description,
             project_color: projectForm.project_color,
             is_chargeable: projectForm.is_chargeable,
+            is_code_recurring: projectForm.is_code_recurring || false,
 
-            // Опциональные поля (без _id суффиксов)
+            // Опциональные поля
             status: projectForm.status_id ? Number(projectForm.status_id) : undefined,
             country: projectForm.country_id ? Number(projectForm.country_id) : undefined,
             manager: projectForm.manager_id ? Number(projectForm.manager_id) : undefined,
@@ -312,15 +303,8 @@ export function ProjectDialog({
                     onSuccess: (data) => {
                         console.log('Project updated successfully:', data);
                         toast.success('Project updated successfully');
-
-                        // Вызываем getProjects после успешного редактирования
-                        console.log('Calling getProjects to refresh list...');
                         getProjects();
-
-                        // Вызываем колбэк onSave из родительского компонента
                         onSave();
-
-                        // Сбрасываем форму
                         resetForm();
                         onOpenChange(false);
                     },
@@ -339,14 +323,8 @@ export function ProjectDialog({
                 onSuccess: (data) => {
                     console.log('Project created successfully:', data);
                     toast.success('Project created successfully');
-
-                    // Также вызываем getProjects после создания нового проекта
                     getProjects();
-
-                    // Вызываем колбэк onSave из родительского компонента
                     onSave();
-
-                    // Сбрасываем форму
                     resetForm();
                     onOpenChange(false);
                 },
@@ -398,7 +376,6 @@ export function ProjectDialog({
         }
 
         return store_departments.map((department) => {
-            // Адаптируемся к разным форматам данных
             const departmentId = department.id;
             const departmentName = department.name || 'Unknown Department';
 
@@ -505,7 +482,7 @@ export function ProjectDialog({
         ));
     };
 
-    const isFormValid = projectForm.name && projectForm.code && projectForm.description;
+    const isFormValid = projectForm.name && projectForm.description;
     const isLoading = isSubmitting || isSending;
 
     return (
@@ -522,17 +499,6 @@ export function ProjectDialog({
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="project-code">Project Code *</Label>
-                                <Input
-                                    id="project-code"
-                                    value={projectForm.code}
-                                    onChange={(e) => setProjectForm({ ...projectForm, code: e.target.value.toUpperCase() })}
-                                    placeholder="e.g., PROJ-001"
-                                    className="font-mono"
-                                />
-                                <p className="text-xs text-slate-500">Must be unique across all projects</p>
-                            </div>
-                            <div className="space-y-2">
                                 <Label htmlFor="project-name">Project Name *</Label>
                                 <Input
                                     id="project-name"
@@ -540,6 +506,22 @@ export function ProjectDialog({
                                     onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
                                     placeholder="Enter project name"
                                 />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="project-recurring">Recurring *</Label>
+                                <div className="flex items-center space-x-2 h-10">
+                                    <Checkbox
+                                        id="project-recurring"
+                                        checked={projectForm.is_code_recurring || false}
+                                        onCheckedChange={(checked) =>
+                                            setProjectForm({ ...projectForm, is_code_recurring: checked === true })
+                                        }
+                                    />
+                                    <Label htmlFor="project-recurring" className="cursor-pointer text-sm">
+                                        Project is recurring
+                                    </Label>
+                                </div>
+                                {/* <p className="text-xs text-slate-500">Recurring projects will have multiple codes over time</p> */}
                             </div>
                         </div>
 
@@ -739,14 +721,16 @@ export function ProjectDialog({
 
                     {/* Color */}
                     <div className="space-y-2">
-                        <Label>Project Color *</Label>
-                        <div className="grid grid-cols-8 gap-2">
+                        <Label className="text-sm font-medium">Project Color *</Label>
+                        <div className="flex flex-wrap gap-1.5">
                             {predefinedColors.map(color => (
                                 <button
                                     key={color.value}
                                     type="button"
                                     onClick={() => handleColorChange(color.value)}
-                                    className={`p-2 rounded border transition-all hover:scale-105 ${projectForm.project_color === color.value ? 'border-slate-900 ring-2 ring-slate-300' : 'border-slate-200'
+                                    className={`w-6 h-6 rounded transition-all hover:scale-110 ${projectForm.project_color === color.value
+                                        ? 'ring-2 ring-offset-1 ring-slate-900'
+                                        : 'ring-1 ring-slate-200'
                                         }`}
                                     style={{ backgroundColor: color.value }}
                                     title={color.name}
@@ -760,17 +744,17 @@ export function ProjectDialog({
                                 type="color"
                                 value={customColor}
                                 onChange={(e) => handleCustomColorChange(e.target.value)}
-                                className="w-12 h-10"
+                                className="w-8 h-8 p-0 rounded"
                             />
                             <Input
                                 type="text"
                                 value={customColor}
                                 onChange={(e) => handleCustomColorChange(e.target.value)}
-                                className="font-mono text-sm w-24"
+                                className="font-mono text-sm w-24 h-8"
                                 placeholder="#RRGGBB"
                             />
                             <div
-                                className="w-6 h-6 rounded border ml-2"
+                                className="w-6 h-6 rounded border ml-1"
                                 style={{ backgroundColor: projectForm.project_color }}
                                 title="Selected color"
                             />

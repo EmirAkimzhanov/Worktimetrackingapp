@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { api } from '../consts/api';
 import { useUserStore } from '../store/UsersStore';
-import { EditDate, TimeBody } from '../types/timeEntrys';
+import { EditDate, LetterBody, ReminderBody, TimeBody } from '../types/timeEntrys';
 import { TimeEntry } from '../components/TimeTrackerContext';
 import { CalendarEvent } from '../types/calendar';
 
@@ -164,6 +164,44 @@ export const getHolidayCalendar = async () => {
     }
 
     const res = await axios(`${api}api/calendars/calendars/holidays/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+
+export const sendReminder = async (body: ReminderBody) => {
+    const token = useUserStore.getState().access_token;
+    console.log(token);
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.post(`${api}api/accounts/users/send-reminders/`, body,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+export const sendLetter = async (letterBody: LetterBody) => {
+    const token = useUserStore.getState().access_token;
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.post(`${api}api/accounts/users/send-message/`, letterBody,
 
         {
             headers: {

@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TimeTrackerProvider } from './components/TimeTrackerContext';
 import { TimeEntryForm } from './components/TimeEntryForm';
@@ -8,11 +8,15 @@ import { CalendarView } from './components/CalendarView';
 import { StatisticsPanel } from './components/StatisticsPanel';
 import { FilterPanel } from './components/FilterPanel';
 import { AdminPanel } from './components/AdminPanel';
-import { Clock, Settings, FileText } from 'lucide-react';
+import { Clock, Settings, FileText, LogOutIcon } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Toaster } from './components/ui/sonner';
 import { Link, useLocation } from 'react-router-dom';
 import TimeTrackerLogin from './pages/LoginPage';
+import { useUserStore } from './store/UsersStore';
+import { useLogOut } from './hooks/UseAuth';
+import { setupInterceptors } from './axios/axiosConfig';
+import { useTokenMonitor } from './hooks/useTokenMonitor';
 
 // Создаем QueryClient
 const queryClient = new QueryClient({
@@ -33,6 +37,9 @@ function Navigation() {
   const location = useLocation();
   const isTimesheet = location.pathname === '/' || location.pathname === '/timesheet';
   const isAdmin = location.pathname === '/admin';
+
+  const me = useUserStore((state) => state.me);
+  const { mutate: logout } = useLogOut();
 
   return (
     <header className="border-b border-slate-200 shadow-sm" style={{ backgroundColor: '#1F4E78' }}>
@@ -60,14 +67,31 @@ function Navigation() {
                 Timesheet
               </Link>
             </Button>
+
+            {me?.role === 'admin' && (
+              <Button
+                asChild
+                variant={isAdmin ? 'secondary' : 'ghost'}
+                className={isAdmin ? '' : 'text-white hover:bg-white/10'}
+              >
+                <Link to="/admin">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Admin
+                </Link>
+              </Button>
+            )}
+
             <Button
               asChild
-              variant={isAdmin ? 'secondary' : 'ghost'}
-              className={isAdmin ? '' : 'text-white hover:bg-white/10'}
+              variant="destructive"
+              onClick={() => {
+                logout();
+              }}
             >
-              <Link to="/admin">
-                <Settings className="w-4 h-4 mr-2" />
-                Admin
+
+              <Link to="/login">
+                <LogOutIcon className="w-4 h-4 mr-2" />
+                Logout
               </Link>
             </Button>
           </div>
@@ -118,8 +142,20 @@ function LoginLayout() {
   return <Outlet />;
 }
 
-// Главный компонент приложения
-function AppContent() {
+// Компонент с настройкой interceptors
+function AppInitializer() {
+  const navigate = useNavigate();
+
+  // useEffect(() => {
+  //   setupInterceptors(navigate);
+  // }, [navigate]);
+  // useTokenMonitor();
+
+  return null;
+}
+
+// Главный компонент с роутами
+function AppRoutes() {
   return (
     <Routes>
       {/* Маршрут для логина без навбара */}
@@ -140,16 +176,17 @@ function AppContent() {
   );
 }
 
-// Главный компонент с роутером
+// Главный компонент приложения - ТОЛЬКО ОДИН BrowserRouter
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router>
+      <BrowserRouter>
         <TimeTrackerProvider>
-          <AppContent />
+          <AppInitializer />
+          <AppRoutes />
           <Toaster />
         </TimeTrackerProvider>
-      </Router>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }

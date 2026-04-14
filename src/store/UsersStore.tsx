@@ -16,6 +16,7 @@ import { DepartmentsResponse } from "../types/deaprtments";
 import { Calendar } from "../types/calendar";
 import { Monitoring } from "../types/monitoring";
 import { GlobalSettings } from "../types/settings";
+import { Me } from "../types/auth";
 
 // Определяем тип для роли (можно заменить на импорт из types, если есть)
 export interface Role {
@@ -182,6 +183,8 @@ interface UserState {
 
   calendar_holidays: Holidays[] | null;
 
+  me: Me | null;
+
   setUser: (
     user: User,
     tokens: { access_token: string; refresh_token: string },
@@ -190,6 +193,8 @@ interface UserState {
   setAccessToken: (token: string) => void;
   setRefreshToken: (token: string) => void;
   updateUser: (updates: Partial<User>) => void;
+
+  setMe: (me: Me) => void;
 
   setCountries: (countries: Countries) => void;
   setSelectedCountry: (country: CountryWithClients | null) => void;
@@ -320,6 +325,7 @@ export const useUserStore = create<UserState>()(
       monitoring: null,
       globalSettings: null,
       calendar_holidays: null,
+      me: null,
       reports: {
         timeReports: null,
         projectReports: null,
@@ -340,12 +346,15 @@ export const useUserStore = create<UserState>()(
       setAccessToken: (token) => set({ access_token: token }),
       setRefreshToken: (token) => set({ refresh_token: token }),
 
+
       updateUser: (updates) =>
         set((state) => ({
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
       setCountries: (countries) => set({ countries }),
+
+      setMe: (me) => set({ me }),
 
       setMonitoring: (monitoring) => set({ monitoring }), // ✅ Исправлено: правильное имя параметра
 
@@ -717,6 +726,7 @@ export const useUserStore = create<UserState>()(
           roles: null,
           monitoring: null,
           calendar_holidays: null,
+          me: null,
           // ✅ ОЧИЩАЕМ ОДИН СТЕЙТ ОТЧЕТОВ ПРИ ВЫХОДЕ
           reports: {
             timeReports: null,
@@ -735,6 +745,7 @@ export const useUserStore = create<UserState>()(
         access_token: state.access_token,
         refresh_token: state.refresh_token,
         user: state.user,
+        me: state.me,
         selectedCountry: state.selectedCountry,
         client_projects: state.client_projects,
         project_tasks: state.project_tasks,

@@ -2,6 +2,7 @@
 import { api } from '../consts/api';
 import axios from 'axios';
 import { Activate } from '../types/auth';
+import { useUserStore } from '../store/UsersStore';
 
 interface LoginCredentials {
     email: string;
@@ -41,8 +42,8 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
         return {
             access: accessToken,
             refresh: refreshToken,
-            access_token: accessToken,  // для обратной совместимости
-            refresh_token: refreshToken // для обратной совместимости
+            access_token: accessToken,
+            refresh_token: refreshToken
         };
     } catch (error: any) {
         console.error('Login service error:', error);
@@ -65,8 +66,45 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
     }
 };
 
+export const logOut = async () => {
+    const token = useUserStore.getState().access_token;
+    const refresh = useUserStore.getState().refresh_token;
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios.post(`${api}api/accounts/logout/`, { refresh: refresh },
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
 export const activateAccount = async (body: Activate) => {
     const res = await axios.post(`${api}api/accounts/activate/`, body,
+    );
+    return res.data;
+}
+
+export const checkMe = async () => {
+    const token = useUserStore.getState().access_token;
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios(`${api}api/accounts/users/me/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
     );
     return res.data;
 }

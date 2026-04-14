@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Edit, Trash2, FolderKanban, Plus } from 'lucide-react';
+import { Edit, Trash2, FolderKanban, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { Project } from '../TimeTrackerContext';
 import { Client, Department, Position, User } from '../../types/types';
 import { useGetDepartments } from '../../hooks/useDepartments';
 import { useStatus } from '../../hooks/useStatus';
 import { useGetCountries } from '../../hooks/useCountries';
-import { useGetClients, useGetCountryClients } from '../../hooks/useClients';
+import { useGetClients } from '../../hooks/useClients';
 import { useGetServiceLines } from '../../hooks/useServiceLines';
 import { useGetTaskTypes } from '../../hooks/useTasks';
 import { useDeleteProject, useGetProjects } from '../../hooks/useProject';
@@ -38,7 +38,6 @@ export function ProjectsTable({
     entries,
     clients,
     users,
-    positions,
     departments,
     onEdit,
     onAdd,
@@ -53,7 +52,6 @@ export function ProjectsTable({
     const { mutate: deleteProject } = useDeleteProject();
     const store_projects = useUserStore((state) => state.projects);
 
-    // Состояние для попапа подтверждения удаления
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [projectToDelete, setProjectToDelete] = useState<{
         id: string;
@@ -61,6 +59,7 @@ export function ProjectsTable({
         code: string;
         hasEntries: boolean;
     } | null>(null);
+    const [expandedCodeDrawers, setExpandedCodeDrawers] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         getDepartments();
@@ -93,15 +92,20 @@ export function ProjectsTable({
         return user ? `${user.first_name} ${user.last_name}` : 'Unknown';
     };
 
-    const getDepartmentName = (departmentId?: number) => {
-        if (!departmentId) return '-';
-        return departments.find(d => d.id === departmentId)?.name || 'Unknown';
+    const getLastCode = (codes: any[]) => {
+        if (!codes || codes.length === 0) return null;
+        return codes[codes.length - 1];
     };
 
-    // Функция для открытия попапа удаления
+    const toggleCodeDrawer = (projectId: string) => {
+        setExpandedCodeDrawers(prev => ({
+            ...prev,
+            [projectId]: !prev[projectId]
+        }));
+    };
+
     const handleDeleteClick = (project: Project) => {
         const stats = getProjectStats(project.id);
-
         setProjectToDelete({
             id: project.id,
             name: project.name,
@@ -111,20 +115,16 @@ export function ProjectsTable({
         setDeleteDialogOpen(true);
     };
 
-    // Функция для подтверждения удаления
     const handleConfirmDelete = () => {
         if (projectToDelete) {
             deleteProject(projectToDelete.id, {
                 onSuccess: () => {
-                    // После успешного удаления обновляем список проектов
                     getProjects();
-                    // Закрываем попап
                     setDeleteDialogOpen(false);
                     setProjectToDelete(null);
                 },
                 onError: (error) => {
                     console.error('Error deleting project:', error);
-                    // Можно добавить уведомление об ошибке
                     setDeleteDialogOpen(false);
                     setProjectToDelete(null);
                 }
@@ -132,22 +132,19 @@ export function ProjectsTable({
         }
     };
 
-    // Функция для отмены удаления
     const handleCancelDelete = () => {
         setDeleteDialogOpen(false);
         setProjectToDelete(null);
     };
 
-    // Используем projects из store с проверкой на null
     const projects = store_projects || [];
 
     return (
         <div className="space-y-4">
-            {/* Заголовок с кнопкой Add */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Projects</h2>
-                    <p className="text-muted-foreground">Manage all projects in the organization</p>
+                    <h2 className="text-xl font-bold tracking-tight">Projects</h2>
+                    <p className="text-sm text-muted-foreground">Manage all projects in the organization</p>
                 </div>
                 <Button onClick={onAdd} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
@@ -155,19 +152,19 @@ export function ProjectsTable({
                 </Button>
             </div>
 
-            <div className="rounded-md border">
-                <Table>
+            <div className="rounded-md border overflow-x-auto">
+                <Table className="min-w-[800px]">
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Project Code</TableHead>
-                            <TableHead>Project Name</TableHead>
-                            <TableHead>Client</TableHead>
-                            <TableHead>Project Manager</TableHead>
-                            <TableHead>Country</TableHead>
-                            <TableHead>Department</TableHead>
-                            <TableHead className="text-right">Entries</TableHead>
-                            <TableHead className="text-right">Total Hours</TableHead>
-                            <TableHead className="w-24">Actions</TableHead>
+                            <TableHead className="w-[200px]">Project Code</TableHead>
+                            <TableHead className="w-[180px]">Project Name</TableHead>
+                            <TableHead className="w-[150px]">Client</TableHead>
+                            <TableHead className="w-[150px]">Project Manager</TableHead>
+                            <TableHead className="w-[80px]">Country</TableHead>
+                            <TableHead className="w-[100px]">Department</TableHead>
+                            <TableHead className="w-[60px] text-right">Entries</TableHead>
+                            <TableHead className="w-[80px] text-right">Total Hours</TableHead>
+                            <TableHead className="w-[70px]">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -180,52 +177,105 @@ export function ProjectsTable({
                         ) : (
                             projects.map(project => {
                                 const stats = getProjectStats(project.id);
+                                const codes = (project as any).codes || [];
+                                const lastCode = getLastCode(codes);
+                                const isExpanded = expandedCodeDrawers[project.id] || false;
+                                const hasMultipleCodes = codes.length > 1;
+
                                 return (
-                                    <TableRow key={project.id} className="hover:bg-slate-50">
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <FolderKanban className="w-4 h-4 text-slate-500" />
-                                                <span className="font-mono">{project.code}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>{project.name}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className="text-xs">
-                                                {getClientName((project as any).clientId)}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm text-slate-700">
-                                                {getProjectManagerName((project as any).projectManager)}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm">{(project as any).country || '-'}</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm">{(project as any).department || '-'}</span>
-                                        </TableCell>
-                                        <TableCell className="text-right">{stats.entriesCount}</TableCell>
-                                        <TableCell className="text-right">{stats.totalHours}h</TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => onEdit(project)}
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleDeleteClick(project)}
-                                                >
-                                                    <Trash2 className="w-4 h-4 text-red-500" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
+                                    <React.Fragment key={project.id}>
+                                        <TableRow className="hover:bg-slate-50">
+                                            <TableCell className="py-2">
+                                                <div className="flex items-center gap-1">
+                                                    <FolderKanban className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                                                    <div className="flex flex-col gap-0.5">
+                                                        {lastCode ? (
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="font-mono text-xs">{lastCode.code}</span>
+                                                                {hasMultipleCodes && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-5 w-5 p-0"
+                                                                        onClick={() => toggleCodeDrawer(project.id)}
+                                                                    >
+                                                                        {isExpanded ? (
+                                                                            <ChevronUp className="h-2.5 w-2.5" />
+                                                                        ) : (
+                                                                            <ChevronDown className="h-2.5 w-2.5" />
+                                                                        )}
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">No codes</span>
+                                                        )}
+
+                                                        {isExpanded && hasMultipleCodes && (
+                                                            <div className="mt-1 space-y-0.5 pl-2 border-l border-slate-200">
+                                                                {codes.slice(0, -1).map((codeItem: any, index: number) => (
+                                                                    <div key={codeItem.id || index} className="flex items-center gap-1">
+                                                                        <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
+                                                                        <span className="font-mono text-[10px] text-slate-600">
+                                                                            {codeItem.code}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-2">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-sm font-medium">{project.name}</span>
+                                                    {project.description && (
+                                                        <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
+                                                            {project.description}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-2">
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                                    {getClientName((project as any).clientId)}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="py-2">
+                                                <span className="text-xs text-slate-700">
+                                                    {getProjectManagerName((project as any).projectManager)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="py-2">
+                                                <span className="text-xs">{(project as any).country || '-'}</span>
+                                            </TableCell>
+                                            <TableCell className="py-2">
+                                                <span className="text-xs">{getDepartmentName((project as any).department)}</span>
+                                            </TableCell>
+                                            <TableCell className="py-2 text-right text-xs">{stats.entriesCount}</TableCell>
+                                            <TableCell className="py-2 text-right text-xs">{stats.totalHours}h</TableCell>
+                                            <TableCell className="py-2">
+                                                <div className="flex gap-0.5">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7"
+                                                        onClick={() => onEdit(project)}
+                                                    >
+                                                        <Edit className="w-3.5 h-3.5" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7"
+                                                        onClick={() => handleDeleteClick(project)}
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    </React.Fragment>
                                 );
                             })
                         )}
@@ -233,7 +283,6 @@ export function ProjectsTable({
                 </Table>
             </div>
 
-            {/* Попап подтверждения удаления проекта */}
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -280,4 +329,10 @@ export function ProjectsTable({
             </AlertDialog>
         </div>
     );
+}
+
+// Добавьте эту функцию, если она отсутствует
+function getDepartmentName(departmentId?: number) {
+    if (!departmentId) return '-';
+    return departmentId.toString(); // Замените на реальную логику получения имени департамента
 }

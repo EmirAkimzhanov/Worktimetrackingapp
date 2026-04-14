@@ -17,6 +17,7 @@ import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useSendReminder } from '../../../hooks/useTimeEntry';
 
 // Моковые уведомления пока оставим, так как для них еще нет API
 const mockNotifications: TimeSheetNotification[] = [
@@ -56,6 +57,7 @@ export default function MonitoringPage() {
 
     const { mutate: getMonitoring, isPending: isMonitoringLoading } = useGetMonitoring();
     const { mutate: getCountries } = useGetCountries();
+    const { mutate: sendReminder } = useSendReminder();
     const countries = useUserStore((state) => state.countries);
     const monitoring = useUserStore((state) => state.monitoring);
 
@@ -313,14 +315,11 @@ export default function MonitoringPage() {
                         <Calendar className="w-4 h-4" />
                         Monitoring
                     </TabsTrigger>
-                    <TabsTrigger value="notifications" className="gap-2">
-                        <Bell className="w-4 h-4" />
-                        Notifications
-                    </TabsTrigger>
-                    <TabsTrigger value="settings" className="gap-2">
+
+                    {/* <TabsTrigger value="settings" className="gap-2">
                         <Settings className="w-4 h-4" />
                         Settings
-                    </TabsTrigger>
+                    </TabsTrigger> */}
                 </TabsList>
 
                 <TabsContent value="monitoring" className="space-y-4">
@@ -328,11 +327,12 @@ export default function MonitoringPage() {
                         data={displayData}
                         onSendReminder={(userIds, period) => {
                             console.log('Send reminder to:', userIds, 'for period:', period);
-                            toast.success(`Reminder sent to ${userIds.length} user(s)`);
                         }}
                         onViewDetails={(userId) => {
                             console.log('View details for user:', userId);
                         }}
+                        periodStart={startDate}
+                        periodEnd={endDate}
                     />
                 </TabsContent>
 

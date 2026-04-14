@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
-import { useActivateAccount, useLogin } from '../hooks/UseAuth';
+import { useActivateAccount, useCheckMe, useLogin } from '../hooks/UseAuth';
 
 const LoginContainer = styled.div`
   min-height: 100vh;
@@ -286,6 +286,8 @@ const TimeTrackerLogin = () => {
   const { mutate: login, isPending: isLoginPending, error: loginError } = useLogin();
   const { mutate: activate, isPending: isActivatePending, error: activateError, isSuccess: isActivateSuccess } = useActivateAccount();
 
+  const { mutate: checkMe } = useCheckMe();
+
   const calculatePasswordStrength = (pass: string) => {
     let strength = 0;
     if (pass.length >= 8) strength++;
@@ -316,7 +318,18 @@ const TimeTrackerLogin = () => {
       return;
     }
 
-    login({ email, password });
+    login(
+      { email, password },
+      {
+        onSuccess: async () => {
+          await checkMe();
+          setSuccessMessage('Login successful');
+        },
+        onError: () => {
+          setFormError('Invalid email or password');
+        }
+      }
+    );
   };
 
   const handleActivateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -602,3 +615,5 @@ const TimeTrackerLogin = () => {
 };
 
 export default TimeTrackerLogin;
+
+

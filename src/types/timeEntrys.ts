@@ -53,3 +53,16 @@ export interface Holidays {
     is_recurring: boolean;
     country: number;
 }
+
+
+export interface LetterBody {
+    email: string;
+    subject: string;
+    body: string;
+}
+
+export interface ReminderBody {
+    emails: string[];
+    start_date: string;
+    end_date: string;
+}

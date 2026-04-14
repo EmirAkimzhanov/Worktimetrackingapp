@@ -50,7 +50,6 @@ export function UserDialog({
 
     // Преобразуем countries в массив, если это объект
     const countries = useMemo(() => {
-        console.log('Raw countries data:', countriesData);
 
         if (!countriesData) return [];
 
@@ -209,7 +208,6 @@ export function UserDialog({
     };
 
     // Для отладки
-    console.log('Countries after conversion:', countries);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

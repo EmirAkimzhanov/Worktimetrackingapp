@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, sendCalendar, sendTimeEntry } from "../services/timeEntry";
-import { EditDate, TimeBody } from '../types/timeEntrys';
+import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, sendCalendar, sendLetter, sendReminder, sendTimeEntry } from "../services/timeEntry";
+import { EditDate, LetterBody, ReminderBody, TimeBody } from '../types/timeEntrys';
 import { useUserStore } from '../store/UsersStore';
 import { CalendarEvent } from '../types/calendar';
 
@@ -104,6 +104,28 @@ export const useGetHolidayTimeEntrys = () => {
         mutationFn: () => getHolidayCalendar(),
         onSuccess: (data) => {
             setCalendarHolidays(data);
+        },
+        onError: (error) => {
+            console.error("Send supports error:", error);
+        },
+    });
+};
+
+export const useSendReminder = () => {
+    return useMutation({
+        mutationFn: (body: ReminderBody) => sendReminder(body),
+        onSuccess: (data) => {
+        },
+        onError: (error) => {
+            console.error("Send supports error:", error);
+        },
+    });
+};
+
+export const useSendLetter = () => {
+    return useMutation({
+        mutationFn: (letterBody: LetterBody) => sendLetter(letterBody),
+        onSuccess: (data) => {
         },
         onError: (error) => {
             console.error("Send supports error:", error);
