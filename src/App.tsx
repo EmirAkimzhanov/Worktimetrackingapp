@@ -146,9 +146,9 @@ function LoginLayout() {
 function AppInitializer() {
   const navigate = useNavigate();
 
-  // useEffect(() => {
-  //   setupInterceptors(navigate);
-  // }, [navigate]);
+  useEffect(() => {
+    setupInterceptors(navigate);
+  }, [navigate]);
   // useTokenMonitor();
 
   return null;
