@@ -557,31 +557,31 @@ const SimpleDepartmentsTables = () => {
       {(!store_tasks ||
         store_tasks.length === 0 ||
         visibleTaskTypes.length === 0) && (
-        <Card className="text-center py-12 mt-8">
-          <CardContent>
-            <div className="text-gray-400 mb-4">
-              <Plus className="w-16 h-16 mx-auto" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">
-              {!store_tasks || store_tasks.length === 0
-                ? "No Tasks Yet"
-                : "No matching tasks"}
-            </h3>
-            <p className="text-gray-500 mb-6">
-              {!store_tasks || store_tasks.length === 0
-                ? "Add your first task to get started"
-                : "Try adjusting your search query"}
-            </p>
-            <Button
-              onClick={() => setNewTaskDialogOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add First Task
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          <Card className="text-center py-12 mt-8">
+            <CardContent>
+              <div className="text-gray-400 mb-4">
+                <Plus className="w-16 h-16 mx-auto" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                {!store_tasks || store_tasks.length === 0
+                  ? "No Tasks Yet"
+                  : "No matching tasks"}
+              </h3>
+              <p className="text-gray-500 mb-6">
+                {!store_tasks || store_tasks.length === 0
+                  ? "Add your first task to get started"
+                  : "Try adjusting your search query"}
+              </p>
+              <Button
+                onClick={() => setNewTaskDialogOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add First Task
+              </Button>
+            </CardContent>
+          </Card>
+        )}
     </div>
   );
 };

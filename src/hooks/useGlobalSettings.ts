@@ -4,33 +4,120 @@ import { createGrade, deleteGrade, editGrade } from "../services/grade";
 import { getGlobalSettings, sendGlobalSettings } from "../services/globalSettings";
 import { GlobalSet } from "../types/GlobalSettings";
 
+// ========== КЭШ ДЛЯ ГЛОБАЛЬНЫХ НАСТРОЕК ==========
+
+// Кэш для глобальных настроек по country_id
+const globalSettingsCache = new Map<string, { data: GlobalSet; timestamp: number }>();
+const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
+
+// Функции очистки кэша
+const clearGlobalSettingsCache = (countryId?: string) => {
+    if (countryId) {
+        globalSettingsCache.delete(countryId);
+        console.log(`Global settings cache cleared for country: ${countryId}`);
+    } else {
+        globalSettingsCache.clear();
+        console.log('All global settings cache cleared');
+    }
+};
+
+// Функция получения кэшированных данных
+const getCachedGlobalSettings = (countryId: string): GlobalSet | null => {
+    const now = Date.now();
+    const cached = globalSettingsCache.get(countryId);
+
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+        console.log(`Returning cached global settings for country: ${countryId}`);
+        return cached.data;
+    }
+
+    return null;
+};
+
+// ========== ХУКИ С КЭШИРОВАНИЕМ ==========
+
 export const useGetGlobalSettings = () => {
     const setGlobalSettings = useUserStore((state) => state.setGlobalSettings)
 
     return useMutation({
-        mutationFn: (country_id: string) => getGlobalSettings(country_id),
-        onSuccess: (data) => {
-            setGlobalSettings(data)
-            console.log(data);
+        mutationFn: async (country_id: string) => {
+            // Проверяем кэш
+            const cached = getCachedGlobalSettings(country_id);
+            if (cached) {
+                return cached;
+            }
+
+            // Загружаем новые данные
+            console.log(`Fetching fresh global settings for country: ${country_id}`);
+            const data = await getGlobalSettings(country_id);
+            globalSettingsCache.set(country_id, { data, timestamp: Date.now() });
+            return data;
+        },
+        onSuccess: (data, country_id) => {
+            setGlobalSettings(data);
+            console.log(`Global settings loaded for country ${country_id}:`, data);
         },
         onError: (error) => {
-            console.error("Send supports error:", error);
+            console.error("Get global settings error:", error);
         },
     });
 };
-
 
 export const useSetGlobalSettings = () => {
     const setGlobalSettings = useUserStore((state) => state.setGlobalSettings)
 
     return useMutation({
-        mutationFn: ({ country_id, globalSet }: { country_id: string, globalSet: GlobalSet }) => sendGlobalSettings(country_id, globalSet),
-        onSuccess: (data) => {
-            setGlobalSettings(data)
-            console.log(data);
+        mutationFn: async ({ country_id, globalSet }: { country_id: string, globalSet: GlobalSet }) => {
+            const result = await sendGlobalSettings(country_id, globalSet);
+            // После сохранения обновляем кэш новыми данными
+            globalSettingsCache.set(country_id, { data: result, timestamp: Date.now() });
+            return result;
+        },
+        onSuccess: (data, { country_id }) => {
+            setGlobalSettings(data);
+            console.log(`Global settings saved for country ${country_id}:`, data);
         },
         onError: (error) => {
-            console.error("Send supports error:", error);
+            console.error("Set global settings error:", error);
         },
     });
+};
+
+// ========== ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ==========
+
+export const globalSettingsCacheUtils = {
+    clearCache: clearGlobalSettingsCache,
+    clearForCountry: (countryId: string) => clearGlobalSettingsCache(countryId),
+    clearAll: () => clearGlobalSettingsCache(),
+    getCache: (countryId: string) => globalSettingsCache.get(countryId),
+    isCacheValid: (countryId: string) => {
+        const cached = globalSettingsCache.get(countryId);
+        if (!cached) return false;
+        const now = Date.now();
+        return (now - cached.timestamp) < CACHE_DURATION;
+    },
+    getCacheAge: (countryId: string) => {
+        const cached = globalSettingsCache.get(countryId);
+        if (!cached) return null;
+        const now = Date.now();
+        return Math.floor((now - cached.timestamp) / 1000); // в секундах
+    },
+    getAllCacheStats: () => {
+        const now = Date.now();
+        const stats: { [key: string]: { age: number; isValid: boolean } } = {};
+
+        globalSettingsCache.forEach((value, key) => {
+            const age = Math.floor((now - value.timestamp) / 1000);
+            stats[key] = {
+                age,
+                isValid: age < CACHE_DURATION / 1000
+            };
+        });
+
+        return {
+            size: globalSettingsCache.size,
+            items: stats,
+            cacheDurationMinutes: CACHE_DURATION / 60000
+        };
+    }
 };
