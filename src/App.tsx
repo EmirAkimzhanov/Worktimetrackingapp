@@ -17,6 +17,8 @@ import { useUserStore } from './store/UsersStore';
 import { useLogOut } from './hooks/UseAuth';
 import { setupInterceptors } from './axios/axiosConfig';
 import { useTokenMonitor } from './hooks/useTokenMonitor';
+import MobileBlocker from './MobileBlocker';
+import { useMobileDetect } from './hooks/useMobileDetected';
 
 // Создаем QueryClient
 const queryClient = new QueryClient({
@@ -127,6 +129,12 @@ function AdminPage() {
 
 // Layout с навбаром для защищенных роутов
 function ProtectedLayout() {
+  const token = localStorage.getItem('access_token');
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F8FAFC' }}>
       <Navigation />
@@ -178,6 +186,11 @@ function AppRoutes() {
 
 // Главный компонент приложения - ТОЛЬКО ОДИН BrowserRouter
 export default function App() {
+  const isMobile = useMobileDetect();
+
+  if (isMobile) {
+    return <MobileBlocker />;
+  }
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

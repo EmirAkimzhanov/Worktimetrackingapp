@@ -74,6 +74,7 @@ export const useLogOut = () => {
 
     return useMutation({
         mutationFn: () => logOut(),
+
         onSuccess: (data) => {
         },
         onError: (error: Error) => {

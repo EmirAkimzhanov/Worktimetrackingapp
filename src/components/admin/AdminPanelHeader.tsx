@@ -53,13 +53,12 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
-                                style={{ color: 'black' }}
                                 onClick={() => onTabChange(tab.id as any)}
                                 className={`
                                     flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors
                                     ${activeTab === tab.id
-                                        ? 'bg-white text-black font-medium' // Изменено с text-blue-800 на text-black
-                                        : 'text-blue-100 hover:text-white hover:bg-blue-600/50'
+                                        ? 'bg-white text-primary font-medium'
+                                        : 'text-blue-100 hover:text-black hover:bg-blue-600/50'
                                     }
                                 `}
                             >
@@ -80,6 +79,6 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
                     </Button> */}
                 </div>
             </div>
-        </CardHeader>
+        </CardHeader >
     );
 }
