@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TimeTrackerProvider } from './components/TimeTrackerContext';
 import { TimeEntryForm } from './components/TimeEntryForm';
@@ -8,17 +8,17 @@ import { CalendarView } from './components/CalendarView';
 import { StatisticsPanel } from './components/StatisticsPanel';
 import { FilterPanel } from './components/FilterPanel';
 import { AdminPanel } from './components/AdminPanel';
-import { Clock, Settings, FileText, LogOutIcon } from 'lucide-react';
+import { Clock, Settings, FileText, LogOutIcon, Home, AlertCircle, Search } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Toaster } from './components/ui/sonner';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import TimeTrackerLogin from './pages/LoginPage';
 import { useUserStore } from './store/UsersStore';
 import { useLogOut } from './hooks/UseAuth';
 import { setupInterceptors } from './axios/axiosConfig';
-import { useTokenMonitor } from './hooks/useTokenMonitor';
 import MobileBlocker from './MobileBlocker';
 import { useMobileDetect } from './hooks/useMobileDetected';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 // Создаем QueryClient
 const queryClient = new QueryClient({
@@ -33,6 +33,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Компонент страницы 404 с анимированным числом
+
 
 // Компонент навигации
 function Navigation() {
@@ -90,7 +93,6 @@ function Navigation() {
                 logout();
               }}
             >
-
               <Link to="/login">
                 <LogOutIcon className="w-4 h-4 mr-2" />
                 Logout
@@ -118,8 +120,15 @@ function TimesheetPage() {
   );
 }
 
-// Компонент для страницы Admin
+// Компонент для страницы Admin с проверкой прав
 function AdminPage() {
+  const me = useUserStore((state) => state.me);
+
+  // Если не админ, показываем 404
+  if (me?.role !== 'admin') {
+    return <NotFoundPage />;
+  }
+
   return (
     <div className="space-y-6">
       <AdminPanel />
@@ -129,10 +138,17 @@ function AdminPage() {
 
 // Layout с навбаром для защищенных роутов
 function ProtectedLayout() {
+  const location = useLocation();
   const token = localStorage.getItem('access_token');
+  const is404Page = location.pathname === '/404';
 
-  if (!token) {
+  if (!token && !is404Page) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Если это страница 404, показываем только ее без навбара
+  if (is404Page) {
+    return <Outlet />;
   }
 
   return (
@@ -157,9 +173,19 @@ function AppInitializer() {
   useEffect(() => {
     setupInterceptors(navigate);
   }, [navigate]);
-  // useTokenMonitor();
 
   return null;
+}
+
+// Компонент для защиты админ маршрута
+function AdminRoute() {
+  const me = useUserStore((state) => state.me);
+
+  if (me?.role !== 'admin') {
+    return <NotFoundPage />;
+  }
+
+  return <AdminPage />;
 }
 
 // Главный компонент с роутами
@@ -175,16 +201,17 @@ function AppRoutes() {
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<TimesheetPage />} />
         <Route path="/timesheet" element={<TimesheetPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin" element={<AdminRoute />} />
+        <Route path="/404" element={<NotFoundPage />} />
       </Route>
 
-      {/* Редирект для несуществующих маршрутов */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Редирект всех несуществующих маршрутов на 404 */}
+      <Route path="*" element={<Navigate to="/404" replace />} />
     </Routes>
   );
 }
 
-// Главный компонент приложения - ТОЛЬКО ОДИН BrowserRouter
+// Главный компонент приложения
 export default function App() {
   const isMobile = useMobileDetect();
 
