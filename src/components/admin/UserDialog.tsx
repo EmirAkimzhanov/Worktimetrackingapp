@@ -207,11 +207,9 @@ export function UserDialog({
         }
     };
 
-    // Для отладки
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
                     <DialogDescription>
@@ -219,6 +217,7 @@ export function UserDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                    {/* Первая строка: First Name и Last Name */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="first_name">First Name *</Label>
@@ -247,43 +246,47 @@ export function UserDialog({
                             )}
                         </div>
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email *</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            value={userForm.email || ''}
-                            onChange={(e) => handleEmailChange(e.target.value)}
-                            placeholder="Enter email address"
-                            className={errors.email ? 'border-red-500' : ''}
-                        />
-                        {errors.email && (
-                            <p className="text-sm text-red-500">{errors.email}</p>
-                        )}
+
+                    {/* Вторая строка: Email и Grade */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Email *</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                value={userForm.email || ''}
+                                onChange={(e) => handleEmailChange(e.target.value)}
+                                placeholder="Enter email address"
+                                className={errors.email ? 'border-red-500' : ''}
+                            />
+                            {errors.email && (
+                                <p className="text-sm text-red-500">{errors.email}</p>
+                            )}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="grade">Grade *</Label>
+                            <Select
+                                value={safeToString(userForm.grade_id)}
+                                onValueChange={(value: string) =>
+                                    setUserForm({ ...userForm, grade_id: parseInt(value) })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select grade" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {user_grades.map(grade => (
+                                        <SelectItem key={grade.id} value={safeToString(grade.id)}>
+                                            {grade.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="grade">Grade *</Label>
-                        <Select
-                            value={safeToString(userForm.grade_id)}
-                            onValueChange={(value: string) =>
-                                setUserForm({ ...userForm, grade_id: parseInt(value) })
-                            }
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select grade" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {user_grades.map(grade => (
-                                    <SelectItem key={grade.id} value={safeToString(grade.id)}>
-                                        {grade.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4">
+                    {/* Третья строка: Position и Department */}
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="position">Position *</Label>
                             <Select
@@ -324,6 +327,10 @@ export function UserDialog({
                                 </SelectContent>
                             </Select>
                         </div>
+                    </div>
+
+                    {/* Четвертая строка: Department Role и Country */}
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="department_role">Department Role *</Label>
                             <Select
@@ -344,35 +351,35 @@ export function UserDialog({
                                 </SelectContent>
                             </Select>
                         </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="country">Country *</Label>
-                        <Select
-                            value={safeToString(userForm.country_id)}
-                            onValueChange={(value: string) =>
-                                setUserForm({ ...userForm, country_id: parseInt(value) })
-                            }
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select country" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {countries.length > 0 ? (
-                                    countries.map((country: Country) => (
-                                        <SelectItem key={country.id} value={safeToString(country.id)}>
-                                            {country.name} {country.code ? `(${country.code})` : ''}
+                        <div className="space-y-2">
+                            <Label htmlFor="country">Country *</Label>
+                            <Select
+                                value={safeToString(userForm.country_id)}
+                                onValueChange={(value: string) =>
+                                    setUserForm({ ...userForm, country_id: parseInt(value) })
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select country" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {countries.length > 0 ? (
+                                        countries.map((country: Country) => (
+                                            <SelectItem key={country.id} value={safeToString(country.id)}>
+                                                {country.name} {country.code ? `(${country.code})` : ''}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <SelectItem value="1" disabled>
+                                            No countries available
                                         </SelectItem>
-                                    ))
-                                ) : (
-                                    <SelectItem value="1" disabled>
-                                        No countries available
-                                    </SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
+                    {/* Пятая строка: System Role и Active Status */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="role">System Role *</Label>

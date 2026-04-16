@@ -398,46 +398,18 @@ export function CalendarView() {
         </CardContent>
       </Card>
 
-      {/* Модальное окно с деталями дня - версия с пагинацией */}
+      {/* Модальное окно с деталями дня - резиновая версия без скроллов */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
-          {/* Фиксированный заголовок с пагинацией */}
-          <DialogHeader className="p-6 border-b shrink-0">
-            <div className="flex items-center justify-between">
+        <DialogContent className="w-[90vw] h-[90vh] flex flex-col p-0">
+          {/* Заголовок */}
+          <DialogHeader className="p-3 border-b shrink-0">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <DialogTitle className="flex items-center gap-2 text-xl">
-                <CalendarDays className="w-5 h-5" />
-                {selectedDate && formatDate(selectedDate)}
+                <CalendarDays className="w-5 h-5 flex-shrink-0" />
+                <span>{selectedDate && formatDate(selectedDate)}</span>
               </DialogTitle>
-
-              {/* Индикатор страницы и навигация */}
-              {selectedDateEntries.length > 0 && (
-                <div className="flex items-center gap-4" style={{ marginTop: '15px' }}>
-                  <span className="text-sm text-gray-500">
-                    {currentEntryIndex + 1} of {selectedDateEntries.length} tasks
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handlePreviousEntry}
-                      disabled={currentEntryIndex === 0}
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleNextEntry}
-                      disabled={currentEntryIndex === selectedDateEntries.length - 1}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Краткая статистика дня */}
             {selectedDateEntries.length > 0 && (
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                 <span>Total: {selectedDateEntries.reduce((sum, e) => sum + (e.hours || 0), 0).toFixed(1)}h</span>
@@ -447,147 +419,137 @@ export function CalendarView() {
             )}
           </DialogHeader>
 
-          {/* Прокручиваемое содержимое с текущей записью */}
-          <div className="flex-1 overflow-y-auto p-6">
+          {/* Содержимое */}
+          <div className="flex-1 flex flex-col p-3 overflow-y-auto">
             {selectedDateEntries.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <CalendarIcon className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                <p className="text-lg">No time entries for this day</p>
+              <div className="flex-1 flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <CalendarIcon className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                  <p className="text-lg">No time entries for this day</p>
+                </div>
               </div>
             ) : (
               currentEntry && (
-                <div className="space-y-4">
-                  {/* Карточка текущей записи */}
-                  <div className={`border rounded-lg overflow-hidden ${isHolidayEntry(currentEntry) ? 'border-red-200' : ''}`}>
-                    {/* Заголовок с проектом */}
-                    <div className={`p-6 border-b ${isHolidayEntry(currentEntry) ? 'bg-red-50' : 'bg-white'}`}>
-                      <div className="flex items-center gap-4">
+                <div className="flex-1 flex flex-col h-full">
+                  {/* Карточка проекта - разбита на две колонки */}
+                  <div style={{ marginBottom: '15px', padding: '10px' }} className={`p-5 rounded-xl mb-6 ${isHolidayEntry(currentEntry) ? 'bg-red-50 border border-red-100' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100'}`}>
+                    <div className="flex gap-4">
+                      {/* Левая колонка - иконка и название */}
+                      <div className="flex items-start gap-4 flex-1">
                         <div
-                          className="w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: getProjectColor(currentEntry) + '20' }}
+                          className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                          style={{ backgroundColor: getProjectColor(currentEntry) + '20', border: `1px solid ${getProjectColor(currentEntry)}30` }}
                         >
                           {isHolidayEntry(currentEntry) ? (
-                            <Gift className="w-8 h-8" style={{ color: getProjectColor(currentEntry) }} />
+                            <Gift className="w-7 h-7" style={{ color: getProjectColor(currentEntry) }} />
                           ) : (
-                            <FolderKanban className="w-8 h-8" style={{ color: getProjectColor(currentEntry) }} />
+                            <FolderKanban className="w-7 h-7" style={{ color: getProjectColor(currentEntry) }} />
                           )}
                         </div>
                         <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <h2 className="text-2xl font-bold text-gray-900">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="text-xl font-bold text-gray-800">
                               {getProjectName(currentEntry)}
                             </h2>
-                            {!isHolidayEntry(currentEntry) && currentEntry.hours > 0 && (
-                              <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
-                                <Clock className="w-5 h-5 text-blue-600" />
-                                <span className="text-2xl font-bold text-blue-700">
-                                  {currentEntry.hours?.toFixed(1)}h
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-3 flex-wrap">
                             <span
-                              className="px-3 py-1 rounded-full text-sm"
+                              className="px-2 py-0.5 rounded-md text-xs font-mono"
                               style={{
-                                backgroundColor: getProjectColor(currentEntry) + '20',
-                                color: getProjectColor(currentEntry)
+                                backgroundColor: getProjectColor(currentEntry) + '15',
+                                color: getProjectColor(currentEntry),
+                                border: `1px solid ${getProjectColor(currentEntry)}30`
                               }}
                             >
                               {getProjectCode(currentEntry)}
                             </span>
-                            <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm">
-                              {getTaskType(currentEntry)}
-                            </span>
-                            {!isHolidayEntry(currentEntry) && currentEntry.client && (
-                              <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm">
-                                {getClient(currentEntry)}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Детали записи */}
-                    <div className="p-6 bg-gray-50">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <CalendarDays className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm font-medium text-gray-700">Date</span>
-                          </div>
-                          <p className="text-gray-900 bg-white p-3 rounded-lg border">
-                            {new Date(currentEntry.date).toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              month: 'long',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                          </p>
-                        </div>
-
-                        {!isHolidayEntry(currentEntry) && currentEntry.user && (
+                      {/* Правая колонка - тип задачи, клиент, часы */}
+                      <div className="flex-1">
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <User className="w-4 h-4 text-gray-500" />
-                              <span className="text-sm font-medium text-gray-700">User</span>
+                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Task Type</div>
+                            <div className="flex items-center gap-1.5 text-sm text-gray-700">
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>{getTaskType(currentEntry)}</span>
                             </div>
-                            <p className="text-gray-900 bg-white p-3 rounded-lg border">
-                              {currentEntry.user}
-                            </p>
                           </div>
-                        )}
-                      </div>
 
-                      {currentEntry.task && (
-                        <div className="mt-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            {isHolidayEntry(currentEntry) ? (
-                              <Gift className="w-4 h-4 text-red-500" />
-                            ) : (
-                              <FileText className="w-4 h-4 text-gray-500" />
-                            )}
-                            <span className="text-sm font-medium text-gray-700">
-                              {isHolidayEntry(currentEntry) ? 'Holiday Name' : 'Task'}
-                            </span>
-                          </div>
-                          <p className={`text-gray-900 bg-white p-4 rounded-lg border ${isHolidayEntry(currentEntry) ? 'border-red-200' : ''}`}>
-                            {getTaskName(currentEntry)}
-                          </p>
+                          {!isHolidayEntry(currentEntry) && currentEntry.client && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Client</div>
+                              <div className="flex items-center gap-1.5 text-sm text-gray-700">
+                                <User className="w-3.5 h-3.5" />
+                                <span>{getClient(currentEntry)}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {!isHolidayEntry(currentEntry) && currentEntry.hours > 0 && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Hours</div>
+                              <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-700">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>{currentEntry.hours?.toFixed(1)} hours</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-
-                      {currentEntry.description && (
-                        <div className="mt-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <FileText className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm font-medium text-gray-700">Description</span>
-                          </div>
-                          <p className="text-gray-900 bg-white p-4 rounded-lg border whitespace-pre-wrap min-h-[100px]">
-                            {currentEntry.description}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Дополнительная информация */}
-                      <div className="mt-4 pt-4 border-t flex flex-wrap gap-4 text-sm text-gray-500">
-                        {!isHolidayEntry(currentEntry) && currentEntry.country && (
-                          <span>📍 Country: {currentEntry.country}</span>
-                        )}
-                        {!isHolidayEntry(currentEntry) && currentEntry.weekends_included !== undefined && (
-                          <span>📅 Weekends: {currentEntry.weekends_included ? 'Included' : 'Excluded'}</span>
-                        )}
-                        <span>🆔 ID: {currentEntry.id}</span>
-                        {isHolidayEntry(currentEntry) && (
-                          <span>🎉 This is a public holiday</span>
-                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Навигация снизу (дубль для удобства) */}
-                  <div className="flex items-center justify-between pt-2">
+                  {/* Детали - сетка 2 колонки */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                    {/* Date блок */}
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Date</div>
+                      <div className="text-gray-900">
+                        {new Date(currentEntry.date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </div>
+                    </div>
+
+                    {/* User блок */}
+                    {!isHolidayEntry(currentEntry) && currentEntry.user && (
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">User</div>
+                        <div className="text-gray-900">
+                          {currentEntry.user}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Task блок */}
+                    {currentEntry.task && (
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                          {isHolidayEntry(currentEntry) ? 'Holiday Name' : 'Task'}
+                        </div>
+                        <div className="text-gray-900">
+                          {getTaskName(currentEntry)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Description блок - на всю ширину если есть место */}
+                    {currentEntry.description && (
+                      <div className="md:col-span-2 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Description</div>
+                        <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {currentEntry.description}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Навигация */}
+                  <div className="flex items-center justify-between pt-6 mt-6  border-gray-200">
                     <Button
                       variant="outline"
                       onClick={handlePreviousEntry}
@@ -613,13 +575,6 @@ export function CalendarView() {
                 </div>
               )
             )}
-          </div>
-
-          {/* Фиксированный футер */}
-          <div className="border-t p-4 flex justify-end shrink-0 bg-white">
-            <Button onClick={() => setIsDetailsOpen(false)} size="lg" variant="default">
-              Close
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -495,36 +495,36 @@ export function ProjectDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    {/* Basic Information */}
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="project-name">Project Name *</Label>
-                                <Input
-                                    id="project-name"
-                                    value={projectForm.name}
-                                    onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
-                                    placeholder="Enter project name"
+                    {/* Basic Information - Project Name, Description, Color в одной сетке */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="project-name">Project Name *</Label>
+                            <Input
+                                id="project-name"
+                                value={projectForm.name}
+                                onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })}
+                                placeholder="Enter project name"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="project-recurring">Recurring *</Label>
+                            <div className="flex items-center space-x-2 h-10">
+                                <Checkbox
+                                    id="project-recurring"
+                                    checked={projectForm.is_code_recurring || false}
+                                    onCheckedChange={(checked) =>
+                                        setProjectForm({ ...projectForm, is_code_recurring: checked === true })
+                                    }
                                 />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="project-recurring">Recurring *</Label>
-                                <div className="flex items-center space-x-2 h-10">
-                                    <Checkbox
-                                        id="project-recurring"
-                                        checked={projectForm.is_code_recurring || false}
-                                        onCheckedChange={(checked) =>
-                                            setProjectForm({ ...projectForm, is_code_recurring: checked === true })
-                                        }
-                                    />
-                                    <Label htmlFor="project-recurring" className="cursor-pointer text-sm">
-                                        Project is recurring
-                                    </Label>
-                                </div>
-                                {/* <p className="text-xs text-slate-500">Recurring projects will have multiple codes over time</p> */}
+                                <Label htmlFor="project-recurring" className="cursor-pointer text-sm">
+                                    Project is recurring
+                                </Label>
                             </div>
                         </div>
+                    </div>
 
+                    {/* Description и Color в одной строке */}
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="project-description">Project Description *</Label>
                             <Textarea
@@ -532,14 +532,55 @@ export function ProjectDialog({
                                 value={projectForm.description}
                                 onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })}
                                 placeholder="Enter project description..."
-                                rows={2}
-                                className="resize-none"
+                                rows={3}
+                                className="resize-none overflow-y-auto"
+                                style={{ height: '80px' }}
                             />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium">Project Color *</Label>
+                            <div className="flex flex-wrap gap-1.5">
+                                {predefinedColors.map(color => (
+                                    <button
+                                        key={color.value}
+                                        type="button"
+                                        onClick={() => handleColorChange(color.value)}
+                                        className={`w-6 h-6 rounded transition-all hover:scale-110 ${projectForm.project_color === color.value
+                                            ? 'ring-2 ring-offset-1 ring-slate-900'
+                                            : 'ring-1 ring-slate-200'
+                                            }`}
+                                        style={{ backgroundColor: color.value }}
+                                        title={color.name}
+                                    />
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                                <Label htmlFor="custom-color" className="text-sm">Custom:</Label>
+                                <Input
+                                    id="custom-color"
+                                    type="color"
+                                    value={customColor}
+                                    onChange={(e) => handleCustomColorChange(e.target.value)}
+                                    className="w-8 h-8 p-0 rounded"
+                                />
+                                <Input
+                                    type="text"
+                                    value={customColor}
+                                    onChange={(e) => handleCustomColorChange(e.target.value)}
+                                    className="font-mono text-sm w-24 h-8"
+                                    placeholder="#RRGGBB"
+                                />
+                                <div
+                                    className="w-6 h-6 rounded border ml-1"
+                                    style={{ backgroundColor: projectForm.project_color }}
+                                    title="Selected color"
+                                />
+                            </div>
                         </div>
                     </div>
 
-                    {/* Status and Billing */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Status, Chargeable, Country, Department - все в одной строке */}
+                    <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="project-status">Status</Label>
                             <Select
@@ -560,7 +601,7 @@ export function ProjectDialog({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="project-chargeable">Chargeable</Label>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2 h-10">
                                 <Checkbox
                                     id="project-chargeable"
                                     checked={projectForm.is_chargeable}
@@ -569,14 +610,10 @@ export function ProjectDialog({
                                     }
                                 />
                                 <Label htmlFor="project-chargeable" className="cursor-pointer text-sm">
-                                    Project is chargeable
+                                    Is chargeable
                                 </Label>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Location */}
-                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="project-country">Country</Label>
                             <Select
@@ -622,8 +659,8 @@ export function ProjectDialog({
                         </div>
                     </div>
 
-                    {/* Project Team */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Project Team - 4 колонки: Manager, Client, Service Line, Task Type */}
+                    <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="project-manager">Project Manager</Label>
                             <Select
@@ -677,10 +714,6 @@ export function ProjectDialog({
                                 </SelectContent>
                             </Select>
                         </div>
-                    </div>
-
-                    {/* Project Details */}
-                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="project-service-line">Service Line</Label>
                             <Select
@@ -716,48 +749,6 @@ export function ProjectDialog({
                                     {renderTaskTypes()}
                                 </SelectContent>
                             </Select>
-                        </div>
-                    </div>
-
-                    {/* Color */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-medium">Project Color *</Label>
-                        <div className="flex flex-wrap gap-1.5">
-                            {predefinedColors.map(color => (
-                                <button
-                                    key={color.value}
-                                    type="button"
-                                    onClick={() => handleColorChange(color.value)}
-                                    className={`w-6 h-6 rounded transition-all hover:scale-110 ${projectForm.project_color === color.value
-                                        ? 'ring-2 ring-offset-1 ring-slate-900'
-                                        : 'ring-1 ring-slate-200'
-                                        }`}
-                                    style={{ backgroundColor: color.value }}
-                                    title={color.name}
-                                />
-                            ))}
-                        </div>
-                        <div className="flex items-center gap-2 mt-2">
-                            <Label htmlFor="custom-color" className="text-sm">Custom:</Label>
-                            <Input
-                                id="custom-color"
-                                type="color"
-                                value={customColor}
-                                onChange={(e) => handleCustomColorChange(e.target.value)}
-                                className="w-8 h-8 p-0 rounded"
-                            />
-                            <Input
-                                type="text"
-                                value={customColor}
-                                onChange={(e) => handleCustomColorChange(e.target.value)}
-                                className="font-mono text-sm w-24 h-8"
-                                placeholder="#RRGGBB"
-                            />
-                            <div
-                                className="w-6 h-6 rounded border ml-1"
-                                style={{ backgroundColor: projectForm.project_color }}
-                                title="Selected color"
-                            />
                         </div>
                     </div>
                 </div>

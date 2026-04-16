@@ -438,7 +438,7 @@ export function RoleManagementTab({
               {isCreating ? "Creating..." : "Create Role"}
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Role</DialogTitle>
               <DialogDescription>
@@ -447,33 +447,37 @@ export function RoleManagementTab({
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="role-name">Role Name *</Label>
-                <Input
-                  id="role-name"
-                  placeholder="e.g., Project Manager"
-                  value={newRole.name}
-                  onChange={(e) =>
-                    setNewRole({ ...newRole, name: e.target.value })
-                  }
-                  disabled={isCreating}
-                />
+              {/* Первая строка: Role Name и Description в 2 колонки */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="role-name">Role Name *</Label>
+                  <Input
+                    id="role-name"
+                    placeholder="e.g., Project Manager"
+                    value={newRole.name}
+                    onChange={(e) =>
+                      setNewRole({ ...newRole, name: e.target.value })
+                    }
+                    disabled={isCreating}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role-description">Description</Label>
+                  <Textarea
+                    id="role-description"
+                    placeholder="Describe the role's purpose..."
+                    value={newRole.description}
+                    onChange={(e) =>
+                      setNewRole({ ...newRole, description: e.target.value })
+                    }
+                    rows={2}
+                    className="resize-none"
+                    disabled={isCreating}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role-description">Description</Label>
-                <Textarea
-                  id="role-description"
-                  placeholder="Describe the role's purpose..."
-                  value={newRole.description}
-                  onChange={(e) =>
-                    setNewRole({ ...newRole, description: e.target.value })
-                  }
-                  rows={2}
-                  disabled={isCreating}
-                />
-              </div>
-
+              {/* Вторая строка: Access Level - на всю ширину */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Access Level</Label>
@@ -482,20 +486,18 @@ export function RoleManagementTab({
                 <div className="space-y-2">
                   {/* Admin toggle */}
                   <div
-                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
-                      newRole.isAdmin
-                        ? "bg-blue-50 border-blue-200"
-                        : "border-gray-200 hover:bg-gray-50"
-                    }`}
+                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${newRole.isAdmin
+                      ? "bg-blue-50 border-blue-200"
+                      : "border-gray-200 hover:bg-gray-50"
+                      }`}
                     onClick={!isCreating ? handleAdminToggle : undefined}
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-5 h-5 rounded border flex items-center justify-center ${
-                          newRole.isAdmin
-                            ? "bg-blue-100 border-blue-400"
-                            : "bg-white border-gray-300"
-                        }`}
+                        className={`w-5 h-5 rounded border flex items-center justify-center ${newRole.isAdmin
+                          ? "bg-blue-100 border-blue-400"
+                          : "bg-white border-gray-300"
+                          }`}
                       >
                         {newRole.isAdmin && (
                           <Check className="w-3.5 h-3.5 text-black" />
@@ -532,7 +534,7 @@ export function RoleManagementTab({
                             disabled={isCreating}
                           >
                             {newRole.selectedPermissions.length ===
-                            availablePermissions.length
+                              availablePermissions.length
                               ? "Deselect All"
                               : "Select All"}
                           </Button>
@@ -543,17 +545,17 @@ export function RoleManagementTab({
                         </p>
                       </div>
 
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                      {/* Permissions в 2 колонки */}
+                      <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-2">
                         {availablePermissions.map((permission) => (
                           <div
                             key={permission.id}
-                            className={`flex items-center space-x-2 p-3 rounded border cursor-pointer transition-colors ${
-                              newRole.selectedPermissions.includes(
-                                permission.id,
-                              )
-                                ? "bg-blue-50 border-blue-200"
-                                : "border-gray-200 hover:bg-gray-50"
-                            }`}
+                            className={`flex items-center space-x-2 p-3 rounded border cursor-pointer transition-colors ${newRole.selectedPermissions.includes(
+                              permission.id,
+                            )
+                              ? "bg-blue-50 border-blue-200"
+                              : "border-gray-200 hover:bg-gray-50"
+                              }`}
                             onClick={
                               !isCreating
                                 ? () => handlePermissionToggle(permission.id)
@@ -561,13 +563,12 @@ export function RoleManagementTab({
                             }
                           >
                             <div
-                              className={`w-4 h-4 rounded border flex items-center justify-center ${
-                                newRole.selectedPermissions.includes(
-                                  permission.id,
-                                )
-                                  ? "bg-blue-100 border-blue-400"
-                                  : "bg-white border-gray-300"
-                              }`}
+                              className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${newRole.selectedPermissions.includes(
+                                permission.id,
+                              )
+                                ? "bg-blue-100 border-blue-400"
+                                : "bg-white border-gray-300"
+                                }`}
                             >
                               {newRole.selectedPermissions.includes(
                                 permission.id,
@@ -577,7 +578,7 @@ export function RoleManagementTab({
                               <p className="text-sm font-medium">
                                 {permission.name}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-500 truncate">
                                 {permission.description}
                               </p>
                             </div>
@@ -625,11 +626,10 @@ export function RoleManagementTab({
             onClick={() => setActiveTab("roles")}
             className={`
                             inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors
-                            ${
-                              activeTab === "roles"
-                                ? "!bg-black !text-white"
-                                : "text-muted-foreground hover:text-black hover:bg-muted"
-                            }
+                            ${activeTab === "roles"
+                ? "!bg-black !text-white"
+                : "text-muted-foreground hover:text-black hover:bg-muted"
+              }
                         `}
           >
             <Shield className="w-4 h-4" />
@@ -639,11 +639,10 @@ export function RoleManagementTab({
             onClick={() => setActiveTab("tabs")}
             className={`
                             inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors
-                            ${
-                              activeTab === "tabs"
-                                ? "!bg-black !text-white"
-                                : "text-muted-foreground hover:text-black hover:bg-muted"
-                            }
+                            ${activeTab === "tabs"
+                ? "!bg-black !text-white"
+                : "text-muted-foreground hover:text-black hover:bg-muted"
+              }
                         `}
           >
             <Settings className="w-4 h-4" />
@@ -731,11 +730,10 @@ export function RoleManagementTab({
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Shield
-                                className={`w-4 h-4 ${
-                                  role.isAdmin
-                                    ? "text-blue-500"
-                                    : "text-gray-400"
-                                }`}
+                                className={`w-4 h-4 ${role.isAdmin
+                                  ? "text-blue-500"
+                                  : "text-gray-400"
+                                  }`}
                               />
                               <div>
                                 <div className="font-medium">{role.name}</div>
@@ -869,7 +867,7 @@ export function RoleManagementTab({
 
       {/* Edit Role Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Role</DialogTitle>
             <DialogDescription>
@@ -879,31 +877,35 @@ export function RoleManagementTab({
 
           {selectedRole && (
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-role-name">Role Name *</Label>
-                <Input
-                  id="edit-role-name"
-                  value={newRole.name}
-                  onChange={(e) =>
-                    setNewRole({ ...newRole, name: e.target.value })
-                  }
-                  disabled={isEditing}
-                />
+              {/* Первая строка: Role Name и Description в 2 колонки */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-role-name">Role Name *</Label>
+                  <Input
+                    id="edit-role-name"
+                    value={newRole.name}
+                    onChange={(e) =>
+                      setNewRole({ ...newRole, name: e.target.value })
+                    }
+                    disabled={isEditing}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-role-description">Description</Label>
+                  <Textarea
+                    id="edit-role-description"
+                    value={newRole.description}
+                    onChange={(e) =>
+                      setNewRole({ ...newRole, description: e.target.value })
+                    }
+                    rows={2}
+                    className="resize-none"
+                    disabled={isEditing}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit-role-description">Description</Label>
-                <Textarea
-                  id="edit-role-description"
-                  value={newRole.description}
-                  onChange={(e) =>
-                    setNewRole({ ...newRole, description: e.target.value })
-                  }
-                  rows={2}
-                  disabled={isEditing}
-                />
-              </div>
-
+              {/* Access Level - на всю ширину */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Access Level</Label>
@@ -912,20 +914,18 @@ export function RoleManagementTab({
                 <div className="space-y-2">
                   {/* Admin toggle */}
                   <div
-                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${
-                      newRole.isAdmin
-                        ? "bg-blue-50 border-blue-200"
-                        : "border-gray-200 hover:bg-gray-50"
-                    }`}
+                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-colors ${newRole.isAdmin
+                      ? "bg-blue-50 border-blue-200"
+                      : "border-gray-200 hover:bg-gray-50"
+                      }`}
                     onClick={!isEditing ? handleAdminToggle : undefined}
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-5 h-5 rounded border flex items-center justify-center ${
-                          newRole.isAdmin
-                            ? "bg-blue-100 border-blue-400"
-                            : "bg-white border-gray-300"
-                        }`}
+                        className={`w-5 h-5 rounded border flex items-center justify-center ${newRole.isAdmin
+                          ? "bg-blue-100 border-blue-400"
+                          : "bg-white border-gray-300"
+                          }`}
                       >
                         {newRole.isAdmin && (
                           <Check className="w-3.5 h-3.5 text-black" />
@@ -962,7 +962,7 @@ export function RoleManagementTab({
                             disabled={isEditing}
                           >
                             {newRole.selectedPermissions.length ===
-                            availablePermissions.length
+                              availablePermissions.length
                               ? "Deselect All"
                               : "Select All"}
                           </Button>
@@ -973,17 +973,17 @@ export function RoleManagementTab({
                         </p>
                       </div>
 
-                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                      {/* Permissions в 2 колонки */}
+                      <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-2">
                         {availablePermissions.map((permission) => (
                           <div
                             key={permission.id}
-                            className={`flex items-center space-x-2 p-3 rounded border cursor-pointer transition-colors ${
-                              newRole.selectedPermissions.includes(
-                                permission.id,
-                              )
-                                ? "bg-blue-50 border-blue-200"
-                                : "border-gray-200 hover:bg-gray-50"
-                            }`}
+                            className={`flex items-center space-x-2 p-3 rounded border cursor-pointer transition-colors ${newRole.selectedPermissions.includes(
+                              permission.id,
+                            )
+                              ? "bg-blue-50 border-blue-200"
+                              : "border-gray-200 hover:bg-gray-50"
+                              }`}
                             onClick={
                               !isEditing
                                 ? () => handlePermissionToggle(permission.id)
@@ -991,13 +991,12 @@ export function RoleManagementTab({
                             }
                           >
                             <div
-                              className={`w-4 h-4 rounded border flex items-center justify-center ${
-                                newRole.selectedPermissions.includes(
-                                  permission.id,
-                                )
-                                  ? "bg-blue-100 border-blue-400"
-                                  : "bg-white border-gray-300"
-                              }`}
+                              className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${newRole.selectedPermissions.includes(
+                                permission.id,
+                              )
+                                ? "bg-blue-100 border-blue-400"
+                                : "bg-white border-gray-300"
+                                }`}
                             >
                               {newRole.selectedPermissions.includes(
                                 permission.id,
@@ -1007,7 +1006,7 @@ export function RoleManagementTab({
                               <p className="text-sm font-medium">
                                 {permission.name}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-gray-500 truncate">
                                 {permission.description}
                               </p>
                             </div>
