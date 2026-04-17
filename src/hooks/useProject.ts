@@ -130,8 +130,6 @@ export const useGetProjects = () => {
                     return cached;
                 }
             }
-
-            // Загружаем новые данные
             console.log(forceRefresh ? 'Force refreshing projects' : 'Fetching fresh projects');
             const data = await getProjects();
             projectsCache = { data, timestamp: Date.now() };
@@ -163,6 +161,8 @@ export const useDeleteProject = () => {
         },
     });
 };
+
+
 
 // ========== ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ==========
 
@@ -218,6 +218,8 @@ export const projectsCacheUtils = {
             items: stats
         };
     },
+
+
 
     refreshProjectsCache: async () => {
         const data = await getProjects();

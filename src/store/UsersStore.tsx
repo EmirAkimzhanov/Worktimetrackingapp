@@ -17,6 +17,7 @@ import { Calendar } from "../types/calendar";
 import { Monitoring } from "../types/monitoring";
 import { GlobalSettings } from "../types/settings";
 import { Me } from "../types/auth";
+import { Manager } from "../types/managers";
 
 // Определяем тип для роли (можно заменить на импорт из types, если есть)
 export interface Role {
@@ -185,6 +186,8 @@ interface UserState {
 
   me: Me | null;
 
+  managers: Manager[] | null;
+
   setUser: (
     user: User,
     tokens: { access_token: string; refresh_token: string },
@@ -195,6 +198,8 @@ interface UserState {
   updateUser: (updates: Partial<User>) => void;
 
   setMe: (me: Me) => void;
+
+  setManagers: (managers: Manager[] | null) => void;
 
   setCountries: (countries: Countries) => void;
   setSelectedCountry: (country: CountryWithClients | null) => void;
@@ -306,6 +311,7 @@ export const useUserStore = create<UserState>()(
       leaves: null,
       time_entries: null,
 
+      managers: null,
       departments: null,
       department_members: null,
       statuses: null,
@@ -355,6 +361,8 @@ export const useUserStore = create<UserState>()(
       setCountries: (countries) => set({ countries }),
 
       setMe: (me) => set({ me }),
+
+      setManagers: (managers) => set({ managers }),
 
       setMonitoring: (monitoring) => set({ monitoring }), // ✅ Исправлено: правильное имя параметра
 
@@ -727,6 +735,7 @@ export const useUserStore = create<UserState>()(
           monitoring: null,
           calendar_holidays: null,
           me: null,
+          managers: null,
           // ✅ ОЧИЩАЕМ ОДИН СТЕЙТ ОТЧЕТОВ ПРИ ВЫХОДЕ
           reports: {
             timeReports: null,
@@ -746,6 +755,7 @@ export const useUserStore = create<UserState>()(
         refresh_token: state.refresh_token,
         user: state.user,
         me: state.me,
+        managers: state.managers,
         selectedCountry: state.selectedCountry,
         client_projects: state.client_projects,
         project_tasks: state.project_tasks,

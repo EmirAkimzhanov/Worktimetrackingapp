@@ -913,11 +913,11 @@ export function TimeEntryForm() {
                     ))}
                   </SelectContent>
                 </Select>
-                {country && clientOptions.length === 0 && !isLoadingClients && (
+                {/* {country && clientOptions.length === 0 && !isLoadingClients && (
                   <p className="text-sm text-amber-600">
                     No clients available for this country.
                   </p>
-                )}
+                )} */}
               </div>
             </div>
 

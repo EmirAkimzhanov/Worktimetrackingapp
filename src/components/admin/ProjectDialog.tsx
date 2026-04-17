@@ -20,6 +20,7 @@ import { useGetDepartments } from '../../hooks/useDepartments';
 import { useUserStore } from '../../store/UsersStore';
 import { useEditProject, useGetProjects, useSendProject } from '../../hooks/useProject';
 import { toast } from 'sonner';
+import { useGetManagers } from '../../hooks/useManagers';
 
 interface ProjectDialogProps {
     open: boolean;
@@ -45,12 +46,9 @@ export function ProjectDialog({
     onSave,
 }: ProjectDialogProps) {
     const [customColor, setCustomColor] = useState(projectForm.project_color || '#1F4E78');
-    const [isLoadingMembers, setIsLoadingMembers] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { mutate: getDepartments, isPending: isDepartmentsLoading } = useGetDepartments();
     const store_departments = useUserStore((state) => state.departments);
-    const department_members = useUserStore((state) => state.department_members);
-    const setDepartmentMembers = useUserStore((state) => state.setDepartmentMembers);
     const { mutate: sendProject, isPending: isSending } = useSendProject();
     const store_statuses = useUserStore((state) => state.statuses);
     const store_clients = useUserStore((state) => state.clients);
@@ -59,6 +57,9 @@ export function ProjectDialog({
     const store_task_types = useUserStore((state) => state.task_types);
     const { mutate: getProjects } = useGetProjects();
     const { mutate: editProject } = useEditProject();
+
+    // Используем useQuery для получения менеджеров
+    const { data: project_managers, isLoading: isLoadingManagers, error: managersError } = useGetManagers();
 
     // Загружаем все департаменты при открытии диалога
     useEffect(() => {
@@ -71,43 +72,16 @@ export function ProjectDialog({
     // Отслеживаем изменения в store для отладки
     useEffect(() => {
         console.log('store_departments:', store_departments);
-        console.log('Type:', typeof store_departments);
-        console.log('Is array?', Array.isArray(store_departments));
-
-        if (store_departments && Array.isArray(store_departments)) {
-            console.log('Number of departments:', store_departments.length);
-            if (store_departments.length > 0) {
-                console.log('First department:', store_departments[0]);
-            }
-        }
     }, [store_departments]);
 
     useEffect(() => {
-        console.log('department_members:', department_members);
-    }, [department_members]);
-
-    useEffect(() => {
-        console.log('store_statuses:', store_statuses);
-    }, [store_statuses]);
-
-    useEffect(() => {
-        console.log('store_clients:', store_clients);
-    }, [store_clients]);
-
-    useEffect(() => {
-        console.log('store_countries:', store_countries);
-    }, [store_countries]);
-
-    useEffect(() => {
-        console.log('store_service_lines:', store_service_lines);
-    }, [store_service_lines]);
-
-    useEffect(() => {
-        console.log('store_task_types:', store_task_types);
-    }, [store_task_types]);
-
-    const getActiveUsers = () => users?.filter(u => u.is_active) || [];
-    const getActiveManagers = () => managers?.filter(m => m.is_active) || [];
+        if (project_managers) {
+            console.log('Project managers loaded:', project_managers);
+        }
+        if (managersError) {
+            console.error('Error loading project managers:', managersError);
+        }
+    }, [project_managers, managersError]);
 
     // Получаем активные статусы из store
     const getActiveStatuses = () => {
@@ -159,46 +133,13 @@ export function ProjectDialog({
         );
     };
 
-    // Загрузка членов департамента при выборе
-    const loadDepartmentMembers = async (departmentId: number) => {
-        setIsLoadingMembers(true);
-        try {
-            getDepartments(departmentId.toString(), {
-                onSuccess: () => {
-                    setIsLoadingMembers(false);
-                },
-                onError: (error) => {
-                    console.error('Error loading department members:', error);
-                    setIsLoadingMembers(false);
-                }
-            });
-        } catch (error) {
-            console.error('Error in loadDepartmentMembers:', error);
-            setIsLoadingMembers(false);
-        }
-    };
-
-    // Получаем менеджеров из загруженных department_members
-    const getDepartmentManagers = () => {
-        if (!department_members || !department_members.members) {
+    // Получаем активных менеджеров из project_managers
+    const getActiveManagers = () => {
+        if (!project_managers || !Array.isArray(project_managers)) {
             return [];
         }
-
-        return department_members.members
-            .filter(member => member.is_active)
-            .map(member => ({
-                id: member.id,
-                first_name: member.first_name,
-                last_name: member.last_name,
-                email: member.email,
-                position: member.position || 'Member',
-                department_role: member.department_role,
-                is_active: member.is_active
-            }));
+        return project_managers.filter(manager => manager.is_active !== false);
     };
-
-    // Проверяем, выбран ли департамент
-    const isManagerSelectDisabled = !projectForm.department_id;
 
     const resetForm = () => {
         setProjectForm({
@@ -223,7 +164,6 @@ export function ProjectDialog({
             task_type: undefined
         });
         setCustomColor('#1F4E78');
-        setDepartmentMembers(null);
     };
 
     // Синхронизируем customColor с project_color из формы
@@ -248,20 +188,12 @@ export function ProjectDialog({
         setProjectForm({ ...projectForm, project_color: color });
     };
 
-    const handleDepartmentChange = async (value: string) => {
+    const handleDepartmentChange = (value: string) => {
         const departmentId = value !== "none" ? parseInt(value) : undefined;
-
         setProjectForm({
             ...projectForm,
             department_id: departmentId,
-            manager_id: undefined
         });
-
-        setDepartmentMembers(null);
-
-        if (departmentId) {
-            await loadDepartmentMembers(departmentId);
-        }
     };
 
     // Функция для отправки проекта
@@ -339,35 +271,13 @@ export function ProjectDialog({
         }
     };
 
-    // Проверяем, переданы ли все необходимые данные
-    const hasData = () => {
-        return Array.isArray(managers);
-    };
-
-    if (!hasData()) {
-        return (
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Loading...</DialogTitle>
-                        <DialogDescription>
-                            Loading project data...
-                        </DialogDescription>
-                    </DialogHeader>
-                </DialogContent>
-            </Dialog>
-        );
-    }
-
     // Отображаем департаменты из store
     const renderDepartments = () => {
         if (!store_departments) {
-            console.log('No departments in store yet');
             return <SelectItem value="none">Loading departments...</SelectItem>;
         }
 
         if (!Array.isArray(store_departments)) {
-            console.error('store_departments is not an array:', store_departments);
             return <SelectItem value="none">Error loading departments</SelectItem>;
         }
 
@@ -375,33 +285,9 @@ export function ProjectDialog({
             return <SelectItem value="none">No departments available</SelectItem>;
         }
 
-        return store_departments.map((department) => {
-            const departmentId = department.id;
-            const departmentName = department.name || 'Unknown Department';
-
-            return (
-                <SelectItem key={departmentId} value={departmentId.toString()}>
-                    {departmentName}
-                </SelectItem>
-            );
-        });
-    };
-
-    // Отображаем менеджеров из department_members
-    const renderDepartmentManagers = () => {
-        const managers = getDepartmentManagers();
-
-        if (managers.length === 0) {
-            if (projectForm.department_id && !isLoadingMembers) {
-                return <SelectItem value="none">No members in this department</SelectItem>;
-            }
-            return <SelectItem value="none">Select department first</SelectItem>;
-        }
-
-        return managers.map(manager => (
-            <SelectItem key={manager.id} value={manager.id.toString()}>
-                {manager.first_name} {manager.last_name}
-                {manager.position && ` (${manager.position})`}
+        return store_departments.map((department) => (
+            <SelectItem key={department.id} value={department.id.toString()}>
+                {department.name || 'Unknown Department'}
             </SelectItem>
         ));
     };
@@ -432,6 +318,25 @@ export function ProjectDialog({
         return activeCountries.map(country => (
             <SelectItem key={country.id} value={country.id.toString()}>
                 {country.name} ({country.code})
+            </SelectItem>
+        ));
+    };
+
+    // Отображаем менеджеров из project_managers
+    const renderManagers = () => {
+        const activeManagers = getActiveManagers();
+
+        if (isLoadingManagers) {
+            return <SelectItem value="none" disabled>Loading managers...</SelectItem>;
+        }
+
+        if (activeManagers.length === 0) {
+            return <SelectItem value="none" disabled>No managers available</SelectItem>;
+        }
+
+        return activeManagers.map(manager => (
+            <SelectItem key={manager.id} value={manager.id.toString()}>
+                {manager.first_name} {manager.last_name}
             </SelectItem>
         ));
     };
@@ -487,7 +392,7 @@ export function ProjectDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[70vh] overflow-y-auto">
+            <DialogContent className="max-h-[85vh] overflow-y-auto" style={{ width: '1000px', maxWidth: 'calc(100vw - 2rem)' }}>
                 <DialogHeader>
                     <DialogTitle>{editingProject ? 'Edit Project' : 'Add New Project'}</DialogTitle>
                     <DialogDescription>
@@ -495,7 +400,7 @@ export function ProjectDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    {/* Basic Information - Project Name, Description, Color в одной сетке */}
+                    {/* Basic Information - Project Name, Recurring */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="project-name">Project Name *</Label>
@@ -507,7 +412,7 @@ export function ProjectDialog({
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="project-recurring">Recurring *</Label>
+                            <Label htmlFor="project-recurring">Recurring</Label>
                             <div className="flex items-center space-x-2 h-10">
                                 <Checkbox
                                     id="project-recurring"
@@ -633,7 +538,7 @@ export function ProjectDialog({
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="project-department">Department *</Label>
+                            <Label htmlFor="project-department">Department</Label>
                             <Select
                                 value={projectForm.department_id?.toString() || "none"}
                                 onValueChange={handleDepartmentChange}
@@ -653,9 +558,6 @@ export function ProjectDialog({
                                     {renderDepartments()}
                                 </SelectContent>
                             </Select>
-                            {isDepartmentsLoading && (
-                                <p className="text-xs text-slate-500">Loading departments...</p>
-                            )}
                         </div>
                     </div>
 
@@ -669,33 +571,25 @@ export function ProjectDialog({
                                     ...projectForm,
                                     manager_id: value !== "none" ? parseInt(value) : undefined
                                 })}
-                                disabled={isManagerSelectDisabled || isLoadingMembers}
+                                disabled={isLoadingManagers}
                             >
-                                <SelectTrigger className={isManagerSelectDisabled ? "bg-gray-100" : ""}>
-                                    <SelectValue
-                                        placeholder={
-                                            isLoadingMembers
-                                                ? "Loading department members..."
-                                                : isManagerSelectDisabled
-                                                    ? "Select department first"
-                                                    : department_members?.members?.length === 0
-                                                        ? "No members in department"
-                                                        : "Select project manager"
-                                        }
-                                    />
+                                <SelectTrigger>
+                                    {isLoadingManagers ? (
+                                        <div className="flex items-center">
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                                            Loading managers...
+                                        </div>
+                                    ) : (
+                                        <SelectValue placeholder="Select manager" />
+                                    )}
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Select manager</SelectItem>
-                                    {renderDepartmentManagers()}
+                                    {renderManagers()}
                                 </SelectContent>
                             </Select>
-                            {isLoadingMembers && (
-                                <p className="text-xs text-slate-500">Loading department members...</p>
-                            )}
-                            {isManagerSelectDisabled && !isLoadingMembers && (
-                                <p className="text-xs text-slate-500">Please select a department first</p>
-                            )}
                         </div>
+
                         <div className="space-y-2">
                             <Label htmlFor="project-client">Client</Label>
                             <Select
@@ -714,6 +608,7 @@ export function ProjectDialog({
                                 </SelectContent>
                             </Select>
                         </div>
+
                         <div className="space-y-2">
                             <Label htmlFor="project-service-line">Service Line</Label>
                             <Select
@@ -732,6 +627,7 @@ export function ProjectDialog({
                                 </SelectContent>
                             </Select>
                         </div>
+
                         <div className="space-y-2">
                             <Label htmlFor="project-task-type">Task Type</Label>
                             <Select
