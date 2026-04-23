@@ -95,15 +95,16 @@ const TabsContainer = styled.div`
   background: white;
 `;
 
-const Tab = styled.button<{ active: boolean }>`
+// ИСПРАВЛЕНО: используем transient prop $active
+const Tab = styled.button<{ $active: boolean }>`
   flex: 1;
   padding: 20px 0 16px;
   background: none;
   border: none;
   font-size: 16px;
   font-weight: 600;
-  color: ${props => props.active ? '#1F4E78' : '#9ca3af'};
-  border-bottom: 3px solid ${props => props.active ? '#1F4E78' : 'transparent'};
+  color: ${props => props.$active ? '#1F4E78' : '#9ca3af'};
+  border-bottom: 3px solid ${props => props.$active ? '#1F4E78' : 'transparent'};
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
@@ -249,16 +250,16 @@ const LoadingSpinner = styled.div`
   }
 `;
 
-const PasswordStrengthIndicator = styled.div<{ strength: number }>`
+const PasswordStrengthIndicator = styled.div<{ $strength: number }>`
   height: 4px;
   background: ${props => {
-    if (props.strength === 0) return '#e5e7eb';
-    if (props.strength === 1) return '#f44336';
-    if (props.strength === 2) return '#ff9800';
-    if (props.strength === 3) return '#4caf50';
+    if (props.$strength === 0) return '#e5e7eb';
+    if (props.$strength === 1) return '#f44336';
+    if (props.$strength === 2) return '#ff9800';
+    if (props.$strength === 3) return '#4caf50';
     return '#e5e7eb';
   }};
-  width: ${props => (props.strength / 3) * 100}%;
+  width: ${props => (props.$strength / 3) * 100}%;
   border-radius: 2px;
   margin-top: 6px;
   transition: all 0.3s ease;
@@ -418,16 +419,17 @@ const TimeTrackerLogin = () => {
           <Logo>
             <LogoIcon>⏱</LogoIcon>
             <LogoText>
-              <CompanyName>Professional</CompanyName>
-              <AppName>TIME TRACKER</AppName>
+              <CompanyName>TIME TRACKER</CompanyName>
+              {/* <AppName>TIME TRACKER</AppName> */}
             </LogoText>
           </Logo>
           <Tagline>Track your work hours and manage projects efficiently</Tagline>
         </LoginHeader>
 
         <TabsContainer>
+          {/* ИСПРАВЛЕНО: используем $active вместо active */}
           <Tab
-            active={activeTab === 'signin'}
+            $active={activeTab === 'signin'}
             onClick={() => {
               setActiveTab('signin');
               setFormError(null);
@@ -436,8 +438,9 @@ const TimeTrackerLogin = () => {
           >
             Sign In
           </Tab>
+          {/* ИСПРАВЛЕНО: используем $active вместо active */}
           <Tab
-            active={activeTab === 'activate'}
+            $active={activeTab === 'activate'}
             onClick={() => {
               setActiveTab('activate');
               setFormError(null);
@@ -543,7 +546,7 @@ const TimeTrackerLogin = () => {
                 disabled={isActivatePending || isActivateSuccess}
               />
               {activatePassword && !isActivateSuccess && (
-                <PasswordStrengthIndicator strength={passwordStrength} />
+                <PasswordStrengthIndicator $strength={passwordStrength} />
               )}
               {activatePassword && passwordStrength < 3 && !isActivateSuccess && (
                 <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
@@ -615,5 +618,3 @@ const TimeTrackerLogin = () => {
 };
 
 export default TimeTrackerLogin;
-
-

@@ -1,40 +1,58 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
-import { Settings, Plus, Calendar } from 'lucide-react';
+import { Settings, Plus, Calendar, ChevronDown } from 'lucide-react';
 
 interface AdminPanelHeaderProps {
-    activeTab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'monitoring';
-    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reprots' | 'monitoring') => void;
+    activeTab: 'projects' | 'users' | 'clients' | 'setiings' | 'country' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors';
+    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'settings' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors') => void;
     onAddClick: () => void;
 }
 
 export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPanelHeaderProps) {
+    const [showMoreTabs, setShowMoreTabs] = useState(false);
+
     const getAddButtonLabel = () => {
         switch (activeTab) {
             case 'projects': return 'Project';
             case 'users': return 'User';
             case 'clients': return 'Client';
-            // case 'settings': return 'Settings';
+            case 'country': return 'Countries';
             case 'teams': return 'Team';
+            case 'pie': return 'Pie';
+            case 'serviceType': return 'Service type';
             case 'department': return 'Tasks';
-            case 'reprots': return 'Reports'
-            case 'monitoring': return 'Monitoring'
+            case 'reports': return 'Reports';
+            case 'monitoring': return 'Monitoring';
             default: return 'Item';
         }
     };
 
-    const tabs = [
+    // Показываем первые 5 табов (добавил reprots)
+    const visibleTabs = [
         { id: 'projects', label: 'Projects' },
         { id: 'users', label: 'Users' },
         { id: 'clients', label: 'Clients' },
-        { id: 'settings', label: 'Settings' },
+        { id: 'calendar', label: 'Calendar' },
         { id: 'reports', label: 'Reports' },
-        { id: 'monitoring', label: 'Monitoring' },
+        { id: 'settings', label: 'Settings' },
 
+    ];
+
+    // Остальные табы в меню More (убрал reprots отсюда)
+    const moreTabs = [
+        { id: 'country', label: 'Countries' },
+        { id: 'teams', label: 'Teams' },
+        { id: 'department', label: 'Department' },
+        { id: 'monitoring', label: 'Monitoring' },
+        { id: 'pie', label: 'Pie' },
+        { id: 'serviceType', label: 'Service-Type' },
+        { id: 'sectors', label: 'Sectors' },
 
 
     ];
+
+    const isMoreTabActive = moreTabs.some(tab => tab.id === activeTab);
 
     return (
         <CardHeader style={{ backgroundColor: '#1F4E78' }} className="text-white border-b">
@@ -50,7 +68,7 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
                 </div>
                 <div className="flex gap-4 items-center">
                     <div className="flex gap-1 bg-transparent border border-blue-300 rounded-lg p-1">
-                        {tabs.map((tab) => (
+                        {visibleTabs.map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => onTabChange(tab.id as any)}
@@ -62,23 +80,60 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
                                     }
                                 `}
                             >
-                                {tab.icon}
                                 {tab.label}
                             </button>
                         ))}
-                    </div>
 
-                    {/* <Button
-                        onClick={onAddClick}
-                        style={{ backgroundColor: '#00A3A1' }}
-                        className="hover:opacity-90"
-                        disabled={activeTab === 'calendar'}
-                    >
+                        {/* Кнопка More */}
+                        <div className="relative" style={{ zIndex: 9999 }}>
+                            <button
+                                onClick={() => setShowMoreTabs(!showMoreTabs)}
+                                className={`
+                                    flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors
+                                    ${isMoreTabActive
+                                        ? 'bg-white text-primary font-medium'
+                                        : 'text-blue-100 hover:text-black hover:bg-blue-600/50'
+                                    }
+                                `}
+                            >
+                                More
+                                <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showMoreTabs ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {showMoreTabs && (
+                                <>
+                                    <div
+                                        style={{ width: '70px' }}
+                                        className="fixed inset-0 z-10"
+                                        onClick={() => setShowMoreTabs(false)}
+                                    />
+                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 py-1" style={{ width: '110px' }}>
+                                        {moreTabs.map((tab) => (
+                                            <button
+                                                key={tab.id}
+                                                onClick={() => {
+                                                    onTabChange(tab.id as any);
+                                                    setShowMoreTabs(false);
+                                                }}
+                                                className={`
+                                                    w-full text-left px-4 py-2 text-sm hover:bg-gray-100
+                                                    ${activeTab === tab.id ? 'bg-blue-50 text-primary' : 'text-primary'}
+                                                `}
+                                            >
+                                                {tab.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                    {/* <Button onClick={onAddClick} className="bg-white text-primary hover:bg-gray-100">
                         <Plus className="w-4 h-4 mr-2" />
                         Add {getAddButtonLabel()}
                     </Button> */}
                 </div>
             </div>
-        </CardHeader >
+        </CardHeader>
     );
 }

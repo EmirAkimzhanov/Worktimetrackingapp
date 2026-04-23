@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
+import { Button } from '../../ui/button';
+import { Badge } from '../../ui/badge';
 import { Edit, Trash2, Plus, User } from 'lucide-react';
-import { getRoleBadgeVariant } from '../../const/consts';
-import { User as UserType, Position, Department } from '../../types/types';
-import { useDeleteUsers, useGetUserGrades, useGetUsers } from '../../hooks/useUsers';
-import { useUserStore } from '../../store/UsersStore';
-import { useGetDepartmentRoles, useGetDepartments } from '../../hooks/useDepartments';
-import { useGetCountries } from '../../hooks/useCountries';
-import { useGetPositions } from '../../hooks/usePosition';
+import { getRoleBadgeVariant } from '../../../const/consts';
+import { User as UserType, Position, Department } from '../../../types/types';
+import { useDeleteUsers, useGetUserGrades, useGetUsers } from '../../../hooks/useUsers';
+import { useUserStore } from '../../../store/UsersStore';
+import { useGetDepartmentRoles, useGetDepartments } from '../../../hooks/useDepartments';
+import { useGetCountries } from '../../../hooks/useCountries';
+import { useGetPositions } from '../../../hooks/usePosition';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -19,7 +19,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '../ui/alert-dialog';
+} from '../../ui/alert-dialog';
 
 interface UsersTableProps {
     positions: Position[];
@@ -127,7 +127,7 @@ export function UsersTable({
                 </Button>
             </div>
 
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -135,6 +135,7 @@ export function UsersTable({
                             <TableHead>Email</TableHead>
                             <TableHead>Position</TableHead>
                             <TableHead>Department</TableHead>
+                            <TableHead>Department Role</TableHead>
                             <TableHead>Grade</TableHead>
                             <TableHead>Country</TableHead>
                             <TableHead>Role</TableHead>
@@ -146,7 +147,7 @@ export function UsersTable({
                     <TableBody>
                         {users.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={10} className="text-center text-slate-500 py-8">
+                                <TableCell colSpan={11} className="text-center text-slate-500 py-8">
                                     {store_users === null ? 'Loading users...' : 'No users found. Click "Add User" to create your first user.'}
                                 </TableCell>
                             </TableRow>
@@ -169,6 +170,11 @@ export function UsersTable({
                                         <span className="text-sm">
                                             {user.department || 'Not assigned'}
                                         </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                            {user.department_role || 'Not assigned'}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell>
                                         <span className="text-sm">

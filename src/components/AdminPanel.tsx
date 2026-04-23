@@ -6,14 +6,14 @@ import { useTimeTracker, Project } from './TimeTrackerContext';
 
 // Импорт компонентов
 import { AdminPanelHeader } from '../components/admin/AdminPanelHeader';
-import { ProjectsTable } from '../components/admin/ProjectTables';
-import { UsersTable } from '../components/admin/UsersTable';
-import { ClientsTable } from '../components/admin/ClientsTable';
+import { ProjectsTable } from './admin/project/ProjectTables';
+import { UsersTable } from './admin/user/UsersTable';
+import { ClientsTable } from './clients/ClientsTable';
 import { CalendarManagement } from '../components/admin/calendar/CalendarManagementProps';
 import { TeamsTab } from '../components/admin/teams/TeamsTab';
-import { ProjectDialog } from '../components/admin/ProjectDialog';
-import { UserDialog } from '../components/admin/UserDialog';
-import { ClientDialog } from '../components/admin/ClientsDialog';
+import { ProjectDialog } from './admin/project/ProjectDialog';
+import { UserDialog } from './admin/user/UserDialog';
+import { ClientDialog } from './clients/ClientsDialog';
 import { DeleteConfirmationDialog } from '../components/admin/DeleteConfiramtion';
 
 // Импорт констант
@@ -44,12 +44,16 @@ import DepartmentsTabs from './admin/department/DepartmentTabs';
 import { ReportsTab } from './admin/reports/ReportsTab';
 import { SettingsTab } from './admin/settings/SettingsTab';
 import MonitoringPage from './admin/monitoring/MonitoringPage';
+import { CountryTable } from './admin/country/CountryTable';
+import { PieTable } from './admin/pie/PieTable';
+import { ServiceTable } from './admin/service type/ServiceTable';
+import { SectorTable } from './admin/sector/SectorTable';
 
 export function AdminPanel() {
   const { projects, addProject, updateProject, deleteProject, entries } = useTimeTracker();
 
   // Состояния - добавлены вкладки department и reports
-  const [activeTab, setActiveTab] = useState<'projects' | 'users' | 'clients' | 'calendar' | 'teams' | 'department' | 'reports'>('projects');
+  const [activeTab, setActiveTab] = useState<'projects' | 'users' | 'clients' | 'country' | 'calendar' | 'teams' | 'department' | 'reports'>('projects');
 
   // Состояния диалогов (открываются изнутри компонентов)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -115,6 +119,7 @@ export function AdminPanel() {
   const [departments, setDepartments] = useState<Department[]>(MOCK_DEPARTMENTS);
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
+
 
   // Состояние для Teams
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
@@ -368,6 +373,8 @@ export function AdminPanel() {
     setIsAddDialogOpen(false);
     resetProjectForm();
   };
+
+
 
   const handleUpdateProject = () => {
     if (!editingProject) return;
@@ -1028,6 +1035,12 @@ export function AdminPanel() {
             />
           )}
 
+          {activeTab === 'country' && (
+            <CountryTable
+
+            />
+          )}
+
           {activeTab === 'calendar' && (
             <CalendarManagement
               configs={calendarConfigs}
@@ -1071,6 +1084,15 @@ export function AdminPanel() {
               onUpdateDepartment={handleUpdateDepartment}
               onDeleteDepartment={handleDeleteDepartment}
             />
+          )}
+          {activeTab === 'pie' && (
+            <PieTable />
+          )}
+          {activeTab === 'serviceType' && (
+            <ServiceTable />
+          )}
+          {activeTab === 'sectors' && (
+            <SectorTable />
           )}
 
           {activeTab === 'reports' && (

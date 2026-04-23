@@ -279,19 +279,19 @@ export function CalendarManagement({
                         <h2 className="text-2xl font-bold">Calendar Management</h2>
                         <p className="text-muted-foreground">Configure holidays, working days and weekly schedules</p>
                     </div>
-                    <Button
+                    {/* <Button
                         variant="outline"
                         onClick={() => setIsSettingsOpen(true)}
                     >
                         <Plus className="w-4 h-4" />
 
                         Add new country
-                    </Button>
+                    </Button> */}
                 </div>
 
                 <div className="flex gap-4">
                     {/* Country Selector */}
-                    <div style={{ width: "40%" }}>
+                    {/* <div style={{ width: "40%" }}>
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Countries</CardTitle>
@@ -341,7 +341,7 @@ export function CalendarManagement({
                                 </div>
                             </CardContent>
                         </Card>
-                    </div>
+                    </div> */}
 
                     {/* Main Content */}
                     <div className="flex-1">

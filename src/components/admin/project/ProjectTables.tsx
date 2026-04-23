@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
+import { Button } from '../../ui/button';
+import { Badge } from '../../ui/badge';
 import { Edit, Trash2, FolderKanban, Plus, ChevronDown, ChevronUp } from 'lucide-react';
-import { Project } from '../TimeTrackerContext';
-import { Client, Department, Position, User } from '../../types/types';
-import { useGetDepartments } from '../../hooks/useDepartments';
-import { useStatus } from '../../hooks/useStatus';
-import { useGetCountries } from '../../hooks/useCountries';
-import { useGetClients } from '../../hooks/useClients';
-import { useGetServiceLines } from '../../hooks/useServiceLines';
-import { useGetTaskTypes } from '../../hooks/useTasks';
-import { useDeleteProject, useGetProjects } from '../../hooks/useProject';
-import { useUserStore } from '../../store/UsersStore';
+import { Project } from '../../TimeTrackerContext';
+import { Client, Department, Position, User } from '../../../types/types';
+import { useGetDepartments } from '../../../hooks/useDepartments';
+import { useStatus } from '../../../hooks/useStatus';
+import { useGetCountries } from '../../../hooks/useCountries';
+import { useGetClients } from '../../../hooks/useClients';
+import { useGetServiceLines } from '../../../hooks/useServiceLines';
+import { useGetTaskTypes } from '../../../hooks/useTasks';
+import { useDeleteProject, useGetProjects } from '../../../hooks/useProject';
+import { useUserStore } from '../../../store/UsersStore';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -22,7 +22,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '../ui/alert-dialog';
+} from '../../ui/alert-dialog';
 
 interface ProjectsTableProps {
     entries: any[];

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
 import axios from 'axios';
 import { api } from '../consts/api';
+import { getManagers } from '../services/managers';
 
 // ========== ИНТЕРФЕЙСЫ ==========
 
@@ -23,21 +24,7 @@ interface Manager {
 
 // ========== СЕРВИСНАЯ ФУНКЦИЯ ==========
 
-export const getManagers = async (): Promise<Manager[]> => {
-    const token = useUserStore.getState().access_token;
 
-    if (!token) {
-        throw new Error("No access token available");
-    }
-
-    const res = await axios(`${api}api/accounts/users/managers/`, {
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
-    });
-
-    return res.data;
-};
 
 // ========== ПРАВИЛЬНЫЙ ХУК С useQuery ==========
 

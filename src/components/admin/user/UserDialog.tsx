@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -6,14 +6,14 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { UserFormData, UserBody } from '../../types/types';
-import { useUserStore } from '../../store/UsersStore';
-import { useEditUsers, useGetUsers, useSendUsers } from '../../hooks/useUsers';
+} from '../../ui/dialog';
+import { Button } from '../../ui/button';
+import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
+import { UserFormData, UserBody } from '../../../types/types';
+import { useUserStore } from '../../../store/UsersStore';
+import { useEditUsers, useGetUsers, useSendUsers } from '../../../hooks/useUsers';
 
 interface UserDialogProps {
     open: boolean;
@@ -48,29 +48,69 @@ export function UserDialog({
     const { mutate: getUsers } = useGetUsers();
     const { mutate: editUser } = useEditUsers();
 
+
+
     // Преобразуем countries в массив, если это объект
     const countries = useMemo(() => {
-
         if (!countriesData) return [];
-
-        // Если это массив, возвращаем как есть
         if (Array.isArray(countriesData)) {
             return countriesData;
         }
-
-        // Если это объект, преобразуем в массив
         if (typeof countriesData === 'object') {
-            // Проверяем, есть ли у объекта метод map (значит это массив)
             if (countriesData && 'map' in countriesData && typeof countriesData.map === 'function') {
                 return countriesData as Country[];
             }
-
-            // Если это объект с ключами, преобразуем значения в массив
             return Object.values(countriesData);
         }
-
         return [];
     }, [countriesData]);
+
+    // Загружаем данные пользователя в форму при редактировании
+    useEffect(() => {
+        if (editingUser && open) {
+            // Находим ID по названию (так как в editingUser приходят названия, а не ID)
+            const findPositionId = () => {
+                const position = store_positions.find(p => p.name === editingUser.position);
+                return position?.id || (store_positions.length > 0 ? store_positions[0].id : 1);
+            };
+
+            const findDepartmentId = () => {
+                const department = store_departments.find(d => d.name === editingUser.department);
+                return department?.id || (store_departments.length > 0 ? store_departments[0].id : 1);
+            };
+
+            const findDepartmentRoleId = () => {
+                const role = department_roles.find(r => r.name === editingUser.department_role);
+                return role?.id || (department_roles.length > 0 ? department_roles[0].id : 1);
+            };
+
+            const findGradeId = () => {
+                const grade = user_grades.find(g => g.name === editingUser.grade);
+                return grade?.id || (user_grades.length > 0 ? user_grades[0].id : 10);
+            };
+
+            const findCountryId = () => {
+                const country = countries.find(c => c.name === editingUser.country || c.code === editingUser.country);
+                return country?.id || (countries.length > 0 ? countries[0].id : 1);
+            };
+
+            setUserForm({
+                email: editingUser.email || '',
+                first_name: editingUser.first_name || '',
+                last_name: editingUser.last_name || '',
+                password: '',
+                date_joined: editingUser.date_joined?.split('T')[0] || new Date().toISOString().split('T')[0],
+                leave_date: editingUser.date_left || '',
+                is_active: editingUser.is_active ?? true,
+                position_id: findPositionId(),
+                department_id: findDepartmentId(),
+                role: editingUser.role || 'user',
+                department_role_id: findDepartmentRoleId(),
+                grade_id: findGradeId(),
+                country_id: findCountryId()
+            });
+        }
+    }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, setUserForm]);
 
     const resetForm = () => {
         setUserForm({
@@ -84,7 +124,7 @@ export function UserDialog({
             position_id: store_positions.length > 0 ? store_positions[0].id : 1,
             department_id: store_departments.length > 0 ? store_departments[0].id : 1,
             role: 'user',
-            department_role_id: 1,
+            department_role_id: department_roles.length > 0 ? department_roles[0].id : 1,
             grade_id: user_grades.length > 0 ? user_grades[0].id : 10,
             country_id: countries.length > 0 ? countries[0].id : 1
         });
@@ -106,19 +146,16 @@ export function UserDialog({
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        // Валидация email
         if (!userForm.email?.trim()) {
             newErrors.email = 'Email is required';
         } else if (!validateEmail(userForm.email)) {
             newErrors.email = 'Please enter a valid email address';
         }
 
-        // Валидация имени
         if (!userForm.first_name?.trim()) {
             newErrors.first_name = 'First name is required';
         }
 
-        // Валидация фамилии
         if (!userForm.last_name?.trim()) {
             newErrors.last_name = 'Last name is required';
         }
@@ -138,12 +175,10 @@ export function UserDialog({
     };
 
     const handleSaveUser = () => {
-        // Проверяем валидность формы перед сохранением
         if (!validateForm()) {
             return;
         }
 
-        // Создаем тело запроса в соответствии с интерфейсом UserBody
         const userBody: UserBody = {
             email: userForm.email,
             first_name: userForm.first_name,
@@ -157,31 +192,25 @@ export function UserDialog({
         };
 
         if (editingUser) {
-            // Редактирование существующего пользователя
             editUser({ body: userBody, user_id: editingUser.id }, {
                 onSuccess: () => {
-                    // После успешного редактирования обновляем список пользователей
                     getUsers();
                     handleClose();
                     if (onSave) onSave();
                 },
                 onError: (error) => {
                     console.error('Error editing user:', error);
-                    // Можно добавить уведомление об ошибке
                 }
             });
         } else {
-            // Создание нового пользователя
             sendUser(userBody, {
                 onSuccess: () => {
-                    // После успешного создания пользователя обновляем список пользователей
                     getUsers();
                     handleClose();
                     if (onSave) onSave();
                 },
                 onError: (error) => {
                     console.error('Error creating user:', error);
-                    // Можно добавить уведомление об ошибке
                 }
             });
         }
@@ -197,7 +226,6 @@ export function UserDialog({
     const handleEmailChange = (value: string) => {
         setUserForm({ ...userForm, email: value });
 
-        // Очищаем ошибку email при изменении
         if (errors.email) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -411,7 +439,7 @@ export function UserDialog({
                         </div>
                     </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className='display-flex pt-4  justify-between'>
                     <Button variant="outline" onClick={handleClose}>
                         Cancel
                     </Button>
