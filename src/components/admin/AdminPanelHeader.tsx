@@ -4,8 +4,8 @@ import { Button } from '../ui/button';
 import { Settings, Plus, Calendar, ChevronDown } from 'lucide-react';
 
 interface AdminPanelHeaderProps {
-    activeTab: 'projects' | 'users' | 'clients' | 'setiings' | 'country' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors';
-    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'settings' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors') => void;
+    activeTab: 'projects' | 'users' | 'clients' | 'setiings' | 'country' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors' | 'service-line' | 'project-status';
+    onTabChange: (tab: 'projects' | 'users' | 'clients' | 'settings' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors' | 'service-line' | 'project-status') => void;
     onAddClick: () => void;
 }
 
@@ -48,6 +48,10 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
         { id: 'pie', label: 'Pie' },
         { id: 'serviceType', label: 'Service-Type' },
         { id: 'sectors', label: 'Sectors' },
+        { id: 'service-line', label: 'Service-line' },
+        { id: 'project-status', label: 'Project-status' },
+
+
 
 
     ];

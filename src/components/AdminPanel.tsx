@@ -48,6 +48,8 @@ import { CountryTable } from './admin/country/CountryTable';
 import { PieTable } from './admin/pie/PieTable';
 import { ServiceTable } from './admin/service type/ServiceTable';
 import { SectorTable } from './admin/sector/SectorTable';
+import { ServiceLineTable } from './admin/service-line/ServiceLineTable';
+import { ProjectStatusTable } from './admin/project-status/ProjectStatusTable';
 
 export function AdminPanel() {
   const { projects, addProject, updateProject, deleteProject, entries } = useTimeTracker();
@@ -1093,6 +1095,12 @@ export function AdminPanel() {
           )}
           {activeTab === 'sectors' && (
             <SectorTable />
+          )}
+          {activeTab === 'service-line' && (
+            <ServiceLineTable />
+          )}
+          {activeTab === 'project-status' && (
+            <ProjectStatusTable />
           )}
 
           {activeTab === 'reports' && (

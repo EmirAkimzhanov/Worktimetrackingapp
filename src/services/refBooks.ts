@@ -57,3 +57,21 @@ export const getSector = async () => {
     );
     return res.data;
 }
+
+export const getProjectStatuses = async () => {
+    const token = useUserStore.getState().access_token;
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios(`${api}api/projects/statuses/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
