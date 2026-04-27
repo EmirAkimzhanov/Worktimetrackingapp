@@ -165,7 +165,7 @@ export function ClientDialog({
                     sector: getFormValue('sector') || 0,
                     client_code: getFormValue('client_code'),
                     bvd: getFormValue('bvd'),
-                    pie_id: getFormValue('pie'),
+                    pie: getFormValue('pie'),
                     country_id: getFormValue('country') === 0 ? null : getFormValue('country'),
                 };
 
@@ -190,7 +190,7 @@ export function ClientDialog({
                     sector: getFormValue('sector') || 0,
                     client_code: getFormValue('client_code'),
                     bvd: getFormValue('bvd'),
-                    pie_id: getFormValue('pie'),
+                    pie: getFormValue('pie'),
                     country: getFormValue('country') === 0 ? null : getFormValue('country'),
                 };
 
