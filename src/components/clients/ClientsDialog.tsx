@@ -21,7 +21,8 @@ interface ClientFormData {
     name: string;
     group: string;
     personal_number: string;
-    client_code: string;   // только одно поле client code
+    client_code: string;
+    bvd: string;
     pie: number;
     country: number;
 }
@@ -61,24 +62,50 @@ export function ClientDialog({
 
     useEffect(() => {
         if (editingClient && open) {
-            const sectorId = editingClient.sector_id || editingClient.sector || 0;
-            const countryId = editingClient.country_id || editingClient.country || 0;
-            const pieId = editingClient.pie_id || editingClient.pie?.id || editingClient.pie || 0;
+            // Функция для поиска ID сектора по названию
+            const getSectorId = (sectorName: string) => {
+                if (!sectorName) return 0;
+                const sector = store_sectors?.find(s => s.name === sectorName);
+                return sector?.id || 0;
+            };
+
+            // Функция для поиска ID страны по коду
+            const getCountryId = (countryCode: string) => {
+                if (!countryCode) return 0;
+                const country = store_countries?.find(c => c.code === countryCode || c.name === countryCode);
+                return country?.id || 0;
+            };
+
+            // Функция для поиска ID PIE по названию или ID
+            const getPieId = (pieValue: any) => {
+                if (!pieValue) return 0;
+                // Если pie приходит как объект с id
+                if (typeof pieValue === 'object' && pieValue.id) return pieValue.id;
+                // Если pie приходит как число
+                if (typeof pieValue === 'number') return pieValue;
+                // Если pie приходит как строка с названием
+                if (typeof pieValue === 'string') {
+                    const pie = pieOptions?.find((p: any) => p.name === pieValue || p.title === pieValue);
+                    return pie?.id || 0;
+                }
+                return 0;
+            };
 
             setClientForm({
                 manager: editingClient.manager || editingClient.manager_id || 0,
-                sector: sectorId,
+                sector: getSectorId(editingClient.sector),
                 name: editingClient.name || '',
                 group: editingClient.group || '',
                 personal_number: editingClient.personal_number || '',
-                client_code: editingClient.client_code || editingClient.clients_code || '', // поддержка старых данных
-                pie: pieId,
-                country: countryId,
+                client_code: editingClient.client_code || editingClient.clients_code || '',
+                bvd: editingClient.bvd || '',
+                pie: getPieId(editingClient.pie),
+                country: getCountryId(editingClient.country),
             });
         } else if (!open) {
             resetForm();
         }
-    }, [editingClient, open, setClientForm]);
+    }, [editingClient, open, setClientForm, store_sectors, store_countries, pieOptions]);
 
     const getFormValue = (key: keyof ClientFormData) => {
         return clientForm?.[key] ?? (key === 'manager' || key === 'sector' || key === 'country' || key === 'pie' ? 0 : '');
@@ -92,6 +119,7 @@ export function ClientDialog({
             group: '',
             personal_number: '',
             client_code: '',
+            bvd: '',
             pie: 0,
             country: 0,
         });
@@ -136,6 +164,7 @@ export function ClientDialog({
                     manager: getFormValue('manager') || 0,
                     sector: getFormValue('sector') || 0,
                     client_code: getFormValue('client_code'),
+                    bvd: getFormValue('bvd'),
                     pie_id: getFormValue('pie'),
                     country_id: getFormValue('country') === 0 ? null : getFormValue('country'),
                 };
@@ -160,6 +189,7 @@ export function ClientDialog({
                     group: getFormValue('group'),
                     sector: getFormValue('sector') || 0,
                     client_code: getFormValue('client_code'),
+                    bvd: getFormValue('bvd'),
                     pie_id: getFormValue('pie'),
                     country: getFormValue('country') === 0 ? null : getFormValue('country'),
                 };
@@ -196,9 +226,9 @@ export function ClientDialog({
                 { value: 5, label: 'Retail' },
             ];
         }
-        const sectorOptions = store_sectors.map((sector, index) => ({
-            value: sector.id || index + 1,
-            label: sector.name || `Sector ${index + 1}`
+        const sectorOptions = store_sectors.map((sector) => ({
+            value: sector.id,
+            label: sector.name
         }));
         return [{ value: 0, label: 'Not selected' }, ...sectorOptions];
     };
@@ -233,6 +263,17 @@ export function ClientDialog({
             }))
         ];
     };
+
+    // Добавим отладочный вывод
+    useEffect(() => {
+        if (editingClient && open) {
+            console.log('Editing client data:', editingClient);
+            console.log('Sectors available:', store_sectors);
+            console.log('Countries available:', store_countries);
+            console.log('PIE options:', pieOptions);
+            console.log('Form data after mapping:', clientForm);
+        }
+    }, [editingClient, open, store_sectors, store_countries, pieOptions, clientForm]);
 
     const sectorOptions = getSectorOptions();
     const countryOptions = getCountryOptions();
@@ -289,6 +330,18 @@ export function ClientDialog({
                         </div>
 
                         <div className="space-y-2">
+                            <Label htmlFor="bvd">BVD</Label>
+                            <Input
+                                id="bvd"
+                                value={getFormValue('bvd')}
+                                onChange={(e) => handleInputChange('bvd', e.target.value)}
+                                placeholder="Enter BVD"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
                             <Label htmlFor="group">Group</Label>
                             <Input
                                 id="group"
@@ -297,9 +350,7 @@ export function ClientDialog({
                                 placeholder="Enter group name"
                             />
                         </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="sector">Sector</Label>
                             <Select
@@ -320,7 +371,9 @@ export function ClientDialog({
                                 </SelectContent>
                             </Select>
                         </div>
+                    </div>
 
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="pie">PIE *</Label>
                             <Select
@@ -342,9 +395,7 @@ export function ClientDialog({
                             </Select>
                             {errors.pie && <p className="text-sm text-red-500">{errors.pie}</p>}
                         </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="country">Country *</Label>
                             <Select
