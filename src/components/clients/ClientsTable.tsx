@@ -19,11 +19,12 @@ import {
   Hash,
   Building2,
   User,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Client } from "../../types/types";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { useDeleteClients, useGetClients } from "../../hooks/useClients";
-import { getClients } from "../../services/clients";
 import { useUserStore } from "../../store/UsersStore";
 import { useGetSectors } from "../../hooks/useSectors";
 import {
@@ -75,43 +76,60 @@ export function ClientsTable({
   onAdd,
 }: ClientsTableProps) {
   const [copiedText, setCopiedText] = useState<string | null>(null);
-  const { mutate: getCLients } = useGetClients();
-  const store_clients = useUserStore((state) => state.clients);
-
-  // ✅ Исправлено: безопасное получение данных с проверкой
-  const displayClients = React.useMemo(() => {
-    if (
-      store_clients &&
-      Array.isArray(store_clients) &&
-      store_clients.length > 0
-    ) {
-      return store_clients;
-    }
-    if (clients && Array.isArray(clients)) {
-      return clients;
-    }
-    return [];
-  }, [store_clients, clients]);
-
+  const { mutate: getClients, isPending: isLoadingClients } = useGetClients();
   const { mutate: getSectors } = useGetSectors();
-  const { mutate: deleteCLient } = useDeleteClients();
+  const { mutate: deleteClient } = useDeleteClients();
 
-  // Состояние для попапа подтверждения удаления
+  const store_clients = useUserStore((state) => state.clients);
+  const clientsPagination = useUserStore((state) => state.clientsPagination);
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<{
     id: number;
     name: string;
   } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 30;
 
+  // Загружаем первую страницу клиентов
   useEffect(() => {
-    // ✅ Добавлена проверка, что функции существуют
-    if (getClients) {
-      getClients();
-    }
+    loadClients(1);
     if (getSectors) {
       getSectors();
     }
   }, []);
+
+  const loadClients = (page: number) => {
+    getClients({ page, page_size: pageSize });
+    setCurrentPage(page);
+  };
+
+  // ✅ Исправлено: безопасное получение данных с проверкой на массив
+  const displayClients = React.useMemo(() => {
+    if (store_clients && Array.isArray(store_clients) && store_clients.length > 0) {
+      return store_clients;
+    }
+    if (clients && Array.isArray(clients) && clients.length > 0) {
+      return clients;
+    }
+    return [];
+  }, [store_clients, clients]);
+
+  const totalCount = clientsPagination?.count || 0;
+  const hasNext = !!clientsPagination?.next;
+  const hasPrev = !!clientsPagination?.previous;
+
+  const handleNextPage = () => {
+    if (hasNext) {
+      loadClients(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (hasPrev) {
+      loadClients(currentPage - 1);
+    }
+  };
 
   const copyToClipboard = async (text: string, itemName: string) => {
     if (!text || text === "N/A") return;
@@ -121,7 +139,6 @@ export function ClientsTable({
       setCopiedText(text);
       toast.success(`${itemName} copied to clipboard`);
 
-      // Reset after 2 seconds
       setTimeout(() => {
         setCopiedText(null);
       }, 2000);
@@ -130,7 +147,6 @@ export function ClientsTable({
     }
   };
 
-  // Функция для открытия попапа удаления
   const handleDeleteClick = (client: Client) => {
     if (client && client.id) {
       setClientToDelete({
@@ -141,18 +157,12 @@ export function ClientsTable({
     }
   };
 
-  // Функция для подтверждения удаления
   const handleConfirmDelete = () => {
     if (clientToDelete && clientToDelete.id) {
-      deleteCLient(clientToDelete.id, {
+      deleteClient(clientToDelete.id.toString(), {
         onSuccess: () => {
-          // После успешного удаления обновляем список клиентов
-          if (getCLients) {
-            getCLients();
-          }
-          // Также вызываем onDelete проп для обратной совместимости
+          loadClients(currentPage);
           onDelete(clientToDelete.id);
-          // Закрываем попап
           setDeleteDialogOpen(false);
           setClientToDelete(null);
           toast.success("Client deleted successfully");
@@ -167,13 +177,11 @@ export function ClientsTable({
     }
   };
 
-  // Функция для отмены удаления
   const handleCancelDelete = () => {
     setDeleteDialogOpen(false);
     setClientToDelete(null);
   };
 
-  // Function to get sector label by value
   const getSectorLabel = (sectorValue: string): string => {
     if (!sectorValue || sectorValue === "N/A") return "Not specified";
     const sector = SECTOR_OPTIONS.find(
@@ -182,18 +190,37 @@ export function ClientsTable({
     return sector ? sector.label : sectorValue;
   };
 
-  // ✅ Проверка на пустой массив
+  // Показываем лоадер при первой загрузке
+  if (isLoadingClients && displayClients.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Clients</h2>
+            <p className="text-muted-foreground">Loading clients...</p>
+          </div>
+          <Button onClick={onAdd} size="sm">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Client
+          </Button>
+        </div>
+        <div className="rounded-md border p-8 text-center text-slate-500">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          Loading clients...
+        </div>
+      </div>
+    );
+  }
+
   const hasClients = displayClients.length > 0;
 
   return (
     <div className="space-y-4">
-      {/* Header with Add button */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Clients</h2>
           <p className="text-muted-foreground">
-            {displayClients.length} client
-            {displayClients.length !== 1 ? "s" : ""} found
+            {totalCount > 0 ? `Total: ${totalCount} clients` : `${displayClients.length} client${displayClients.length !== 1 ? "s" : ""} found`}
           </p>
         </div>
         <Button onClick={onAdd} size="sm">
@@ -231,7 +258,6 @@ export function ClientsTable({
               </TableRow>
             ) : (
               displayClients.map((client) => {
-                // ✅ Проверка, что client существует
                 if (!client) return null;
 
                 const sectorLabel = client.sector
@@ -265,7 +291,7 @@ export function ClientsTable({
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {client.personal_number &&
-                        client.personal_number !== "N/A" ? (
+                          client.personal_number !== "N/A" ? (
                           <>
                             <div className="flex items-center gap-1">
                               <Hash className="w-3 h-3 text-gray-400" />
@@ -342,7 +368,38 @@ export function ClientsTable({
         </Table>
       </div>
 
-      {/* Попап подтверждения удаления */}
+      {/* Пагинация */}
+      {(hasNext || hasPrev) && (
+        <div className="flex justify-between items-center pt-4">
+          <div className="text-xs text-muted-foreground">
+            Showing {displayClients.length} of {totalCount} clients
+          </div>
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrevPage}
+              disabled={!hasPrev || isLoadingClients}
+            >
+              <ChevronLeft size={14} className="mr-1" />
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground px-2">
+              Page {currentPage}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextPage}
+              disabled={!hasNext || isLoadingClients}
+            >
+              Next
+              <ChevronRight size={14} className="ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -7,8 +7,8 @@ import { OnlyClient } from '../types/client';
 
 // Кэш для getCountryClients (по countryId)
 const countryClientsCache = new Map<string, { data: any; timestamp: number }>();
-// Кэш для getClients
-let clientsCache: { data: any; timestamp: number } | null = null;
+// Кэш для getClients (с пагинацией)
+let clientsCache: { data: any; timestamp: number; params?: any } | null = null;
 // Кэш для getClientProjects (по clientId)
 const clientProjectsCache = new Map<string, { data: any; timestamp: number }>();
 
@@ -40,6 +40,18 @@ const clearAllCaches = () => {
     countryClientsCache.clear();
     clientsCache = null;
     clientProjectsCache.clear();
+};
+
+// Функция получения кэшированных клиентов
+const getCachedClients = (params?: { page?: number; page_size?: number }) => {
+    const now = Date.now();
+    if (clientsCache && (now - clientsCache.timestamp) < CACHE_DURATION) {
+        if (JSON.stringify(clientsCache.params) === JSON.stringify(params)) {
+            console.log('Returning cached clients data for params:', params);
+            return clientsCache.data;
+        }
+    }
+    return null;
 };
 
 // ========== ХУКИ С КЭШИРОВАНИЕМ ==========
@@ -105,25 +117,45 @@ export const useGetCLientProjecs = () => {
 
 export const useGetClients = () => {
     const setClients = useUserStore((state) => state.setClients);
+    const setClientsPagination = useUserStore((state) => state.setClientsPagination);
 
     return useMutation({
-        mutationFn: async () => {
-            // Проверяем кэш
-            const now = Date.now();
+        mutationFn: async (params?: { page?: number; page_size?: number; forceRefresh?: boolean }) => {
+            const { page = 1, page_size = 30, forceRefresh = false } = params || {};
+            const queryParams = { page, page_size };
 
-            if (clientsCache && (now - clientsCache.timestamp) < CACHE_DURATION) {
-                console.log('Using cached clients list');
-                return clientsCache.data;
+            // Проверяем кэш
+            if (!forceRefresh) {
+                const cached = getCachedClients(queryParams);
+                if (cached) {
+                    return cached;
+                }
             }
 
-            // Загружаем новые данные
-            const data = await getClients();
-            clientsCache = { data, timestamp: now };
+            console.log(forceRefresh ? 'Force refreshing clients' : `Fetching fresh clients for page ${page}, page_size ${page_size}`);
+            const data = await getClients(queryParams);
+
+            // Сохраняем в кэш с параметрами
+            clientsCache = {
+                data,
+                timestamp: Date.now(),
+                params: queryParams
+            };
+
             return data;
         },
-        onSuccess: (data) => {
-            useUserStore.getState().setSelectedCountry(data);
-            setClients(data);
+        onSuccess: (data, params) => {
+            // Сохраняем clients и пагинацию в store
+            setClients(data.results || data);
+            if (setClientsPagination) {
+                setClientsPagination({
+                    count: data.count,
+                    next: data.next,
+                    previous: data.previous,
+                    currentPage: params?.page || 1,
+                    pageSize: params?.page_size || 30
+                });
+            }
             console.log('Clients loaded:', data);
         },
         onError: (error: Error) => {
@@ -185,6 +217,7 @@ export const cacheUtils = {
     getCacheStats: () => ({
         countryClientsSize: countryClientsCache.size,
         clientsCached: !!clientsCache,
+        clientsCacheParams: clientsCache?.params || null,
         clientProjectsSize: clientProjectsCache.size,
     }),
 };

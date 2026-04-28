@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Edit, Trash2, Plus, User } from 'lucide-react';
+import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getRoleBadgeVariant } from '../../../const/consts';
 import { User as UserType, Position, Department } from '../../../types/types';
 import { useDeleteUsers, useGetUserGrades, useGetUsers } from '../../../hooks/useUsers';
@@ -34,36 +34,58 @@ export function UsersTable({
     onEdit,
     onAdd
 }: UsersTableProps) {
-    const { mutate: getUsers } = useGetUsers();
+    const { mutate: getUsers, isPending: isLoadingUsers } = useGetUsers();
     const { mutate: getDepartmentRoles } = useGetDepartmentRoles();
     const { mutate: getUserGrades } = useGetUserGrades();
     const { mutate: getCountries } = useGetCountries();
     const { mutate: getDepartments } = useGetDepartments();
     const { mutate: getPositions } = useGetPositions();
     const { mutate: deleteUser } = useDeleteUsers();
-    const store_users = useUserStore((state) => state.users);
-    // const store_departments = useUserStore((state) => state.departments);
 
-    // Состояние для попапа подтверждения удаления
+    const store_users = useUserStore((state) => state.users);
+    const usersPagination = useUserStore((state) => state.usersPagination);
+
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState<{
         id: number;
         name: string;
     } | null>(null);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const pageSize = 30;
+
     useEffect(() => {
-        getUsers();
         getDepartmentRoles();
         getUserGrades();
         getCountries();
         getDepartments();
         getPositions();
+        loadUsers(1);
     }, []);
 
-    // Используем пользователей из стора, проверяем на null/undefined
-    const users = store_users || [];
+    const loadUsers = (page: number) => {
+        getUsers({ page, page_size: pageSize });
+        setCurrentPage(page);
+    };
 
-    // Функция для открытия попапа удаления
+    // Проверяем, что users это массив
+    const users = Array.isArray(store_users) ? store_users : [];
+    const totalCount = usersPagination?.count || 0;
+    const hasNext = !!usersPagination?.next;
+    const hasPrev = !!usersPagination?.previous;
+
+    const handleNextPage = () => {
+        if (hasNext) {
+            loadUsers(currentPage + 1);
+        }
+    };
+
+    const handlePrevPage = () => {
+        if (hasPrev) {
+            loadUsers(currentPage - 1);
+        }
+    };
+
     const handleDeleteClick = (user: UserType) => {
         setUserToDelete({
             id: user.id,
@@ -72,20 +94,16 @@ export function UsersTable({
         setDeleteDialogOpen(true);
     };
 
-    // Функция для подтверждения удаления
     const handleConfirmDelete = () => {
         if (userToDelete) {
-            deleteUser(userToDelete.id, {
+            deleteUser(userToDelete.id.toString(), {
                 onSuccess: () => {
-                    // После успешного удаления обновляем список пользователей
-                    getUsers();
-                    // Закрываем попап
+                    loadUsers(currentPage);
                     setDeleteDialogOpen(false);
                     setUserToDelete(null);
                 },
                 onError: (error) => {
                     console.error('Error deleting user:', error);
-                    // Можно добавить уведомление об ошибке
                     setDeleteDialogOpen(false);
                     setUserToDelete(null);
                 }
@@ -93,13 +111,11 @@ export function UsersTable({
         }
     };
 
-    // Функция для отмены удаления
     const handleCancelDelete = () => {
         setDeleteDialogOpen(false);
         setUserToDelete(null);
     };
 
-    // Форматирование даты
     const formatDate = (dateString: string | null) => {
         if (!dateString) return 'Not set';
         try {
@@ -113,13 +129,36 @@ export function UsersTable({
         }
     };
 
+    if (isLoadingUsers && users.length === 0) {
+        return (
+            <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight">Users</h2>
+                        <p className="text-muted-foreground">Manage all users in the organization</p>
+                    </div>
+                    <Button onClick={onAdd} size="sm">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add User
+                    </Button>
+                </div>
+                <div className="rounded-md border p-8 text-center text-slate-500">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    Loading users...
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4">
-            {/* Заголовок с кнопкой Add */}
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Users</h2>
-                    <p className="text-muted-foreground">Manage all users in the organization</p>
+                    <p className="text-muted-foreground">
+                        Manage all users in the organization
+                        {totalCount > 0 && ` • Total: ${totalCount} users`}
+                    </p>
                 </div>
                 <Button onClick={onAdd} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
@@ -128,7 +167,20 @@ export function UsersTable({
             </div>
 
             <div className="rounded-md border overflow-x-auto">
-                <Table>
+                <Table className="min-w-[1200px] table-fixed">
+                    <colgroup>
+                        <col style={{ width: '150px' }} />
+                        <col style={{ width: '200px' }} />
+                        <col style={{ width: '100px' }} />
+                        <col style={{ width: '100px' }} />
+                        <col style={{ width: '120px' }} />
+                        <col style={{ width: '80px' }} />
+                        <col style={{ width: '80px' }} />
+                        <col style={{ width: '100px' }} />
+                        <col style={{ width: '100px' }} />
+                        <col style={{ width: '80px' }} />
+                        <col style={{ width: '70px' }} />
+                    </colgroup>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Name</TableHead>
@@ -141,54 +193,56 @@ export function UsersTable({
                             <TableHead>Role</TableHead>
                             <TableHead>Date Joined</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead className="w-24">Actions</TableHead>
+                            <TableHead>Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {users.length === 0 ? (
+                        {users.length === 0 && !isLoadingUsers ? (
                             <TableRow>
                                 <TableCell colSpan={11} className="text-center text-slate-500 py-8">
-                                    {store_users === null ? 'Loading users...' : 'No users found. Click "Add User" to create your first user.'}
+                                    No users found. Click "Add User" to create your first user.
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            users.map(user => (
+                            users.map((user: any) => (
                                 <TableRow key={user.id} className="hover:bg-slate-50">
                                     <TableCell className="font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <User className="w-4 h-4 text-slate-500" />
-                                            {user.first_name} {user.last_name}
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <User className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                            <span className="truncate">
+                                                {user.first_name} {user.last_name}
+                                            </span>
                                         </div>
                                     </TableCell>
-                                    <TableCell>{user.email}</TableCell>
                                     <TableCell>
-                                        <span className="text-sm">
+                                        <span className="text-sm truncate block max-w-[180px]">
+                                            {user.email}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className="text-sm truncate block max-w-[90px]">
                                             {user.position || 'Not assigned'}
                                         </span>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-sm">
+                                        <span className="text-sm truncate block max-w-[90px]">
                                             {user.department || 'Not assigned'}
                                         </span>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 truncate max-w-[110px]">
                                             {user.department_role || 'Not assigned'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-sm">
-                                            {user.grade || '-'}
-                                        </span>
+                                        <span className="text-sm">{user.grade || '-'}</span>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-sm">
-                                            {user?.country || '-'}
-                                        </span>
+                                        <span className="text-sm">{user.country || '-'}</span>
                                     </TableCell>
                                     <TableCell>
                                         <Badge variant={getRoleBadgeVariant(user.role)}>
-                                            {user.role || 'Not assigned'}
+                                            {user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'User' : user.role || 'Not assigned'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
@@ -214,16 +268,18 @@ export function UsersTable({
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
+                                                className="h-7 w-7"
                                                 onClick={() => onEdit(user)}
                                             >
-                                                <Edit className="w-4 h-4" />
+                                                <Edit className="w-3.5 h-3.5" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
+                                                className="h-7 w-7"
                                                 onClick={() => handleDeleteClick(user)}
                                             >
-                                                <Trash2 className="w-4 h-4 text-red-500" />
+                                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
                                             </Button>
                                         </div>
                                     </TableCell>
@@ -234,7 +290,37 @@ export function UsersTable({
                 </Table>
             </div>
 
-            {/* Попап подтверждения удаления */}
+            {(hasNext || hasPrev) && (
+                <div className="flex justify-between items-center pt-4">
+                    <div className="text-xs text-muted-foreground">
+                        Showing {users.length} of {totalCount} users
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handlePrevPage}
+                            disabled={!hasPrev || isLoadingUsers}
+                        >
+                            <ChevronLeft size={14} className="mr-1" />
+                            Previous
+                        </Button>
+                        <span className="text-sm text-muted-foreground px-2">
+                            Page {currentPage}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleNextPage}
+                            disabled={!hasNext || isLoadingUsers}
+                        >
+                            Next
+                            <ChevronRight size={14} className="ml-1" />
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -242,8 +328,8 @@ export function UsersTable({
                         <AlertDialogDescription>
                             {userToDelete && (
                                 <>
-                                    This action cannot be undone. This will permanently delete the user{" "}
-                                    <span className="font-semibold text-red-600">{userToDelete.name}</span>{" "}
+                                    This action cannot be undone. This will permanently delete the user{' '}
+                                    <span className="font-semibold text-red-600">{userToDelete.name}</span>{' '}
                                     from the system.
                                     <div className="mt-3 p-3 bg-red-50 rounded-md">
                                         <p className="text-sm text-red-700 font-medium">

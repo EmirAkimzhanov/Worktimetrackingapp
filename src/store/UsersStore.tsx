@@ -107,6 +107,22 @@ export interface ReportSummary {
   billablePercentage: number;
 }
 
+export interface UsersPagination {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  currentPage: number;
+  pageSize: number;
+}
+
+export interface ClientsPagination {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  currentPage: number;
+  pageSize: number;
+}
+
 export type ReportType = 'time' | 'project' | 'user' | 'financial' | 'custom';
 
 // Единый тип для всех отчетов
@@ -125,6 +141,14 @@ interface User {
   email: string;
   name: string;
   role: string;
+}
+
+interface ProjectsPagination {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  currentPage: number;
+  pageSize: number;
 }
 
 interface UserState {
@@ -188,6 +212,10 @@ interface UserState {
 
   managers: Manager[] | null;
 
+  projectsPagination: ProjectsPagination | null;
+  usersPagination: UsersPagination | null;
+  clientsPagination: ClientsPagination | null;
+
   setUser: (
     user: User,
     tokens: { access_token: string; refresh_token: string },
@@ -214,6 +242,10 @@ interface UserState {
   getInternalTasksByType: (taskType: string) => Task[];
 
   setLeaves: (leaves: LeaveArray | null) => void;
+
+  setProjectsPagination: (pagination: ProjectsPagination | null) => void;
+  setUsersPagination: (pagination: UsersPagination | null) => void;
+  setClientsPagination: (pagination: ClientsPagination | null) => void;
 
   setTimeEntries: (timeEntries: TimeEntry[] | null) => void;
 
@@ -332,6 +364,9 @@ export const useUserStore = create<UserState>()(
       globalSettings: null,
       calendar_holidays: null,
       me: null,
+      projectsPagination: null,
+      usersPagination: null,
+      clientsPagination: null,
       reports: {
         timeReports: null,
         projectReports: null,
@@ -352,7 +387,6 @@ export const useUserStore = create<UserState>()(
       setAccessToken: (token) => set({ access_token: token }),
       setRefreshToken: (token) => set({ refresh_token: token }),
 
-
       updateUser: (updates) =>
         set((state) => ({
           user: state.user ? { ...state.user, ...updates } : null,
@@ -364,7 +398,7 @@ export const useUserStore = create<UserState>()(
 
       setManagers: (managers) => set({ managers }),
 
-      setMonitoring: (monitoring) => set({ monitoring }), // ✅ Исправлено: правильное имя параметра
+      setMonitoring: (monitoring) => set({ monitoring }),
 
       setSelectedCountry: (country) => set({ selectedCountry: country }),
 
@@ -389,6 +423,10 @@ export const useUserStore = create<UserState>()(
 
       setDepartments: (departments) => set({ departments }),
 
+      setUsersPagination: (pagination) => set({ usersPagination: pagination }),
+
+      setClientsPagination: (pagination) => set({ clientsPagination: pagination }),
+
       setDepartmentMembers: (departmentMembers) =>
         set({ department_members: departmentMembers }),
 
@@ -403,6 +441,8 @@ export const useUserStore = create<UserState>()(
       setProjects: (projects) => set({ projects }),
 
       setUsers: (users) => set({ users }),
+
+      setProjectsPagination: (pagination) => set({ projectsPagination: pagination }),
 
       setDepartmentRoles: (department_roles) => set({ department_roles }),
 
@@ -420,7 +460,6 @@ export const useUserStore = create<UserState>()(
 
       setRoles: (roles) => set({ roles }),
 
-      // ✅ ОДНА ПРОСТАЯ ФУНКЦИЯ ДЛЯ ОТЧЕТОВ
       setReports: (reports) => set({ reports }),
 
       getInternalTaskById: (taskId: number) => {
@@ -437,7 +476,6 @@ export const useUserStore = create<UserState>()(
         );
       },
 
-      // ✅ Хелпер функции для tasks
       getTaskById: (taskId: number) => {
         const state = get();
         if (!state.tasks) return undefined;
@@ -474,7 +512,6 @@ export const useUserStore = create<UserState>()(
         set({ tasks: filteredTasks });
       },
 
-      // ✅ Хелпер функции для roles
       getRoleById: (roleId: number) => {
         const state = get();
         if (!state.roles) return undefined;
@@ -513,7 +550,6 @@ export const useUserStore = create<UserState>()(
         set({ roles: filteredRoles });
       },
 
-      // ✅ Хелпер функции для отчетов
       getTimeReportById: (reportId: number) => {
         const state = get();
         return state.reports?.timeReports?.find((report) => report.id === reportId);
@@ -736,7 +772,9 @@ export const useUserStore = create<UserState>()(
           calendar_holidays: null,
           me: null,
           managers: null,
-          // ✅ ОЧИЩАЕМ ОДИН СТЕЙТ ОТЧЕТОВ ПРИ ВЫХОДЕ
+          projectsPagination: null,
+          usersPagination: null,
+          clientsPagination: null,
           reports: {
             timeReports: null,
             projectReports: null,
@@ -755,6 +793,7 @@ export const useUserStore = create<UserState>()(
         refresh_token: state.refresh_token,
         user: state.user,
         me: state.me,
+        projectsPagination: state.projectsPagination,
         managers: state.managers,
         selectedCountry: state.selectedCountry,
         client_projects: state.client_projects,

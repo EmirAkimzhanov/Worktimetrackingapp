@@ -1151,8 +1151,9 @@ export function AdminPanel() {
       <ProjectDialog
         open={isAddDialogOpen}
         onOpenChange={(open: boolean) => {
+          setIsAddDialogOpen(open);
+
           if (!open) {
-            setIsAddDialogOpen(false);
             setEditingProject(null);
             resetProjectForm();
           }
@@ -1164,7 +1165,7 @@ export function AdminPanel() {
         clients={clients}
         countries={COUNTRIES}
         predefinedColors={PREDEFINED_COLORS}
-        onSave={editingProject ? handleUpdateProject : handleAddProject}
+      // onSave={editingProject ? handleUpdateProject : handleAddProject}
       />
 
       {/* Диалог пользователя */}

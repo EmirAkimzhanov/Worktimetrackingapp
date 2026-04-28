@@ -64,6 +64,9 @@ export function ProjectDialog({
     const { data: serviceType } = useGetServiceType();
     const { data: project_managers, isLoading: isLoadingManagers, error: managersError } = useGetManagers();
 
+
+
+
     // Загружаем департаменты при открытии
     useEffect(() => {
         if (open && (!store_departments || store_departments.length === 0)) {
@@ -151,7 +154,7 @@ export function ProjectDialog({
 
             setProjectForm({
                 ...projectForm,
-                name: editingProject.name || '',
+                ic: editingProject.name || '',
                 description: editingProject.description || '',
                 project_color: editingProject.project_color || '#1F4E78',
                 status_id: statusId,
@@ -176,7 +179,7 @@ export function ProjectDialog({
 
     const resetForm = () => {
         setProjectForm({
-            name: '',
+            ic: '',
             description: '',
             project_color: '#1F4E78',
             status_id: undefined,
@@ -219,8 +222,8 @@ export function ProjectDialog({
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (!projectForm.name?.trim()) {
-            newErrors.name = 'Project name is required';
+        if (!projectForm.ic?.trim()) {
+            newErrors.ic = 'Project name is required';
         }
         if (!projectForm.description?.trim()) {
             newErrors.description = 'Project description is required';
@@ -242,7 +245,7 @@ export function ProjectDialog({
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         if (!validateForm()) {
             toast.error('Please fill in all required fields');
             return;
@@ -251,7 +254,7 @@ export function ProjectDialog({
         setIsSubmitting(true);
 
         const projectData = {
-            name: projectForm.name,
+            name: projectForm.ic,
             description: projectForm.description,
             project_color: projectForm.project_color,
             is_chargeable: projectForm.is_chargeable,
@@ -275,14 +278,14 @@ export function ProjectDialog({
                     onSuccess: () => {
                         toast.success('Project updated successfully');
                         getProjects();
-                        onSave();
-                        resetForm();
                         onOpenChange(false);
+                        resetForm();
+                        setIsSubmitting(false);
                     },
                     onError: (error) => {
                         toast.error(`Failed to update project: ${error.message || 'Unknown error'}`);
+                        setIsSubmitting(false);
                     },
-                    onSettled: () => setIsSubmitting(false),
                 }
             );
         } else {
@@ -290,14 +293,14 @@ export function ProjectDialog({
                 onSuccess: () => {
                     toast.success('Project created successfully');
                     getProjects();
-                    onSave();
-                    resetForm();
                     onOpenChange(false);
+                    resetForm();
+                    setIsSubmitting(false);
                 },
                 onError: (error) => {
                     toast.error(`Failed to create project: ${error.message || 'Unknown error'}`);
+                    setIsSubmitting(false);
                 },
-                onSettled: () => setIsSubmitting(false),
             });
         }
     };
@@ -311,11 +314,13 @@ export function ProjectDialog({
     const getActiveStoreCountries = () => {
         if (!store_countries || !Array.isArray(store_countries)) return [];
         return store_countries.filter(country => country.is_active !== false);
+
     };
 
     const getActiveManagers = () => {
-        if (!project_managers || !Array.isArray(project_managers)) return [];
-        return project_managers.filter(manager => manager.is_active !== false);
+        // if (!project_managers || !Array.isArray(project_managers)) return [];
+        // return project_managers.filter(manager => manager.is_active !== false);
+        return project_managers
     };
 
     const getActiveStoreClients = () => {
@@ -401,7 +406,7 @@ export function ProjectDialog({
         ));
     };
 
-    const isLoading = isSubmitting || isSending;
+    const isLoading = isSubmitting;
 
     // Если данные ещё не загружены, показываем индикатор загрузки
     if (open && editingProject && !isDataReady) {
@@ -430,18 +435,18 @@ export function ProjectDialog({
                     {/* Project Name и Recurring */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="project-name">Project Name *</Label>
+                            <Label htmlFor="project-name">IC *</Label>
                             <Input
                                 id="project-name"
-                                value={projectForm.name}
+                                value={projectForm.ic}
                                 onChange={(e) => {
-                                    setProjectForm({ ...projectForm, name: e.target.value });
-                                    if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
+                                    setProjectForm({ ...projectForm, ic: e.target.value });
+                                    if (errors.ic) setErrors(prev => ({ ...prev, ic: '' }));
                                 }}
-                                placeholder="Enter project name"
-                                className={errors.name ? 'border-red-500' : ''}
+                                placeholder="Enter ic"
+                                className={errors.ic ? 'border-red-500' : ''}
                             />
-                            {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+                            {errors.ic && <p className="text-sm text-red-500">{errors.ic}</p>}
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="project-recurring">Recurring</Label>

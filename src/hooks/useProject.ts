@@ -5,8 +5,8 @@ import { ProjectBody } from '../types/project';
 
 // ========== КЭШ ДЛЯ ПРОЕКТОВ ==========
 
-// Кэш для всех проектов
-let projectsCache: { data: any[]; timestamp: number } | null = null;
+// Кэш для всех проектов (с пагинацией)
+let projectsCache: { data: any; timestamp: number; params?: any } | null = null;
 
 // Кэш для задач проекта (по project_id)
 const projectTasksCache = new Map<string, { data: any; timestamp: number }>();
@@ -36,11 +36,14 @@ const clearAllProjectsCaches = () => {
 };
 
 // Функции получения кэшированных данных
-const getCachedProjects = () => {
+const getCachedProjects = (params?: { page?: number; page_size?: number }) => {
     const now = Date.now();
     if (projectsCache && (now - projectsCache.timestamp) < CACHE_DURATION) {
-        console.log('Returning cached projects data');
-        return projectsCache.data;
+        // Проверяем, совпадают ли параметры кэша с запрашиваемыми
+        if (JSON.stringify(projectsCache.params) === JSON.stringify(params)) {
+            console.log('Returning cached projects data for params:', params);
+            return projectsCache.data;
+        }
     }
     return null;
 };
@@ -120,23 +123,45 @@ export const useEditProject = () => {
 
 export const useGetProjects = () => {
     const setProjects = useUserStore((state) => state.setProjects);
+    const setProjectsPagination = useUserStore((state) => state.setProjectsPagination);
 
     return useMutation({
-        mutationFn: async (forceRefresh?: boolean) => {
+        mutationFn: async (params?: { page?: number; page_size?: number; forceRefresh?: boolean }) => {
+            const { page = 1, page_size = 30, forceRefresh = false } = params || {};
+            const queryParams = { page, page_size };
+
             // Проверяем кэш
             if (!forceRefresh) {
-                const cached = getCachedProjects();
+                const cached = getCachedProjects(queryParams);
                 if (cached) {
                     return cached;
                 }
             }
-            console.log(forceRefresh ? 'Force refreshing projects' : 'Fetching fresh projects');
-            const data = await getProjects();
-            projectsCache = { data, timestamp: Date.now() };
+
+            console.log(forceRefresh ? 'Force refreshing projects' : `Fetching fresh projects for page ${page}, page_size ${page_size}`);
+            const data = await getProjects(queryParams);
+
+            // Сохраняем в кэш с параметрами
+            projectsCache = {
+                data,
+                timestamp: Date.now(),
+                params: queryParams
+            };
+
             return data;
         },
-        onSuccess: (data) => {
-            setProjects(data);
+        onSuccess: (data, params) => {
+            // Сохраняем projects и пагинацию в store
+            setProjects(data.results || data);
+            if (setProjectsPagination) {
+                setProjectsPagination({
+                    count: data.count,
+                    next: data.next,
+                    previous: data.previous,
+                    currentPage: params?.page || 1,
+                    pageSize: params?.page_size || 30
+                });
+            }
             console.log('Projects loaded:', data);
         },
         onError: (error: Error) => {
@@ -162,8 +187,6 @@ export const useDeleteProject = () => {
     });
 };
 
-
-
 // ========== ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ==========
 
 export const projectsCacheUtils = {
@@ -171,10 +194,12 @@ export const projectsCacheUtils = {
     clearProjectTasksCache: clearProjectTasksCache,
     clearAll: clearAllProjectsCaches,
 
-    isProjectsCacheValid: () => {
+    isProjectsCacheValid: (params?: { page?: number; page_size?: number }) => {
         if (!projectsCache) return false;
         const now = Date.now();
-        return (now - projectsCache.timestamp) < CACHE_DURATION;
+        const isTimeValid = (now - projectsCache.timestamp) < CACHE_DURATION;
+        const isParamsValid = JSON.stringify(projectsCache.params) === JSON.stringify(params);
+        return isTimeValid && isParamsValid;
     },
 
     isProjectTasksCacheValid: (projectId: string) => {
@@ -198,7 +223,7 @@ export const projectsCacheUtils = {
     },
 
     getProjectsCacheSize: () => {
-        return projectsCache ? projectsCache.data.length : 0;
+        return projectsCache ? (projectsCache.data.results?.length || projectsCache.data.length || 0) : 0;
     },
 
     getProjectTasksCacheStats: () => {
@@ -219,12 +244,16 @@ export const projectsCacheUtils = {
         };
     },
 
-
-
-    refreshProjectsCache: async () => {
-        const data = await getProjects();
-        projectsCache = { data, timestamp: Date.now() };
-        console.log('Projects cache refreshed');
+    refreshProjectsCache: async (params?: { page?: number; page_size?: number }) => {
+        const page = params?.page || 1;
+        const page_size = params?.page_size || 30;
+        const data = await getProjects({ page, page_size });
+        projectsCache = {
+            data,
+            timestamp: Date.now(),
+            params: { page, page_size }
+        };
+        console.log(`Projects cache refreshed for page ${page}, page_size ${page_size}`);
         return data;
     },
 
