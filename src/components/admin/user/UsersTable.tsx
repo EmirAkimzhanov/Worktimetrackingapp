@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { getRoleBadgeVariant } from '../../../const/consts';
 import { User as UserType, Position, Department } from '../../../types/types';
 import { useDeleteUsers, useGetUserGrades, useGetUsers } from '../../../hooks/useUsers';
@@ -20,6 +20,13 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '../../ui/alert-dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '../../ui/select';
 
 interface UsersTableProps {
     positions: Position[];
@@ -71,6 +78,7 @@ export function UsersTable({
     // Проверяем, что users это массив
     const users = Array.isArray(store_users) ? store_users : [];
     const totalCount = usersPagination?.count || 0;
+    const totalPages = Math.ceil(totalCount / pageSize);
     const hasNext = !!usersPagination?.next;
     const hasPrev = !!usersPagination?.previous;
 
@@ -83,6 +91,24 @@ export function UsersTable({
     const handlePrevPage = () => {
         if (hasPrev) {
             loadUsers(currentPage - 1);
+        }
+    };
+
+    const handleGoToPage = (page: number) => {
+        if (page >= 1 && page <= totalPages && page !== currentPage) {
+            loadUsers(page);
+        }
+    };
+
+    const handleFirstPage = () => {
+        if (currentPage !== 1) {
+            loadUsers(1);
+        }
+    };
+
+    const handleLastPage = () => {
+        if (currentPage !== totalPages && totalPages > 0) {
+            loadUsers(totalPages);
         }
     };
 
@@ -127,6 +153,82 @@ export function UsersTable({
         } catch {
             return dateString;
         }
+    };
+
+    // Функция для отображения номеров страниц
+    const renderPageNumbers = () => {
+        const pages = [];
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+        if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+
+        // Добавляем первую страницу, если нужно
+        if (startPage > 1) {
+            pages.push(
+                <Button
+                    key="1"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleGoToPage(1)}
+                    disabled={isLoadingUsers}
+                    className="min-w-[40px] hidden sm:inline-flex"
+                >
+                    1
+                </Button>
+            );
+            if (startPage > 2) {
+                pages.push(
+                    <span key="ellipsis1" className="px-1 text-muted-foreground hidden sm:inline">
+                        ...
+                    </span>
+                );
+            }
+        }
+
+        // Основные страницы
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push(
+                <Button
+                    key={i}
+                    variant={currentPage === i ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleGoToPage(i)}
+                    disabled={isLoadingUsers}
+                    className="min-w-[40px]"
+                >
+                    {i}
+                </Button>
+            );
+        }
+
+        // Добавляем последнюю страницу, если нужно
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                pages.push(
+                    <span key="ellipsis2" className="px-1 text-muted-foreground hidden sm:inline">
+                        ...
+                    </span>
+                );
+            }
+            pages.push(
+                <Button
+                    key={totalPages}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleGoToPage(totalPages)}
+                    disabled={isLoadingUsers}
+                    className="min-w-[40px] hidden sm:inline-flex"
+                >
+                    {totalPages}
+                </Button>
+            );
+        }
+
+        return pages;
     };
 
     if (isLoadingUsers && users.length === 0) {
@@ -290,12 +392,27 @@ export function UsersTable({
                 </Table>
             </div>
 
-            {(hasNext || hasPrev) && (
-                <div className="flex justify-between items-center pt-4">
+            {/* Улучшенная пагинация */}
+            {totalPages > 0 && (
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
                     <div className="text-xs text-muted-foreground">
                         Showing {users.length} of {totalCount} users
                     </div>
-                    <div className="flex gap-2 items-center">
+
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                        {/* Кнопка "Первая страница" */}
+                        {/* <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleFirstPage}
+                            disabled={currentPage === 1 || isLoadingUsers}
+                            className="hidden sm:flex"
+                        >
+                            <ChevronsLeft size={14} className="mr-1" />
+                            First
+                        </Button> */}
+
+                        {/* Кнопка "Предыдущая" */}
                         <Button
                             variant="outline"
                             size="sm"
@@ -305,19 +422,89 @@ export function UsersTable({
                             <ChevronLeft size={14} className="mr-1" />
                             Previous
                         </Button>
-                        <span className="text-sm text-muted-foreground px-2">
-                            Page {currentPage}
-                        </span>
+
+                        {/* Номера страниц (десктоп) */}
+                        <div className="hidden md:flex gap-1">
+                            {renderPageNumbers()}
+                        </div>
+
+                        {/* Выпадающий список для перехода (мобильные) */}
+                        <div className="flex md:hidden items-center gap-2">
+                            <Select
+                                value={currentPage.toString()}
+                                onValueChange={(value) => handleGoToPage(parseInt(value))}
+                                disabled={isLoadingUsers}
+                            >
+                                <SelectTrigger className="w-[100px] h-8">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                        <SelectItem key={page} value={page.toString()}>
+                                            Page {page} of {totalPages}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Индикатор страницы (планшеты) */}
+                        <div className="hidden sm:flex md:hidden items-center gap-2">
+                            <span className="text-sm font-medium">{currentPage}</span>
+                            <span className="text-sm text-muted-foreground">of {totalPages}</span>
+                        </div>
+
+                        {/* Кнопка "Следующая" */}
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={handleNextPage}
                             disabled={!hasNext || isLoadingUsers}
                         >
-                            Next
                             <ChevronRight size={14} className="ml-1" />
+                            Next
                         </Button>
+
+                        {/* Кнопка "Последняя страница" */}
+                        {/* <Button
+                            variant="outline"
+                            // size="sm"
+                            onClick={handleLastPage}
+                            disabled={currentPage === totalPages || isLoadingUsers}
+                            className="hidden sm:flex"
+                        >
+                            Last
+                            <ChevronsRight size={14} className="ml-1" />
+                        </Button> */}
                     </div>
+
+                    {/* Прямой ввод номера страницы */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            Go to page:
+                        </span>
+                        <input
+                            type="number"
+                            min={1}
+                            max={totalPages}
+                            value={currentPage}
+                            onChange={(e) => {
+                                const page = parseInt(e.target.value);
+                                if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                                    handleGoToPage(page);
+                                }
+                            }}
+                            className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            disabled={isLoadingUsers}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Дополнительная статистика пагинации */}
+            {totalPages > 0 && (
+                <div className="text-center text-xs text-muted-foreground pt-2 border-t">
+                    Page {currentPage} of {totalPages} • Total {totalCount} users
                 </div>
             )}
 

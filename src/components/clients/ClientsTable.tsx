@@ -37,6 +37,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 // Sector options based on the actual data
 const SECTOR_OPTIONS = [
@@ -116,6 +123,7 @@ export function ClientsTable({
   }, [store_clients, clients]);
 
   const totalCount = clientsPagination?.count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
   const hasNext = !!clientsPagination?.next;
   const hasPrev = !!clientsPagination?.previous;
 
@@ -128,6 +136,12 @@ export function ClientsTable({
   const handlePrevPage = () => {
     if (hasPrev) {
       loadClients(currentPage - 1);
+    }
+  };
+
+  const handleGoToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+      loadClients(page);
     }
   };
 
@@ -188,6 +202,35 @@ export function ClientsTable({
       (s) => s.value.toLowerCase() === sectorValue.toLowerCase(),
     );
     return sector ? sector.label : sectorValue;
+  };
+
+  // Функция для отображения номеров страниц
+  const renderPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(
+        <Button
+          key={i}
+          variant={currentPage === i ? "default" : "outline"}
+          size="sm"
+          onClick={() => handleGoToPage(i)}
+          disabled={isLoadingClients}
+          className="min-w-[40px]"
+        >
+          {i}
+        </Button>
+      );
+    }
+
+    return pages;
   };
 
   // Показываем лоадер при первой загрузке
@@ -368,13 +411,26 @@ export function ClientsTable({
         </Table>
       </div>
 
-      {/* Пагинация */}
-      {(hasNext || hasPrev) && (
-        <div className="flex justify-between items-center pt-4">
+      {/* Улучшенная пагинация с отображением общего количества страниц и возможностью перехода */}
+      {totalPages > 0 && (
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
           <div className="text-xs text-muted-foreground">
             Showing {displayClients.length} of {totalCount} clients
           </div>
-          <div className="flex gap-2 items-center">
+
+          <div className="flex items-center gap-2">
+            {/* Кнопка "Первая страница" */}
+            {/* <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleGoToPage(1)}
+              disabled={currentPage === 1 || isLoadingClients}
+              className="hidden sm:flex"
+            >
+              First
+            </Button> */}
+
+            {/* Кнопка "Предыдущая" */}
             <Button
               variant="outline"
               size="sm"
@@ -384,9 +440,42 @@ export function ClientsTable({
               <ChevronLeft size={14} className="mr-1" />
               Previous
             </Button>
-            <span className="text-sm text-muted-foreground px-2">
-              Page {currentPage}
-            </span>
+
+            {/* Номера страниц */}
+            <div className="hidden md:flex gap-1">
+              {renderPageNumbers()}
+            </div>
+
+            {/* Выпадающий список для перехода на конкретную страницу (на мобильных устройствах) */}
+            <div className="flex md:hidden items-center gap-2">
+              <Select
+                value={currentPage.toString()}
+                onValueChange={(value) => handleGoToPage(parseInt(value))}
+                disabled={isLoadingClients}
+              >
+                <SelectTrigger className="w-[80px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <SelectItem key={page} value={page.toString()}>
+                      Page {page}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground">
+                of {totalPages}
+              </span>
+            </div>
+
+            {/* Отображение текущей страницы и общего количества (на планшетах) */}
+            <div className="hidden sm:flex md:hidden items-center gap-1">
+              <span className="text-sm font-medium">{currentPage}</span>
+              <span className="text-sm text-muted-foreground">of {totalPages}</span>
+            </div>
+
+            {/* Кнопка "Следующая" */}
             <Button
               variant="outline"
               size="sm"
@@ -396,7 +485,46 @@ export function ClientsTable({
               Next
               <ChevronRight size={14} className="ml-1" />
             </Button>
+
+            {/* Кнопка "Последняя страница" */}
+            {/* <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleGoToPage(totalPages)}
+              disabled={currentPage === totalPages || isLoadingClients}
+              className="hidden sm:flex"
+            >
+              Last
+            </Button> */}
           </div>
+
+          {/* Прямой ввод номера страницы */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              Go to page:
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={currentPage}
+              onChange={(e) => {
+                const page = parseInt(e.target.value);
+                if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                  handleGoToPage(page);
+                }
+              }}
+              className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoadingClients}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Дополнительная информация о пагинации */}
+      {totalPages > 0 && (
+        <div className="text-center text-xs text-muted-foreground pt-2">
+          Page {currentPage} of {totalPages} • Total {totalCount} clients
         </div>
       )}
 
