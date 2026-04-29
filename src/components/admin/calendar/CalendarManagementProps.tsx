@@ -12,6 +12,13 @@ import { EditCountryDialog } from './EditCountryDialog';
 import { useUserStore } from '../../../store/UsersStore';
 import { useAddCountry, useDeleteCountry, useGetCountries } from '../../../hooks/useCountries';
 import { toast } from 'sonner';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '../../ui/select';
 
 // ... (остальные импорты)
 
@@ -245,22 +252,62 @@ export function CalendarManagement({
                     </div>
                 </div>
 
-                {/* SELECTOR для стран */}
+                {/* SELECTOR для стран с использованием Radix UI Select */}
                 <div className="flex items-center gap-4">
                     <div className="w-80">
-                        <select
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={selectedCountryId || ''}
-                            onChange={(e) => handleCountrySelect(Number(e.target.value))}
+                        <Select
+                            value={selectedCountryId?.toString() || ''}
+                            onValueChange={(value) => handleCountrySelect(Number(value))}
                         >
-                            {displayedCountries.map((country) => (
-                                <option key={country.storeId} value={country.storeId}>
-                                    {country.name} {!country.hasConfig && '(no config)'}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select a country..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {displayedCountries.map((country) => (
+                                    <SelectItem
+                                        key={country.storeId}
+                                        value={country.storeId.toString()}
+                                    >
+                                        <div className="flex items-center justify-between w-full gap-2">
+                                            <span>{country.name}</span>
+                                            {!country.hasConfig && (
+                                                <span className="text-xs text-muted-foreground">
+                                                    (no config)
+                                                </span>
+                                            )}
+                                            {country.hasConfig && (
+                                                <span className="text-xs text-green-600">
+                                                    ✓ configured
+                                                </span>
+                                            )}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
+                    {/* Кнопки управления страной */}
+                    {currentSelectedCountry && (
+                        <div className="flex gap-2">
+                            {!currentSelectedCountry.hasConfig && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        if (currentConfig) {
+                                            handleAddConfig(currentConfig);
+                                        }
+                                    }}
+                                >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add Configuration
+                                </Button>
+                            )}
+
+
+                        </div>
+                    )}
                 </div>
 
                 {/* Main Content */}
