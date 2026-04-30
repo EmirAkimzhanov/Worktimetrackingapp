@@ -54,6 +54,8 @@ export function CalendarView() {
   const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
   const me = useUserStore((state) => state.me);
 
+  console.log(calendar_holidays)
+
   // ✅ Стабильный countryId
   const countryId = useMemo(() => {
     return me?.country_id ? String(me.country_id) : undefined;
@@ -112,11 +114,22 @@ export function CalendarView() {
     }
 
     const date = new Date(dateStr);
+    const year = date.getFullYear();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
+    const fullDate = `${year}-${month}-${day}`;
     const monthDay = `${month}-${day}`;
 
-    const holiday = calendar_holidays.find(h => h.date === monthDay);
+    // Ищем праздник по полной дате или по month-day для recurring
+    const holiday = calendar_holidays.find(h => {
+      // Если праздник ежегодный (is_recurring), сравниваем по month-day
+      if (h.is_recurring) {
+        return h.date === monthDay;
+      }
+      // Иначе сравниваем по полной дате
+      return h.date === fullDate;
+    });
+
     return holiday || null;
   };
 
