@@ -119,6 +119,7 @@ export function TimeEntryForm() {
   const setInternalTasks = useUserStore((state) => state.setInternalTasks);
   const leaves = useUserStore((state) => state.leaves);
 
+
   // Функция проверки является ли день выходным
   const isWeekend = (dateString: string): boolean => {
     const date = new Date(dateString);
@@ -192,28 +193,16 @@ export function TimeEntryForm() {
 
   // НОВАЯ ФУНКЦИЯ: Преобразуем проекты в формат для Select (новый формат с project_codes)
   const projectOptions = useMemo((): ProjectOption[] => {
-    // Проверяем наличие project_codes
     if (!client_projects?.project_codes || !Array.isArray(client_projects.project_codes)) {
       return [];
     }
 
-    // Группируем коды по проектам (так как может быть несколько кодов на один проект)
-    const projectsMap = new Map<number, ProjectOption>();
-
-    client_projects.project_codes.forEach((codeItem: ProjectCode) => {
-      const projectIdNum = codeItem.project;
-
-      if (!projectsMap.has(projectIdNum)) {
-        projectsMap.set(projectIdNum, {
-          value: String(projectIdNum),
-          label: client_projects.name || 'Unnamed Project',
-          code: codeItem.code,
-          project_id: projectIdNum,
-        });
-      }
-    });
-
-    return Array.from(projectsMap.values());
+    return client_projects.project_codes.map((pc: ProjectCode) => ({
+      value: String(pc.id),          // <-- ВОТ ЭТО НУЖНО (71, 72)
+      label: client_projects.name,   // можно оставить имя клиента/проекта
+      code: pc.code,                 // сам код
+      project_id: pc.project         // id проекта (если нужен)
+    }));
   }, [client_projects]);
 
   // Преобразуем задачи проекта в формат для Select
@@ -420,39 +409,45 @@ export function TimeEntryForm() {
   };
 
   // Функция для загрузки задач при выборе проекта
-  const handleProjectChange = (projectId: string) => {
-    setProjectId(projectId);
-    setSelectedTask('');
+  const handleProjectChange = (selectedCodeId: string) => {
+    // Находим выбранный project_code и берем из него project_id
+    const selectedProjectCode = projectOptions.find(p => p.value === selectedCodeId);
 
-    const selectedProject = projectOptions.find(p => p.value === projectId);
+    if (selectedProjectCode) {
+      // Сохраняем ID project_code для отправки в запросе
+      setProjectId(selectedCodeId);
+      setSelectedTask('');
 
-    if (selectedProject) {
-      console.log('Selected project:', selectedProject.label);
-      console.log('Project code:', selectedProject.code);
-    }
+      // Для загрузки задач используем project_id, а не ID кода
+      const projectIdForTasks = selectedProjectCode.project_id;
 
-    if (projectId) {
-      setIsLoadingTasks(true);
+      if (projectIdForTasks) {
+        setIsLoadingTasks(true);
 
-      getProjectTasks(projectId, {
-        onSuccess: (data) => {
-          setProjectTasks(data);
-          setIsLoadingTasks(false);
+        getProjectTasks(String(projectIdForTasks), {
+          onSuccess: (data) => {
+            setProjectTasks(data);
+            setIsLoadingTasks(false);
 
-          if (data?.tasks?.length > 0) {
-            toast.success(`Loaded ${data.tasks.length} tasks for the project`);
-          } else {
-            toast.warning('No tasks found for this project');
+            if (data?.tasks?.length > 0) {
+              toast.success(`Loaded ${data.tasks.length} tasks for the project`);
+            } else {
+              toast.warning('No tasks found for this project');
+            }
+          },
+          onError: (error) => {
+            console.error('Failed to load project tasks:', error);
+            toast.error('Failed to load project tasks');
+            setIsLoadingTasks(false);
+            setProjectTasks(null);
           }
-        },
-        onError: (error) => {
-          console.error('Failed to load project tasks:', error);
-          toast.error('Failed to load project tasks');
-          setIsLoadingTasks(false);
-          setProjectTasks(null);
-        }
-      });
+        });
+      } else {
+        clearProjectTasks();
+      }
     } else {
+      setProjectId('');
+      setSelectedTask('');
       clearProjectTasks();
     }
   };
@@ -504,7 +499,7 @@ export function TimeEntryForm() {
       case 'external': {
         const selectedCountryObj = localCountryOptions.find(c => c.value === country);
         const selectedClient = clientOptions.find(c => c.value === client);
-        const selectedProject = projectOptions.find(p => p.value === projectId);
+        const selectedProjectCode = projectOptions.find(p => p.value === projectId); // projectId хранит ID project_code
         const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
 
         return {
@@ -512,11 +507,10 @@ export function TimeEntryForm() {
           id: 0,
           country: selectedCountryObj?.value ? parseInt(selectedCountryObj.value) : null,
           client: selectedClient?.value ? parseInt(selectedClient.value) : null,
-          project: selectedProject?.value ? parseInt(selectedProject.value) : null,
+          // ✅ ВОТ ЗДЕСЬ - отправляем ID project_code (71, 72...)
+          project_code: selectedProjectCode?.value ? parseInt(selectedProjectCode.value) : null,
           task_type: selectedProjectTask?.task_type || null,
           task: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : null,
-          project_code: selectedProject?.code || null,
-          project_name: selectedProject?.label || null,
         };
       }
 
@@ -562,7 +556,7 @@ export function TimeEntryForm() {
     setIsSubmitting(true);
 
     if (activeTab === 'external') {
-      if (!projectId || !selectedTask || !description || !hours || !country || !client) {
+      if (!projectId || !description || !hours || !country || !client) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
@@ -591,7 +585,6 @@ export function TimeEntryForm() {
     if (inputMode === 'range') {
       const start = new Date(startDate);
       const end = new Date(endDate);
-
       if (start > end) {
         toast.error('Start date must be before end date');
         setIsSubmitting(false);
@@ -606,10 +599,13 @@ export function TimeEntryForm() {
         const entriesToAdd = [];
         const selectedCountryObj = localCountryOptions.find(c => c.value === country);
         const selectedClient = clientOptions.find(c => c.value === client);
-        const selectedProject = projectOptions.find(p => p.value === projectId);
+        // Находим выбранный проект по projectId (который содержит ID проекта)
+        const selectedProjectOption = projectOptions.find(p => p.project_id === parseInt(projectId));
         const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
         const selectedInternalTask = internalTaskOptions.find(t => t.value === selectedTask);
         const selectedLeave = leaveOptions.find(l => l.value === selectedLeaveType);
+
+        console.log('Selected project option:', selectedProjectOption); // Для отладки
 
         if (inputMode === 'single') {
           let entry;
@@ -626,9 +622,9 @@ export function TimeEntryForm() {
           } else if (activeTab === 'external') {
             entry = {
               type: 'external',
-              projectId,
-              projectName: selectedProject?.label || projectId,
-              projectCode: selectedProject?.code || '',
+              projectId: projectId, // ID проекта (число)
+              projectName: selectedProjectOption?.label || '',
+              projectCode: selectedProjectOption?.code || '',
               task: selectedProjectTask?.label || selectedTask,
               task_id: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : undefined,
               description,
@@ -679,9 +675,9 @@ export function TimeEntryForm() {
               } else if (activeTab === 'external') {
                 entry = {
                   type: 'external',
-                  projectId,
-                  projectName: selectedProject?.label || projectId,
-                  projectCode: selectedProject?.code || '',
+                  projectId: projectId, // ID проекта (число)
+                  projectName: selectedProjectOption?.label || '',
+                  projectCode: selectedProjectOption?.code || '',
                   task: selectedProjectTask?.label || selectedTask,
                   task_id: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : undefined,
                   description,

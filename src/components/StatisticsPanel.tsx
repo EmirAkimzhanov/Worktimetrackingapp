@@ -19,7 +19,6 @@ export function StatisticsPanel() {
   const loadTimeEntries = () => {
     getTimeEntrys(undefined, {
       onSuccess: (data) => {
-        console.log('Statistics: Loaded time entries:', data);
       },
       onError: (error) => {
         console.error('Statistics: Failed to load time entries:', error);

@@ -188,17 +188,19 @@ export const useSendCalendar = () => {
     });
 };
 
+// mutationFn: async ({ body, day_id }: { body: CalendarEvent, day_id: string }) => {
 export const useEditCalendar = () => {
+    const getCalendarMutation = useGetCalendar();
+
     return useMutation({
         mutationFn: async ({ body, day_id }: { body: CalendarEvent, day_id: string }) => {
             const result = await editCalendar(body, day_id);
-            // Очищаем кэш календаря при редактировании
             clearCalendarCache();
             return result;
         },
-        onError: (error) => {
-            console.error("Edit calendar error:", error);
-        },
+        onSuccess: async () => {
+            await getCalendarMutation.mutateAsync(true); // 💥 force refresh
+        }
     });
 };
 

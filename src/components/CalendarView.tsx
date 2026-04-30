@@ -1,11 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, FolderKanban, FileText, User, CalendarDays, Gift, Coffee } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, FolderKanban, FileText, User, CalendarDays, Gift, Coffee, RefreshCw } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { useUserStore } from '../store/UsersStore';
-import { useGetHolidayTimeEntrys } from '../hooks/useTimeEntry';
 import { useGetGlobalSettings } from '../hooks/useGlobalSettings';
 
 // Интерфейс для записи времени в новом формате
@@ -44,8 +43,8 @@ interface HolidayTimeEntry extends TimeEntry {
   holidayDescription?: string;
 }
 
-// Маппинг дней недели (0 = Sunday, 1 = Monday, ...)
-const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+// Маппинг дней недели для отображения (начинается с понедельника)
+const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function CalendarView() {
   const { filters } = useTimeTracker();
@@ -54,14 +53,17 @@ export function CalendarView() {
   const currentMonth = useUserStore((state) => state.currentMonth);
   const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
   const me = useUserStore((state) => state.me);
-  const globalSettings = useUserStore((state) => state.globalSettings);
 
-  // Используем новый хук useGetGlobalSettings с правильным параметром
-  const {
-    data: globSet,
-    refetch: refetchGlobalSettings,
-    isLoading: isLoadingSettings
-  } = useGetGlobalSettings(me?.country_id || '');
+  // ✅ Стабильный countryId
+  const countryId = useMemo(() => {
+    return me?.country_id ? String(me.country_id) : undefined;
+  }, [me?.country_id]);
+
+  // ✅ Безопасная деструктуризация хука
+  const globalSettingsQuery = useGetGlobalSettings(countryId as any);
+  const globSet = globalSettingsQuery?.data ?? null;
+  const isLoadingSettings = globalSettingsQuery?.isLoading ?? false;
+  const refetchGlobalSettings = globalSettingsQuery?.refetch;
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDateEntries, setSelectedDateEntries] = useState<(TimeEntry | HolidayTimeEntry)[]>([]);
@@ -88,17 +90,19 @@ export function CalendarView() {
     return time_entries || [];
   }, [time_entries]);
 
-  // Функция для проверки, является ли день выходным (не входит в working_days)
+  // ✅ Рабочие дни с fallback
+  const workingDays = useMemo(() => {
+    return globSet?.working_days ?? [0, 1, 2, 3, 4]; // fallback: пн-пт
+  }, [globSet]);
+
+  // Функция для проверки, является ли день выходным
   const isDayOff = (dateStr: string): boolean => {
-    // Используем globSet из запроса или globalSettings из store
-    const settings = globSet || globalSettings;
-    if (!settings || !settings.working_days) return false;
-
     const date = new Date(dateStr);
-    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ...
-
+    let dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+    // Преобразуем для сравнения с working_days (где 0 = Monday, 1 = Tuesday, ..., 6 = Sunday)
+    const adjustedDayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     // Если день недели не входит в список рабочих дней - это выходной
-    return !settings.working_days.includes(dayOfWeek);
+    return !workingDays.includes(adjustedDayOfWeek);
   };
 
   // Функция для проверки, является ли дата праздником
@@ -155,7 +159,11 @@ export function CalendarView() {
   const month = currentDate.getMonth();
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Вычисляем первый день месяца с учетом того, что неделя начинается с понедельника
   const firstDayOfMonth = new Date(year, month, 1).getDay();
+  // Преобразуем Sunday (0) в 6, и смещаем на 1, чтобы понедельник был первым
+  let startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
 
   const previousMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
@@ -167,6 +175,11 @@ export function CalendarView() {
 
   const goToCurrentMonth = () => {
     setCurrentDate(new Date());
+  };
+
+  const handleRefresh = async () => {
+    console.log('Manual refresh triggered');
+    await refetchGlobalSettings?.();
   };
 
   const getEntriesForDate = (day: number): (TimeEntry | HolidayTimeEntry)[] => {
@@ -241,10 +254,10 @@ export function CalendarView() {
 
   const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
+  // Строим массив дней для календаря, начиная с понедельника
   const calendarDays = [];
-  for (let i = 0; i < firstDayOfMonth; i++) {
+  // Добавляем пустые ячейки для выравнивания
+  for (let i = 0; i < startOffset; i++) {
     calendarDays.push(null);
   }
   for (let day = 1; day <= daysInMonth; day++) {
@@ -309,7 +322,14 @@ export function CalendarView() {
     return entry.task || entry.task_type || 'No task';
   };
 
-  const currentSettings = globSet || globalSettings;
+  // Получаем отображаемые рабочие дни для подписи
+  const getWorkingDaysDisplay = () => {
+    if (!globSet?.working_days || !Array.isArray(globSet.working_days)) {
+      return 'Not configured';
+    }
+    const dayMapping = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return globSet.working_days.map(d => dayMapping[d]).join(', ');
+  };
 
   return (
     <>
@@ -325,9 +345,9 @@ export function CalendarView() {
                 {allEntries.length > 0
                   ? `Click on a day to see task details (${allEntries.length} total entries)`
                   : 'No time entries yet'}
-                {currentSettings && (
+                {globSet && globSet.working_days && (
                   <span className="ml-2 text-xs">
-                    • Working days: {currentSettings.working_days?.map(d => dayNames[d]).join(', ')}
+                    • Working days: {getWorkingDaysDisplay()}
                   </span>
                 )}
                 {isLoadingSettings && <span className="ml-2 text-xs text-gray-400">• Loading settings...</span>}
@@ -337,9 +357,10 @@ export function CalendarView() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => refetchGlobalSettings()}
+                onClick={handleRefresh}
                 disabled={isLoadingSettings}
               >
+                <RefreshCw className={`w-4 h-4 mr-1 ${isLoadingSettings ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
               <Button variant="outline" size="icon" onClick={previousMonth}>
@@ -475,9 +496,8 @@ export function CalendarView() {
         </CardContent>
       </Card>
 
-      {/* Модальное окно с деталями дня - без изменений */}
+      {/* Модальное окно с деталями дня (без изменений) */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        {/* ... содержимое модального окна без изменений ... */}
         <DialogContent className="w-[90vw] h-[90vh] flex flex-col p-0">
           <DialogHeader className="p-3 border-b shrink-0">
             <div className="flex items-center justify-between flex-wrap gap-3">

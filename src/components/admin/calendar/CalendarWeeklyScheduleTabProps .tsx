@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '../../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Label } from '../../ui/label';
+import { Card, CardContent } from '../../ui/card';
 import { Switch } from '../../ui/switch';
 import { Input } from '../../ui/input';
 import { CountryCalendarConfig, WeeklySchedule } from '../../../types/types';
@@ -21,22 +20,13 @@ export function CalendarWeeklyScheduleTab({
     onUpdateWeeklySchedule
 }: CalendarWeeklyScheduleTabProps) {
 
-    const defaultSchedule: WeeklySchedule = {
-        monday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
-        tuesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
-        wednesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
-        thursday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
-        friday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
-        saturday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' },
-        sunday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' }
-    };
-
     const queryClient = useQueryClient();
     const { mutate: setGlobalSettings } = useSetGlobalSettings();
 
     const countries = useUserStore((state) => state.countries);
 
-    const correctCountryId = useMemo(() => {
+    // ✅ ЕДИНЫЙ ИСТОЧНИК ID (больше никаких конфликтов)
+    const countryId = useMemo(() => {
         if (!countries?.length) return config.id;
 
         const country = countries.find(
@@ -49,24 +39,35 @@ export function CalendarWeeklyScheduleTab({
         return country?.id || config.id;
     }, [config, countries]);
 
-    // ✅ НОВЫЙ ХУК (useQuery)
-    const { data: globalSettings } = useGetGlobalSettings(correctCountryId.toString());
+    const queryKey = ['globalSettings', countryId.toString()];
 
-    const initialSchedule = useMemo(() => {
-        if (!config?.weeklySchedule) return defaultSchedule;
+    const { data: globalSettings } = useGetGlobalSettings(countryId.toString());
 
-        return {
-            ...defaultSchedule,
-            ...config.weeklySchedule,
-        };
-    }, [config]);
+    // ------------------------
+    // DEFAULT STATE
+    // ------------------------
 
-    const [schedule, setSchedule] = useState<WeeklySchedule>(initialSchedule);
+    const defaultSchedule: WeeklySchedule = {
+        monday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        tuesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        wednesday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        thursday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        friday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
+        saturday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' },
+        sunday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' }
+    };
+
+    const [schedule, setSchedule] = useState<WeeklySchedule>(defaultSchedule);
     const [hoursPerDay, setHoursPerDay] = useState('8');
+
+    // ------------------------
+    // HELPERS
+    // ------------------------
 
     const getTimeFromHours = (hours: number) => {
         const startHour = 9;
         const endHour = startHour + hours;
+
         return {
             startTime: `${startHour.toString().padStart(2, '0')}:00`,
             endTime: `${endHour.toString().padStart(2, '0')}:00`
@@ -88,65 +89,73 @@ export function CalendarWeeklyScheduleTab({
     };
 
     const convertToWorkingDaysArray = (schedule: WeeklySchedule): number[] => {
-        const workingDays: number[] = [];
+        const days: number[] = [];
 
-        if (schedule.monday.isWorkingDay) workingDays.push(0);
-        if (schedule.tuesday.isWorkingDay) workingDays.push(1);
-        if (schedule.wednesday.isWorkingDay) workingDays.push(2);
-        if (schedule.thursday.isWorkingDay) workingDays.push(3);
-        if (schedule.friday.isWorkingDay) workingDays.push(4);
-        if (schedule.saturday.isWorkingDay) workingDays.push(5);
-        if (schedule.sunday.isWorkingDay) workingDays.push(6);
+        if (schedule.monday.isWorkingDay) days.push(0);
+        if (schedule.tuesday.isWorkingDay) days.push(1);
+        if (schedule.wednesday.isWorkingDay) days.push(2);
+        if (schedule.thursday.isWorkingDay) days.push(3);
+        if (schedule.friday.isWorkingDay) days.push(4);
+        if (schedule.saturday.isWorkingDay) days.push(5);
+        if (schedule.sunday.isWorkingDay) days.push(6);
 
-        return workingDays;
+        return days;
     };
 
-    // ✅ обновление из сервера
-    useEffect(() => {
-        if (globalSettings) {
-            const hours = globalSettings.hours_per_day;
-            const workingDays = globalSettings.working_days;
+    // ------------------------
+    // SYNC WITH SERVER
+    // ------------------------
 
-            if (hours && workingDays) {
-                setHoursPerDay(hours.toString());
-                setSchedule(convertWorkingDaysToSchedule(workingDays, hours));
-            }
+    useEffect(() => {
+        if (!globalSettings) return;
+
+        const hours = globalSettings.hours_per_day;
+        const workingDays = globalSettings.working_days;
+
+        if (hours && workingDays) {
+            setHoursPerDay(hours.toString());
+            setSchedule(convertWorkingDaysToSchedule(workingDays, hours));
         }
     }, [globalSettings]);
+
+    // ------------------------
+    // HANDLERS
+    // ------------------------
 
     const handleToggleDay = (dayKey: keyof WeeklySchedule) => {
         setSchedule(prev => ({
             ...prev,
             [dayKey]: {
                 ...prev[dayKey],
-                isWorkingDay: !prev[dayKey].isWorkingDay,
-                ...(!prev[dayKey].isWorkingDay && getTimeFromHours(parseFloat(hoursPerDay)))
+                isWorkingDay: !prev[dayKey].isWorkingDay
             }
         }));
     };
 
     const handleHoursChange = (value: string) => {
         setHoursPerDay(value);
+
         const hours = parseFloat(value);
+        if (isNaN(hours)) return;
 
-        if (!isNaN(hours)) {
-            const { startTime, endTime } = getTimeFromHours(hours);
+        const { startTime, endTime } = getTimeFromHours(hours);
 
-            setSchedule(prev => {
-                const updated = { ...prev };
-                Object.keys(updated).forEach((key) => {
-                    const day = key as keyof WeeklySchedule;
-                    if (updated[day].isWorkingDay) {
-                        updated[day] = {
-                            ...updated[day],
-                            startTime,
-                            endTime
-                        };
-                    }
-                });
-                return updated;
+        setSchedule(prev => {
+            const updated = { ...prev };
+
+            Object.keys(updated).forEach((key) => {
+                const day = key as keyof WeeklySchedule;
+                if (updated[day].isWorkingDay) {
+                    updated[day] = {
+                        ...updated[day],
+                        startTime,
+                        endTime
+                    };
+                }
             });
-        }
+
+            return updated;
+        });
     };
 
     const handleSave = () => {
@@ -155,22 +164,21 @@ export function CalendarWeeklyScheduleTab({
 
         setGlobalSettings(
             {
-                country_id: config.id.toString(),
+                country_id: countryId.toString(),
                 globalSet: {
                     hours_per_day: hours,
                     working_days: workingDays
                 }
             },
             {
-                onSuccess: () => {
+                onSuccess: async () => {
                     toast.success('Saved');
 
-                    onUpdateWeeklySchedule(config.id, schedule);
+                    onUpdateWeeklySchedule(countryId, schedule);
 
-                    // ✅ ВОТ ЭТО ЗАМЕНА getGlobalSettings()
-                    queryClient.invalidateQueries({
-                        queryKey: ['globalSettings', config.id.toString()],
-                    });
+                    // ✅ ГАРАНТИРОВАННОЕ обновление
+                    await queryClient.invalidateQueries({ queryKey });
+                    await queryClient.refetchQueries({ queryKey });
                 },
                 onError: () => {
                     toast.error('Error');
@@ -178,6 +186,10 @@ export function CalendarWeeklyScheduleTab({
             }
         );
     };
+
+    // ------------------------
+    // UI
+    // ------------------------
 
     return (
         <div className="space-y-6">
