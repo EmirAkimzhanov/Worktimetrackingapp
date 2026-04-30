@@ -1,13 +1,62 @@
-// src/components/admin/SettingsTab.tsx
+// src/components/admin/settings/SettingsTab.tsx
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '../../ui/card';
-import { Settings, Users, Calendar, Briefcase, Shield, Layers } from 'lucide-react';
+import {
+    Settings,
+    Users,
+    Calendar,
+    Briefcase,
+    Shield,
+    Layers,
+    Globe,
+    Activity,
+    PieChart,
+    Wrench,
+    Building2,
+    LineChart,
+    CheckSquare,
+    MoreHorizontal
+} from 'lucide-react';
 import { TeamsTab } from '../teams/TeamsTab';
 import { CalendarManagement } from '../calendar/CalendarManagementProps';
 import SimpleDepartmentsTables from "../department/DepartmentTabs";
 import { RoleManagementTab } from '../role/RoleManagementTab';
 import { Positions } from '../positions/Positions';
 import { useGetDepartments } from '../../../hooks/useDepartments';
+import { CountryTable } from '../country/CountryTable';
+import { MOCK_DEPARTMENTS } from '../../../const/consts';
+import { toast } from 'sonner';
+import MonitoringPage from '../monitoring/MonitoringPage';
+import { PieTable } from '../pie/PieTable';
+import { ServiceTable } from '../service type/ServiceTable';
+import { SectorTable } from '../sector/SectorTable';
+import { ServiceLineTable } from '../service-line/ServiceLineTable';
+import { ProjectStatusTable } from '../project-status/ProjectStatusTable';
+
+// Тип для Department
+interface Department {
+    id: number;
+    name: string;
+    description?: string;
+    manager_id?: number | null;
+    parent_id?: number | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
+type SubTabType =
+    | 'teams'
+    | 'calendar'
+    | 'departments'
+    | 'roles'
+    | 'positions'
+    | 'countries'
+    | 'monitoring'
+    | 'pie'
+    | 'service-type'
+    | 'sectors'
+    | 'service-line'
+    | 'project-status';
 
 interface SettingsTabProps {
     // Teams props
@@ -59,13 +108,13 @@ interface SettingsTabProps {
 
 export function SettingsTab({
     // Teams
-    departments,
+    departments: departmentsProp,
     positions,
     users,
     teamMembers,
     onAddDepartment,
-    onUpdateDepartment,
-    onDeleteDepartment,
+    onUpdateDepartment: onUpdateDepartmentProp,
+    onDeleteDepartment: onDeleteDepartmentProp,
     onAddUser,
     onUpdateUser,
     onDeleteUser,
@@ -96,13 +145,15 @@ export function SettingsTab({
     onRoleDeleted,
 
     // Positions callbacks
-    positionsData = [{ id: 1, name: 'Notes', grades: ['Notes'] },
-    { id: 2, name: 'Junior', grades: ['Assistant 1', 'Assistant 2'] },
-    { id: 3, name: 'Senior', grades: ['Assistant 3', 'Senior 1', 'Senior 2'] },
-    { id: 4, name: 'Manager', grades: ['Manager 1', 'Manager 2'] },
-    { id: 5, name: 'Senior Manager', grades: ['Senior Manager 1', 'Senior Manager 2'] },
-    { id: 6, name: 'Partner', grades: ['Partner'] },
-    { id: 7, name: 'Director', grades: ['Director'] }],
+    positionsData = [
+        { id: 1, name: 'Notes', grades: ['Notes'] },
+        { id: 2, name: 'Junior', grades: ['Assistant 1', 'Assistant 2'] },
+        { id: 3, name: 'Senior', grades: ['Assistant 3', 'Senior 1', 'Senior 2'] },
+        { id: 4, name: 'Manager', grades: ['Manager 1', 'Manager 2'] },
+        { id: 5, name: 'Senior Manager', grades: ['Senior Manager 1', 'Senior Manager 2'] },
+        { id: 6, name: 'Partner', grades: ['Partner'] },
+        { id: 7, name: 'Director', grades: ['Director'] }
+    ],
     onPositionCreated,
     onPositionUpdated,
     onPositionDeleted,
@@ -110,13 +161,27 @@ export function SettingsTab({
     onGradeUpdated,
     onGradeDeleted
 }: SettingsTabProps) {
-    const [activeSubTab, setActiveSubTab] = useState<'teams' | 'calendar' | 'departments' | 'roles' | 'positions'>('teams');
+    const [activeSubTab, setActiveSubTab] = useState<SubTabType>('teams');
 
     const { mutate: getDepartments } = useGetDepartments();
 
+    const handleUpdateDepartment = (department: Department) => {
+        if (onUpdateDepartmentProp) {
+            onUpdateDepartmentProp(department);
+        }
+        toast.success('Department updated successfully');
+    };
+
+    const handleDeleteDepartment = (id: number) => {
+        if (onDeleteDepartmentProp) {
+            onDeleteDepartmentProp(id);
+        }
+        toast.success('Department deleted successfully');
+    };
+
     useEffect(() => {
         getDepartments();
-    }, [])
+    }, []);
 
     // Обработчики для Positions
     const handlePositionCreated = (position: any) => {
@@ -155,6 +220,21 @@ export function SettingsTab({
         }
     };
 
+    // Определяем все табы
+    const mainTabs = [
+        { id: 'teams', label: 'Teams', icon: Users },
+        { id: 'calendar', label: 'Calendar', icon: Calendar },
+        { id: 'departments', label: 'Departments', icon: Briefcase },
+        { id: 'roles', label: 'Roles', icon: Shield },
+        { id: 'positions', label: 'Positions', icon: Layers },
+        { id: 'countries', label: 'Countries', icon: Globe },
+        { id: 'pie', label: 'PIE', icon: PieChart },
+        { id: 'service-type', label: 'Service Type', icon: Wrench },
+        { id: 'sectors', label: 'Sectors', icon: Building2 },
+        { id: 'service-line', label: 'Service Line', icon: LineChart },
+        { id: 'project-status', label: 'Project Status', icon: CheckSquare },
+    ] as const;
+
     return (
         <div className="space-y-6">
             {/* Заголовок */}
@@ -190,78 +270,27 @@ export function SettingsTab({
 
             {/* Подвкладки */}
             <Card>
-                {/* Кастомные табы */}
                 <div className="border-b px-6 py-2">
-                    <div className="flex space-x-1">
-                        <button
-                            onClick={() => setActiveSubTab('teams')}
-                            className={`
-                                inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors
-                                ${activeSubTab === 'teams'
-                                    ? '!bg-black !text-white'
-                                    : 'text-muted-foreground hover:text-black hover:bg-muted'
-                                }
-                            `}
-                        >
-                            <Users className="w-4 h-4" />
-                            Teams
-                        </button>
-
-                        <button
-                            onClick={() => setActiveSubTab('calendar')}
-                            className={`
-                                inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors
-                                ${activeSubTab === 'calendar'
-                                    ? '!bg-black !text-white'
-                                    : 'text-muted-foreground hover:text-black hover:bg-muted'
-                                }
-                            `}
-                        >
-                            <Calendar className="w-4 h-4" />
-                            Calendar
-                        </button>
-
-                        <button
-                            onClick={() => setActiveSubTab('departments')}
-                            className={`
-                                inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors
-                                ${activeSubTab === 'departments'
-                                    ? '!bg-black !text-white'
-                                    : 'text-muted-foreground hover:text-black hover:bg-muted'
-                                }
-                            `}
-                        >
-                            <Briefcase className="w-4 h-4" />
-                            Tasks
-                        </button>
-
-                        <button
-                            onClick={() => setActiveSubTab('roles')}
-                            className={`
-                                inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors
-                                ${activeSubTab === 'roles'
-                                    ? '!bg-black !text-white'
-                                    : 'text-muted-foreground hover:text-black hover:bg-muted'
-                                }
-                            `}
-                        >
-                            <Shield className="w-4 h-4" />
-                            Roles
-                        </button>
-
-                        <button
-                            onClick={() => setActiveSubTab('positions')}
-                            className={`
-                                inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors
-                                ${activeSubTab === 'positions'
-                                    ? '!bg-black !text-white'
-                                    : 'text-muted-foreground hover:text-black hover:bg-muted'
-                                }
-                            `}
-                        >
-                            <Layers className="w-4 h-4" />
-                            Positions
-                        </button>
+                    <div className="flex space-x-1 flex-wrap gap-y-2">
+                        {mainTabs.map((tab) => {
+                            const Icon = tab.icon;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveSubTab(tab.id)}
+                                    className={`
+                                        inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors
+                                        ${activeSubTab === tab.id
+                                            ? '!bg-black !text-white'
+                                            : 'text-muted-foreground hover:text-black hover:bg-muted'
+                                        }
+                                    `}
+                                >
+                                    <Icon className="w-4 h-4" />
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -271,13 +300,13 @@ export function SettingsTab({
                     {activeSubTab === 'teams' && (
                         <CardContent className="p-6">
                             <TeamsTab
-                                departments={departments}
+                                departments={departmentsProp}
                                 positions={positions}
                                 users={users}
                                 teamMembers={teamMembers}
                                 onAddDepartment={onAddDepartment}
-                                onUpdateDepartment={onUpdateDepartment}
-                                onDeleteDepartment={onDeleteDepartment}
+                                onUpdateDepartment={onUpdateDepartmentProp}
+                                onDeleteDepartment={onDeleteDepartmentProp}
                                 onAddUser={onAddUser}
                                 onUpdateUser={onUpdateUser}
                                 onDeleteUser={onDeleteUser}
@@ -311,7 +340,7 @@ export function SettingsTab({
                     {activeSubTab === 'departments' && (
                         <CardContent className="p-6">
                             <SimpleDepartmentsTables
-                                departments={departments}
+                                departments={departmentsProp}
                                 users={users}
                             />
                         </CardContent>
@@ -340,6 +369,50 @@ export function SettingsTab({
                                 onGradeUpdated={handleGradeUpdated}
                                 onGradeDeleted={handleGradeDeleted}
                             />
+                        </CardContent>
+                    )}
+
+                    {/* Countries Content */}
+                    {activeSubTab === 'countries' && (
+                        <CardContent className="p-6">
+                            <CountryTable />
+                        </CardContent>
+                    )}
+
+
+
+                    {/* PIE Content */}
+                    {activeSubTab === 'pie' && (
+                        <CardContent className="p-6">
+                            <PieTable />
+                        </CardContent>
+                    )}
+
+                    {/* Service Type Content */}
+                    {activeSubTab === 'service-type' && (
+                        <CardContent className="p-6">
+                            <ServiceTable />
+                        </CardContent>
+                    )}
+
+                    {/* Sectors Content */}
+                    {activeSubTab === 'sectors' && (
+                        <CardContent className="p-6">
+                            <SectorTable />
+                        </CardContent>
+                    )}
+
+                    {/* Service Line Content */}
+                    {activeSubTab === 'service-line' && (
+                        <CardContent className="p-6">
+                            <ServiceLineTable />
+                        </CardContent>
+                    )}
+
+                    {/* Project Status Content */}
+                    {activeSubTab === 'project-status' && (
+                        <CardContent className="p-6">
+                            <ProjectStatusTable />
                         </CardContent>
                     )}
                 </div>

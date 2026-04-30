@@ -20,7 +20,7 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
     try {
         const response = await axios.post(`${api}api/accounts/login/`, credentials);
 
-        console.log('Login response:', response.data); // Для отладки
+        console.log('Login response:', response.data);
 
         if (!response.data) {
             throw new Error('No data in response');
@@ -48,20 +48,59 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
     } catch (error: any) {
         console.error('Login service error:', error);
 
+        // Если ошибка от сервера с response
         if (error.response) {
             const { status, data } = error.response;
 
-            if (status === 401) {
-                throw new Error('Invalid credentials');
-            } else if (status === 400) {
-                throw new Error(data.message || 'Invalid request');
-            } else if (status >= 500) {
-                throw new Error('Server error');
+            // Если есть detail в response (как в вашем случае)
+            if (data?.detail) {
+                throw new Error(data.detail);
             }
-        } else if (error.request) {
-            throw new Error('Network error');
+
+            // Если есть message в response
+            if (data?.message) {
+                throw new Error(data.message);
+            }
+
+            // Если есть error в response
+            if (data?.error) {
+                throw new Error(data.error);
+            }
+
+            // Если есть non_field_errors
+            if (data?.non_field_errors && Array.isArray(data.non_field_errors)) {
+                throw new Error(data.non_field_errors[0]);
+            }
+
+            // Если есть ошибки валидации полей
+            if (data && typeof data === 'object') {
+                const firstKey = Object.keys(data)[0];
+                if (firstKey && data[firstKey]) {
+                    const errorValue = data[firstKey];
+                    if (Array.isArray(errorValue) && errorValue.length > 0) {
+                        throw new Error(`${firstKey}: ${errorValue[0]}`);
+                    }
+                    if (typeof errorValue === 'string') {
+                        throw new Error(`${firstKey}: ${errorValue}`);
+                    }
+                }
+            }
+
+            // Если нет специфичных сообщений, пробрасываем ошибку по статусу
+            if (status === 401) {
+                throw new Error('Invalid email or password');
+            } else if (status === 400) {
+                throw new Error('Invalid request');
+            } else if (status >= 500) {
+                throw new Error('Server error. Please try again later.');
+            }
+        }
+        // Если ошибка сети
+        else if (error.request) {
+            throw new Error('Network error. Please check your connection.');
         }
 
+        // Пробрасываем оригинальную ошибку, если ничего не подошло
         throw error;
     }
 };
@@ -75,7 +114,6 @@ export const logOut = async () => {
     }
 
     const res = await axios.post(`${api}api/accounts/logout/`, { refresh: refresh },
-
         {
             headers: {
                 Authorization: `Bearer ${token}`,
@@ -90,9 +128,34 @@ export const logOut = async () => {
 }
 
 export const activateAccount = async (body: Activate) => {
-    const res = await axios.post(`${api}api/accounts/activate/`, body,
-    );
-    return res.data;
+    try {
+        const res = await axios.post(`${api}api/accounts/activate/`, body);
+        return res.data;
+    } catch (error: any) {
+        console.error('Activate account error:', error);
+
+        if (error.response) {
+            const { data } = error.response;
+
+            if (data?.detail) {
+                throw new Error(data.detail);
+            }
+
+            if (data?.message) {
+                throw new Error(data.message);
+            }
+
+            if (data?.error) {
+                throw new Error(data.error);
+            }
+
+            if (data?.non_field_errors && Array.isArray(data.non_field_errors)) {
+                throw new Error(data.non_field_errors[0]);
+            }
+        }
+
+        throw error;
+    }
 }
 
 export const checkMe = async () => {
@@ -103,7 +166,6 @@ export const checkMe = async () => {
     }
 
     const res = await axios(`${api}api/accounts/users/me/`,
-
         {
             headers: {
                 Authorization: `Bearer ${token}`,

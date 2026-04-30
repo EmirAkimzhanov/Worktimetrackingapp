@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Settings, Plus, Calendar, ChevronDown } from 'lucide-react';
 
 interface AdminPanelHeaderProps {
-    activeTab: 'projects' | 'users' | 'clients' | 'setiings' | 'country' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors' | 'service-line' | 'project-status';
+    activeTab: 'projects' | 'users' | 'clients' | 'setiings' | 'country' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors' | 'service-line' | 'project-status' | 'monitoring';
     onTabChange: (tab: 'projects' | 'users' | 'clients' | 'settings' | 'calendar' | 'pie' | 'serviceType' | 'teams' | 'department' | 'reports' | 'monitoring' | 'sectors' | 'service-line' | 'project-status') => void;
     onAddClick: () => void;
 }
@@ -35,6 +35,7 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
         { id: 'clients', label: 'Clients' },
         { id: 'calendar', label: 'Calendar' },
         { id: 'reports', label: 'Reports' },
+        { id: 'monitoring', label: 'Monitoring' },
         { id: 'settings', label: 'Settings' },
 
     ];
@@ -90,7 +91,7 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
 
                         {/* Кнопка More */}
                         <div className="relative" style={{ zIndex: 9999 }}>
-                            <button
+                            {/* <button
                                 onClick={() => setShowMoreTabs(!showMoreTabs)}
                                 className={`
                                     flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors
@@ -102,7 +103,7 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
                             >
                                 More
                                 <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showMoreTabs ? 'rotate-180' : ''}`} />
-                            </button>
+                            </button> */}
 
                             {showMoreTabs && (
                                 <>

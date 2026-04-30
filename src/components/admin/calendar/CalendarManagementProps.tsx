@@ -287,27 +287,6 @@ export function CalendarManagement({
                         </Select>
                     </div>
 
-                    {/* Кнопки управления страной */}
-                    {currentSelectedCountry && (
-                        <div className="flex gap-2">
-                            {!currentSelectedCountry.hasConfig && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                        if (currentConfig) {
-                                            handleAddConfig(currentConfig);
-                                        }
-                                    }}
-                                >
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Add Configuration
-                                </Button>
-                            )}
-
-
-                        </div>
-                    )}
                 </div>
 
                 {/* Main Content */}

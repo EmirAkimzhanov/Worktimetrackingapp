@@ -19,99 +19,21 @@ const processQueue = (error: any | null, token: string | null = null) => {
 };
 
 export const setupInterceptors = (navigate: Function) => {
-    // Request interceptor
-    axios.interceptors.request.use(
-        async (config) => {
-            // ✅ Пропускаем запрос на обновление токена
-            if (config.url?.includes('/refresh/')) {
-                return config;
-            }
-
-            const accessToken = localStorage.getItem('access_token');
-
-            // Добавляем заголовок авторизации всегда, если токен есть
-            if (accessToken && !isTokenExpired(accessToken)) {
-                config.headers.Authorization = `Bearer ${accessToken}`;
-                return config;
-            }
-
-            // Если токен истек, пытаемся обновить
-            if (accessToken && isTokenExpired(accessToken)) {
-                if (!isRefreshing) {
-                    isRefreshing = true;
-
-                    try {
-                        const refreshToken = localStorage.getItem('refresh_token');
-                        console.log('🔄 Refreshing token...');
-
-                        const response = await axios.post(`${api}api/accounts/refresh/`, {
-                            refresh: refreshToken
-                        });
-
-                        const newAccessToken = response.data.access || response.data.access_token;
-                        const newRefreshToken = response.data.refresh || response.data.refresh_token;
-
-                        if (newAccessToken) {
-                            // Сохраняем новые токены
-                            localStorage.setItem('access_token', newAccessToken);
-                            if (newRefreshToken) {
-                                localStorage.setItem('refresh_token', newRefreshToken);
-                            }
-
-                            // Обновляем store
-                            useUserStore.getState().setAccessToken(newAccessToken);
-                            if (newRefreshToken) {
-                                useUserStore.getState().setRefreshToken(newRefreshToken);
-                            }
-
-                            console.log('✅ Token refreshed successfully');
-
-                            // Обновляем заголовок текущего запроса
-                            config.headers.Authorization = `Bearer ${newAccessToken}`;
-
-                            processQueue(null, newAccessToken);
-                            return config;
-                        } else {
-                            throw new Error('No access token in response');
-                        }
-                    } catch (error) {
-                        console.error('❌ Token refresh failed:', error);
-                        processQueue(error, null);
-                        localStorage.clear();
-                        useUserStore.getState().setAccessToken(null);
-                        useUserStore.getState().setRefreshToken(null);
-                        useUserStore.getState().setMe(null);
-                        navigate('/login');
-                        return Promise.reject(error);
-                    } finally {
-                        isRefreshing = false;
-                    }
-                } else {
-                    // Ждем обновления токена
-                    return new Promise((resolve, reject) => {
-                        failedQueue.push({ resolve, reject });
-                    }).then((token) => {
-                        config.headers.Authorization = `Bearer ${token}`;
-                        return config;
-                    }).catch((error) => {
-                        return Promise.reject(error);
-                    });
-                }
-            }
-
-            return config;
-        },
-        (error) => Promise.reject(error)
-    );
-
-    // Response interceptor для обработки ошибки 401
+    // Только ОДИН response interceptor
     axios.interceptors.response.use(
         (response) => response,
         async (error) => {
             const originalRequest = error.config;
 
-            // ✅ Пропускаем запрос на обновление токена
-            if (originalRequest.url?.includes('/refresh/')) {
+            // ✅ Пропускаем все auth запросы (login, refresh, register, activate)
+            const isAuthRequest =
+                originalRequest.url?.includes('/login') ||
+                originalRequest.url?.includes('/refresh') ||
+                originalRequest.url?.includes('/register') ||
+                originalRequest.url?.includes('/activate');
+
+            if (isAuthRequest) {
+                console.log('🚫 Skipping interceptor for auth request:', originalRequest.url);
                 return Promise.reject(error);
             }
 
@@ -119,8 +41,28 @@ export const setupInterceptors = (navigate: Function) => {
             if (error.response?.status === 401 && !originalRequest._retry) {
                 originalRequest._retry = true;
 
+                // Если уже идет обновление токена, добавляем в очередь
+                if (isRefreshing) {
+                    return new Promise((resolve, reject) => {
+                        failedQueue.push({ resolve, reject });
+                    }).then(token => {
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        return axios(originalRequest);
+                    }).catch(err => {
+                        return Promise.reject(err);
+                    });
+                }
+
+                isRefreshing = true;
+
                 try {
                     const refreshToken = localStorage.getItem('refresh_token');
+
+                    if (!refreshToken) {
+                        console.error('❌ No refresh token available');
+                        throw new Error('No refresh token');
+                    }
+
                     console.log('🔄 Refreshing token due to 401...');
 
                     const response = await axios.post(`${api}api/accounts/refresh/`, {
@@ -130,32 +72,44 @@ export const setupInterceptors = (navigate: Function) => {
                     const newAccessToken = response.data.access || response.data.access_token;
                     const newRefreshToken = response.data.refresh || response.data.refresh_token;
 
-                    if (newAccessToken) {
-                        localStorage.setItem('access_token', newAccessToken);
-                        if (newRefreshToken) {
-                            localStorage.setItem('refresh_token', newRefreshToken);
-                        }
-
-                        useUserStore.getState().setAccessToken(newAccessToken);
-                        if (newRefreshToken) {
-                            useUserStore.getState().setRefreshToken(newRefreshToken);
-                        }
-
-                        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-
-                        // Повторяем оригинальный запрос
-                        return axios(originalRequest);
-                    } else {
+                    if (!newAccessToken) {
                         throw new Error('No access token in response');
                     }
+
+                    // Сохраняем новые токены
+                    localStorage.setItem('access_token', newAccessToken);
+                    if (newRefreshToken) {
+                        localStorage.setItem('refresh_token', newRefreshToken);
+                        useUserStore.getState().setRefreshToken(newRefreshToken);
+                    }
+
+                    useUserStore.getState().setAccessToken(newAccessToken);
+
+                    // Обновляем заголовок для повторного запроса
+                    originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+
+                    // Обрабатываем очередь запросов
+                    processQueue(null, newAccessToken);
+
+                    // Повторяем оригинальный запрос
+                    return axios(originalRequest);
+
                 } catch (refreshError) {
-                    console.error('❌ Token refresh failed on 401:', refreshError);
+                    console.error('❌ Token refresh failed:', refreshError);
+
+                    // Очищаем все данные и перенаправляем на логин
+                    processQueue(refreshError, null);
                     localStorage.clear();
                     useUserStore.getState().setAccessToken(null);
                     useUserStore.getState().setRefreshToken(null);
                     useUserStore.getState().setMe(null);
+
+                    // Перенаправляем на страницу логина
                     navigate('/login');
+
                     return Promise.reject(refreshError);
+                } finally {
+                    isRefreshing = false;
                 }
             }
 

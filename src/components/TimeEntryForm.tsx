@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { Switch } from './ui/switch';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane, Search, X } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner@2.0.3';
 import { useGetHolidayTimeEntrys, useGetTimeEntrys, useSendTimeEntrys } from '../hooks/useTimeEntry';
@@ -25,7 +25,7 @@ import { Leave } from '../types/leave';
 type InputMode = 'single' | 'range';
 type TabType = 'internal' | 'external' | 'vacations';
 
-// Типы для нового формата данных
+// НОВЫЕ ТИПЫ для нового формата данных
 interface ProjectCode {
   id: number;
   code: string;
@@ -33,29 +33,10 @@ interface ProjectCode {
   created_at: string;
 }
 
-interface ClientProject {
-  id: number;
-  status: string;
-  country: string;
-  manager: string;
-  client: string;
-  department: string;
-  service_line: string;
-  task_type: string;
-  service_type: string | null;
-  codes: ProjectCode[];
-  description: string;
-  entity: string;
-  ic: string;
-  project_color: string;
-  is_chargeable: boolean;
-  is_code_recurring: boolean;
-  agreement_date: string;
-}
-
+// Новый формат клиента с проектами
 interface ClientWithProjects {
   id: number;
-  projects: ClientProject[];
+  project_codes: ProjectCode[];
   name: string;
   group: string;
   personal_number: string;
@@ -64,6 +45,27 @@ interface ClientWithProjects {
   sector: number;
   country: number;
   pie: string | null;
+}
+
+// Интерфейс для отображения проекта в селекте
+interface ProjectOption {
+  value: string;
+  label: string;
+  code: string;
+  description?: string;
+  is_chargeable?: boolean;
+  status?: string;
+  manager?: string;
+  country?: string;
+  department?: string;
+  service_line?: string;
+  task_type?: string;
+  project_color?: string;
+  ic?: string;
+  entity?: string;
+  agreement_date?: string;
+  is_code_recurring?: boolean;
+  project_id?: number;
 }
 
 export function TimeEntryForm() {
@@ -81,6 +83,7 @@ export function TimeEntryForm() {
   const [includeWeekends, setIncludeWeekends] = useState(true);
   const [country, setCountry] = useState<string>('');
   const [client, setClient] = useState('');
+  const [clientSearch, setClientSearch] = useState(''); // Состояние для поиска клиента
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
   const [isLoadingInternalTasks, setIsLoadingInternalTasks] = useState(false);
@@ -107,7 +110,7 @@ export function TimeEntryForm() {
   const countries = useUserStore((state) => state.countries);
   const selectedCountry = useUserStore((s) => s.selectedCountry);
   const clients = selectedCountry?.clients ?? [];
-  const client_projects = useUserStore((state) => state.client_projects);
+  const client_projects = useUserStore((state) => state.client_projects) as ClientWithProjects | null;
   const setClientProjects = useUserStore((state) => state.setClientProjects);
   const project_tasks = useUserStore((state) => state.project_tasks);
   const setProjectTasks = useUserStore((state) => state.setProjectTasks);
@@ -158,11 +161,11 @@ export function TimeEntryForm() {
     }
   };
 
-  // Преобразуем клиентов в формат для Select
-  const clientOptions = useMemo(() => {
+  // Преобразуем клиентов в формат для Select с сортировкой по алфавиту
+  const allClientOptions = useMemo(() => {
     if (!Array.isArray(clients) || clients.length === 0) return [];
 
-    return clients
+    const options = clients
       .filter(client => client && client.id != null && client.name)
       .map((client: Client) => ({
         value: String(client.id),
@@ -171,36 +174,46 @@ export function TimeEntryForm() {
         sector: client.sector || '',
         personal_number: client.personal_number || ''
       }));
+
+    // Сортируем по алфавиту по полю label
+    return options.sort((a, b) => a.label.localeCompare(b.label));
   }, [clients]);
 
-  // Преобразуем проекты в формат для Select (НОВЫЙ ФОРМАТ)
-  const projectOptions = useMemo(() => {
-    // Проверяем наличие projects массива
-    if (!client_projects?.projects || !Array.isArray(client_projects.projects)) {
+  // Фильтруем клиентов по поиску
+  const clientOptions = useMemo(() => {
+    if (!clientSearch.trim()) {
+      return allClientOptions;
+    }
+    const searchLower = clientSearch.toLowerCase();
+    return allClientOptions.filter(option =>
+      option.label.toLowerCase().includes(searchLower)
+    );
+  }, [allClientOptions, clientSearch]);
+
+  // НОВАЯ ФУНКЦИЯ: Преобразуем проекты в формат для Select (новый формат с project_codes)
+  const projectOptions = useMemo((): ProjectOption[] => {
+    // Проверяем наличие project_codes
+    if (!client_projects?.project_codes || !Array.isArray(client_projects.project_codes)) {
       return [];
     }
 
-    return client_projects.projects
-      .filter((project: ClientProject) => project && project.id != null)
-      .map((project: ClientProject) => ({
-        value: String(project.id),
-        label: project.client || 'Unnamed Project',
-        code: project.codes?.[0]?.code || '',
-        description: project.description || '',
-        is_chargeable: project.is_chargeable || false,
-        status: project.status || '',
-        manager: project.manager || '',
-        country: project.country || '',
-        department: project.department || '',
-        service_line: project.service_line || '',
-        task_type: project.task_type || '',
-        project_color: project.project_color || '',
-        ic: project.ic || '',
-        entity: project.entity || '',
-        agreement_date: project.agreement_date || '',
-        is_code_recurring: project.is_code_recurring || false,
-        codes: project.codes || []
-      }));
+    // Группируем коды по проектам (так как может быть несколько кодов на один проект)
+    const projectsMap = new Map<number, ProjectOption>();
+
+    client_projects.project_codes.forEach((codeItem: ProjectCode) => {
+      const projectIdNum = codeItem.project;
+
+      if (!projectsMap.has(projectIdNum)) {
+        projectsMap.set(projectIdNum, {
+          value: String(projectIdNum),
+          label: client_projects.name || 'Unnamed Project',
+          code: codeItem.code,
+          project_id: projectIdNum,
+        });
+      }
+    });
+
+    return Array.from(projectsMap.values());
   }, [client_projects]);
 
   // Преобразуем задачи проекта в формат для Select
@@ -366,14 +379,16 @@ export function TimeEntryForm() {
   useEffect(() => {
     if (country && activeTab === 'external') {
       getClients(country);
+      setClientSearch(''); // Сбрасываем поиск при смене страны
     }
   }, [country, activeTab]);
 
-  // Функция для загрузки проектов при выборе клиента (НОВЫЙ ФОРМАТ)
+  // Функция для загрузки проектов при выборе клиента
   const handleClientChange = (clientId: string) => {
     setClient(clientId);
     setProjectId('');
     setSelectedTask('');
+    setClientSearch(''); // Сбрасываем поиск после выбора
     clearProjectTasks();
 
     if (clientId) {
@@ -381,17 +396,12 @@ export function TimeEntryForm() {
 
       getClientProjects(clientId, {
         onSuccess: (data: ClientWithProjects) => {
-          // Сохраняем полные данные клиента с проектами
           setClientProjects(data);
           setIsLoadingProjects(false);
 
-          if (data?.projects?.length > 0) {
-            toast.success(`Loaded ${data.projects.length} projects for ${data.name}`);
-
-            // Логируем для отладки
-            console.log('Client data:', data.name);
-            console.log('Projects loaded:', data.projects);
-          } else if (data?.projects?.length === 0) {
+          if (data?.project_codes?.length > 0) {
+            toast.success(`Loaded ${data.project_codes.length} project codes for ${data.name}`);
+          } else if (data?.project_codes?.length === 0) {
             toast.warning('No projects found for this client');
           } else {
             toast.warning('Invalid project data structure');
@@ -414,15 +424,11 @@ export function TimeEntryForm() {
     setProjectId(projectId);
     setSelectedTask('');
 
-    // Находим выбранный проект для дополнительной информации
-    const selectedProject = client_projects?.projects?.find(
-      (p: ClientProject) => String(p.id) === projectId
-    );
+    const selectedProject = projectOptions.find(p => p.value === projectId);
 
     if (selectedProject) {
-      console.log('Selected project:', selectedProject.client);
-      console.log('Project code:', selectedProject.codes?.[0]?.code);
-      console.log('Is chargeable:', selectedProject.is_chargeable);
+      console.log('Selected project:', selectedProject.label);
+      console.log('Project code:', selectedProject.code);
     }
 
     if (projectId) {
@@ -456,6 +462,7 @@ export function TimeEntryForm() {
     setClient('');
     setProjectId('');
     setSelectedTask('');
+    setClientSearch('');
     setClientProjects(null);
     clearProjectTasks();
   };
@@ -465,6 +472,7 @@ export function TimeEntryForm() {
     if (tab !== 'external') {
       setClientProjects(null);
       clearProjectTasks();
+      setClientSearch('');
     }
     if (tab !== 'vacations') {
       setSelectedLeaveType('');
@@ -479,6 +487,7 @@ export function TimeEntryForm() {
     setHours('8');
     setProjectId('');
     setDateError('');
+    setClientSearch('');
   };
 
   const createRequestBody = (): any => {
@@ -498,29 +507,16 @@ export function TimeEntryForm() {
         const selectedProject = projectOptions.find(p => p.value === projectId);
         const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
 
-        // Получаем полные данные проекта из нового формата
-        const fullProject = client_projects?.projects?.find(
-          (p: ClientProject) => String(p.id) === projectId
-        );
-
         return {
           ...baseBody,
           id: 0,
           country: selectedCountryObj?.value ? parseInt(selectedCountryObj.value) : null,
           client: selectedClient?.value ? parseInt(selectedClient.value) : null,
           project: selectedProject?.value ? parseInt(selectedProject.value) : null,
-          task_type: selectedProjectTask?.task_type || fullProject?.task_type || null,
+          task_type: selectedProjectTask?.task_type || null,
           task: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : null,
-          // Дополнительные поля для аналитики из нового формата
-          project_code: fullProject?.codes?.[0]?.code || null,
-          project_name: fullProject?.client || null,
-          project_status: fullProject?.status || null,
-          department: fullProject?.department || null,
-          service_line: fullProject?.service_line || null,
-          is_chargeable: fullProject?.is_chargeable || false,
-          project_color: fullProject?.project_color || null,
-          ic: fullProject?.ic || null,
-          agreement_date: fullProject?.agreement_date || null
+          project_code: selectedProject?.code || null,
+          project_name: selectedProject?.label || null,
         };
       }
 
@@ -558,7 +554,6 @@ export function TimeEntryForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Валидация выходного дня для single mode
     if (inputMode === 'single' && isWeekend(date)) {
       toast.error('Weekends are not allowed for single date entries. Please select a weekday or use Date Range mode.');
       return;
@@ -566,7 +561,6 @@ export function TimeEntryForm() {
 
     setIsSubmitting(true);
 
-    // Валидация
     if (activeTab === 'external') {
       if (!projectId || !selectedTask || !description || !hours || !country || !client) {
         toast.error('Please fill in all required fields');
@@ -605,13 +599,10 @@ export function TimeEntryForm() {
       }
     }
 
-    // Создаем тело запроса в новом формате
     const requestBody = createRequestBody();
 
-    // Отправляем запрос
     sendEntrys(requestBody, {
       onSuccess: (data) => {
-        // Создаем записи для локального состояния
         const entriesToAdd = [];
         const selectedCountryObj = localCountryOptions.find(c => c.value === country);
         const selectedClient = clientOptions.find(c => c.value === client);
@@ -756,7 +747,6 @@ export function TimeEntryForm() {
       ? "bg-blue-50 text-blue-700 border-blue-200"
       : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100";
 
-  // Проверка, заблокирована ли кнопка отправки
   const isSubmitDisabled = () => {
     if (isSubmitting) return true;
     if (inputMode === 'single' && isWeekend(date)) return true;
@@ -810,6 +800,270 @@ export function TimeEntryForm() {
           </div>
         </div>
 
+        {activeTab === 'external' && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <ToggleGroup
+                type="single"
+                value={inputMode}
+                onValueChange={(value) => value && handleInputModeChange(value as InputMode)}
+                className="justify-start"
+              >
+                <ToggleGroupItem value="single" className="gap-2">
+                  <CalendarIcon className="w-4 h-4" />
+                  Single Date
+                </ToggleGroupItem>
+                <ToggleGroupItem value="range" className="gap-2">
+                  <CalendarRange className="w-4 h-4" />
+                  Date Range
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="country">Projects Country *</Label>
+                <Select
+                  value={country}
+                  onValueChange={handleCountryChange}
+                  disabled={isCountriesLoading || localCountryOptions.length === 0}
+                >
+                  <SelectTrigger id="country">
+                    <SelectValue placeholder={isCountriesLoading ? "Loading countries..." : localCountryOptions.length === 0 ? "No countries available" : "Select country"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {localCountryOptions.map(countryOption => (
+                      <SelectItem key={countryOption.value} value={countryOption.value}>
+                        {countryOption.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="client">Client *</Label>
+                <div className="relative">
+                  <Select
+                    value={client}
+                    onValueChange={handleClientChange}
+                    disabled={!country || allClientOptions.length === 0 || isLoadingClients}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        setClientSearch('');
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="client" className="w-full">
+                      {isLoadingClients ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                          Loading clients...
+                        </div>
+                      ) : (
+                        <SelectValue placeholder={!country ? "Select country first" : allClientOptions.length === 0 ? "No clients available" : "Select client"} />
+                      )}
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[280px] overflow-y-auto">
+                      {/* Поле поиска - фиксируется при скролле */}
+                      <div className="sticky top-0 bg-white z-10 p-2 border-b">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <Input
+                            placeholder="Search client..."
+                            value={clientSearch}
+                            onChange={(e) => setClientSearch(e.target.value)}
+                            className="pl-8 pr-8 h-8 text-sm"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          {clientSearch && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setClientSearch('');
+                              }}
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                            >
+                              <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Контейнер с прокруткой для списка клиентов */}
+                      <div className="max-h-[200px] overflow-y-auto" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        {clientOptions.length === 0 && clientSearch ? (
+                          <div className="p-4 text-center text-gray-500 text-sm">
+                            No clients found for "{clientSearch}"
+                          </div>
+                        ) : (
+                          clientOptions.map(clientOption => (
+                            <SelectItem key={clientOption.value} value={clientOption.value}>
+                              <span className="font-medium">{clientOption.label}</span>
+                            </SelectItem>
+                          ))
+                        )}
+                      </div>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project">Projects code *</Label>
+              <Select
+                value={projectId}
+                onValueChange={handleProjectChange}
+                disabled={!client || projectOptions.length === 0 || isLoadingProjects}
+              >
+                <SelectTrigger id="project">
+                  {isLoadingProjects ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Loading projects...
+                    </div>
+                  ) : (
+                    <SelectValue placeholder={!client ? "Select client first" : projectOptions.length === 0 ? "No projects available" : "Select project"} />
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {projectOptions.map(projectOption => (
+                    <SelectItem key={projectOption.value} value={projectOption.value}>
+                      <div className="flex flex-col py-1">
+                        <div className="flex items-center gap-2">
+                          {projectOption.code && (
+                            <code className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {projectOption.code}
+                            </code>
+                          )}
+                          <span className="font-medium">{projectOption.label}</span>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="task">Task *</Label>
+              <Select
+                value={selectedTask}
+                onValueChange={setSelectedTask}
+                disabled={!projectId || projectTaskOptions.length === 0 || isLoadingTasks}
+              >
+                <SelectTrigger id="task" className="w-full">
+                  {isLoadingTasks ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Loading tasks...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
+                      <SelectValue placeholder={!projectId ? "Select project first" : projectTaskOptions.length === 0 ? "No tasks available" : "Select task"} />
+                    </div>
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  {projectTaskOptions.map(taskOption => (
+                    <SelectItem key={taskOption.value} value={taskOption.value}>
+                      <span className="font-medium">{taskOption.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {inputMode === 'single' ? (
+              <div className="space-y-2">
+                <Label htmlFor="date">Date *</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  required
+                  className={dateError ? 'border-red-500' : ''}
+                />
+                {dateError && <p className="text-sm text-red-500">{dateError}</p>}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="startDate">Start Date *</Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="endDate">End Date *</Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
+                  <Switch
+                    id="weekends"
+                    checked={includeWeekends}
+                    onCheckedChange={setIncludeWeekends}
+                  />
+                  <Label htmlFor="weekends" className="cursor-pointer">
+                    {includeWeekends ? 'Include weekends' : 'Exclude weekends'}
+                  </Label>
+                </div>
+              </>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="hours">{inputMode === 'range' ? 'Hours per Day' : 'Hours'} *</Label>
+              <Input
+                id="hours"
+                type="number"
+                step="0.5"
+                min="0.5"
+                max="24"
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+                placeholder="8.0"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description *</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Detailed description of the work done"
+                rows={3}
+                required
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <div className="text-sm text-gray-500">Fields marked with * are required</div>
+              <Button type="submit" style={{ backgroundColor: '#1F4E78' }} disabled={isSubmitDisabled()} className="px-6">
+                {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> Add Time Entry{inputMode === 'range' ? 's' : ''} </>}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Остальные вкладки internal и vacations остаются без изменений */}
         {activeTab === 'internal' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -866,11 +1120,6 @@ export function TimeEntryForm() {
                   ))}
                 </SelectContent>
               </Select>
-              {!isLoadingInternalTasks && internalTaskOptions.length === 0 && (
-                <p className="text-sm text-amber-600">
-                  No internal tasks available. Please contact administrator.
-                </p>
-              )}
             </div>
 
             {inputMode === 'single' ? (
@@ -884,9 +1133,7 @@ export function TimeEntryForm() {
                   required
                   className={dateError ? 'border-red-500' : ''}
                 />
-                {dateError && (
-                  <p className="text-sm text-red-500">{dateError}</p>
-                )}
+                {dateError && <p className="text-sm text-red-500">{dateError}</p>}
               </div>
             ) : (
               <>
@@ -953,342 +1200,9 @@ export function TimeEntryForm() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <div className="text-sm text-gray-500">
-                Fields marked with * are required
-              </div>
-              <Button
-                type="submit"
-                style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitDisabled()}
-                className="px-6"
-              >
-                {isSubmitting ? (
-                  'Adding...'
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Time Entry{inputMode === 'range' ? 's' : ''}
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {activeTab === 'external' && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <ToggleGroup
-                type="single"
-                value={inputMode}
-                onValueChange={(value) => value && handleInputModeChange(value as InputMode)}
-                className="justify-start"
-              >
-                <ToggleGroupItem value="single" className="gap-2">
-                  <CalendarIcon className="w-4 h-4" />
-                  Single Date
-                </ToggleGroupItem>
-                <ToggleGroupItem value="range" className="gap-2">
-                  <CalendarRange className="w-4 h-4" />
-                  Date Range
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="country">Country *</Label>
-                <Select
-                  value={country}
-                  onValueChange={handleCountryChange}
-                  disabled={isCountriesLoading || localCountryOptions.length === 0}
-                >
-                  <SelectTrigger id="country">
-                    <SelectValue
-                      placeholder={
-                        isCountriesLoading
-                          ? "Loading countries..."
-                          : localCountryOptions.length === 0
-                            ? "No countries available"
-                            : country
-                              ? localCountryOptions.find(c => c.value === country)?.label || "Select country"
-                              : "Select country"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {localCountryOptions.map(countryOption => (
-                      <SelectItem key={countryOption.value} value={countryOption.value}>
-                        {countryOption.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!isCountriesLoading && localCountryOptions.length === 0 && (
-                  <p className="text-sm text-amber-600">No countries available. Please contact administrator.</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="client">Client *</Label>
-                <Select
-                  value={client}
-                  onValueChange={handleClientChange}
-                  disabled={!country || clientOptions.length === 0 || isLoadingClients}
-                >
-                  <SelectTrigger id="client">
-                    {isLoadingClients ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                        Loading clients...
-                      </div>
-                    ) : (
-                      <SelectValue
-                        placeholder={
-                          !country
-                            ? "Select country first"
-                            : clientOptions.length === 0
-                              ? "No clients available for this country"
-                              : "Select client"
-                        }
-                      />
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clientOptions.map(clientOption => (
-                      <SelectItem key={clientOption.value} value={clientOption.value}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{clientOption.label}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="project">Project *</Label>
-              <Select
-                value={projectId}
-                onValueChange={handleProjectChange}
-                disabled={!client || projectOptions.length === 0 || isLoadingProjects}
-              >
-                <SelectTrigger id="project">
-                  {isLoadingProjects ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                      Loading projects...
-                    </div>
-                  ) : (
-                    <SelectValue
-                      placeholder={
-                        !client
-                          ? "Select client first"
-                          : projectOptions.length === 0
-                            ? "No projects available for this client"
-                            : "Select project"
-                      }
-                    />
-                  )}
-                </SelectTrigger>
-                <SelectContent>
-                  {projectOptions.map(projectOption => {
-                    const fullProject = client_projects?.projects?.find(
-                      (p: ClientProject) => String(p.id) === projectOption.value
-                    );
-
-                    return (
-                      <SelectItem key={projectOption.value} value={projectOption.value}>
-                        <div className="flex flex-col py-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium">
-                              {fullProject?.codes?.[0]?.code && (
-                                <span className="font-mono text-xs text-slate-500 mr-2">
-                                  {fullProject.codes[0].code}
-                                </span>
-                              )}
-                              {projectOption.label}
-                            </span>
-                            <div className="flex gap-1">
-                              {projectOption.is_chargeable && (
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
-                                  Chargeable
-                                </span>
-                              )}
-                              {fullProject?.project_color && (
-                                <div
-                                  className="w-4 h-4 rounded-full border"
-                                  style={{ backgroundColor: fullProject.project_color }}
-                                  title="Project color"
-                                />
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2 mt-1 text-xs text-gray-400">
-                            {fullProject?.status && (
-                              <span>Status: {fullProject.status}</span>
-                            )}
-                            {fullProject?.department && (
-                              <span>• Dept: {fullProject.department}</span>
-                            )}
-                          </div>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              {client && projectOptions.length === 0 && !isLoadingProjects && (
-                <p className="text-sm text-amber-600">
-                  No projects available for this client. Please select another client.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="task">Task *</Label>
-              <Select
-                value={selectedTask}
-                onValueChange={setSelectedTask}
-                disabled={!projectId || projectTaskOptions.length === 0 || isLoadingTasks}
-              >
-                <SelectTrigger id="task" className="w-full">
-                  {isLoadingTasks ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                      Loading tasks...
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
-                      <SelectValue
-                        placeholder={
-                          !projectId
-                            ? "Select project first"
-                            : projectTaskOptions.length === 0
-                              ? "No tasks available for this project"
-                              : "Select task"
-                        }
-                      />
-                    </div>
-                  )}
-                </SelectTrigger>
-                <SelectContent>
-                  {projectTaskOptions.map(taskOption => (
-                    <SelectItem key={taskOption.value} value={taskOption.value}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{taskOption.label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {projectId && projectTaskOptions.length === 0 && !isLoadingTasks && (
-                <p className="text-sm text-amber-600">
-                  No specific tasks found for this project.
-                </p>
-              )}
-            </div>
-
-            {inputMode === 'single' ? (
-              <div className="space-y-2">
-                <Label htmlFor="date">Date *</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  required
-                  className={dateError ? 'border-red-500' : ''}
-                />
-                {dateError && (
-                  <p className="text-sm text-red-500">{dateError}</p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="startDate">Start Date *</Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => handleStartDateChange(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="endDate">End Date *</Label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
-                  <Switch
-                    id="weekends"
-                    checked={includeWeekends}
-                    onCheckedChange={setIncludeWeekends}
-                  />
-                  <Label htmlFor="weekends" className="cursor-pointer">
-                    {includeWeekends ? 'Include weekends' : 'Exclude weekends'}
-                  </Label>
-                </div>
-              </>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="hours">{inputMode === 'range' ? 'Hours per Day' : 'Hours'} *</Label>
-              <Input
-                id="hours"
-                type="number"
-                step="0.5"
-                min="0.5"
-                max="24"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                placeholder="8.0"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Detailed description of the work done"
-                rows={3}
-                required
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <div className="text-sm text-gray-500">
-                Fields marked with * are required
-              </div>
-              <Button
-                type="submit"
-                style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitDisabled()}
-                className="px-6"
-              >
-                {isSubmitting ? (
-                  'Adding...'
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Time Entry{inputMode === 'range' ? 's' : ''}
-                  </>
-                )}
+              <div className="text-sm text-gray-500">Fields marked with * are required</div>
+              <Button type="submit" style={{ backgroundColor: '#1F4E78' }} disabled={isSubmitDisabled()} className="px-6">
+                {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> Add Time Entry{inputMode === 'range' ? 's' : ''} </>}
               </Button>
             </div>
           </form>
@@ -1330,31 +1244,18 @@ export function TimeEntryForm() {
                   ) : (
                     <div className="flex items-center">
                       <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
-                      <SelectValue
-                        placeholder={
-                          leaveOptions.length === 0
-                            ? "No leave types available"
-                            : "Select leave type"
-                        }
-                      />
+                      <SelectValue placeholder={leaveOptions.length === 0 ? "No leave types available" : "Select leave type"} />
                     </div>
                   )}
                 </SelectTrigger>
                 <SelectContent>
                   {leaveOptions.map(leaveOption => (
                     <SelectItem key={leaveOption.value} value={leaveOption.value}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{leaveOption.label}</span>
-                      </div>
+                      <span className="font-medium">{leaveOption.label}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {!isLoadingLeaves && leaveOptions.length === 0 && (
-                <p className="text-sm text-amber-600">
-                  No leave types available. Please contact administrator.
-                </p>
-              )}
             </div>
 
             {inputMode === 'single' ? (
@@ -1368,9 +1269,7 @@ export function TimeEntryForm() {
                   required
                   className={dateError ? 'border-red-500' : ''}
                 />
-                {dateError && (
-                  <p className="text-sm text-red-500">{dateError}</p>
-                )}
+                {dateError && <p className="text-sm text-red-500">{dateError}</p>}
               </div>
             ) : (
               <>
@@ -1437,23 +1336,9 @@ export function TimeEntryForm() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <div className="text-sm text-gray-500">
-                Fields marked with * are required
-              </div>
-              <Button
-                type="submit"
-                style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitDisabled()}
-                className="px-6"
-              >
-                {isSubmitting ? (
-                  'Adding...'
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Vacation{inputMode === 'range' ? 's' : ''}
-                  </>
-                )}
+              <div className="text-sm text-gray-500">Fields marked with * are required</div>
+              <Button type="submit" style={{ backgroundColor: '#1F4E78' }} disabled={isSubmitDisabled()} className="px-6">
+                {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> Add Vacation{inputMode === 'range' ? 's' : ''} </>}
               </Button>
             </div>
           </form>

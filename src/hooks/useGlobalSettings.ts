@@ -1,8 +1,9 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useUserStore } from "../store/UsersStore";
 import { createGrade, deleteGrade, editGrade } from "../services/grade";
 import { getGlobalSettings, sendGlobalSettings } from "../services/globalSettings";
 import { GlobalSet } from "../types/GlobalSettings";
+import { useEffect } from "react";
 
 // ========== КЭШ ДЛЯ ГЛОБАЛЬНЫХ НАСТРОЕК ==========
 
@@ -36,31 +37,25 @@ const getCachedGlobalSettings = (countryId: string): GlobalSet | null => {
 
 // ========== ХУКИ С КЭШИРОВАНИЕМ ==========
 
-export const useGetGlobalSettings = () => {
-    const setGlobalSettings = useUserStore((state) => state.setGlobalSettings)
+export const useGetGlobalSettings = (country_id: string) => {
+    const setGlobalSettings = useUserStore((state) => state.setGlobalSettings);
 
-    return useMutation({
-        mutationFn: async (country_id: string) => {
-            // Проверяем кэш
-            const cached = getCachedGlobalSettings(country_id);
-            if (cached) {
-                return cached;
-            }
-
-            // Загружаем новые данные
-            console.log(`Fetching fresh global settings for country: ${country_id}`);
-            const data = await getGlobalSettings(country_id);
-            globalSettingsCache.set(country_id, { data, timestamp: Date.now() });
-            return data;
+    const query = useQuery({
+        queryKey: ['globalSettings', country_id],
+        queryFn: async () => {
+            return await getGlobalSettings(country_id);
         },
-        onSuccess: (data, country_id) => {
-            setGlobalSettings(data);
-            console.log(`Global settings loaded for country ${country_id}:`, data);
-        },
-        onError: (error) => {
-            console.error("Get global settings error:", error);
-        },
+        enabled: !!country_id,
     });
+
+    // ✅ замена onSuccess из v4
+    useEffect(() => {
+        if (query.data) {
+            setGlobalSettings(query.data);
+        }
+    }, [query.data, setGlobalSettings]);
+
+    return query;
 };
 
 export const useSetGlobalSettings = () => {

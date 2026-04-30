@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, FolderKanban, FileText, User, CalendarDays, ChevronUp, ChevronDown, Gift, Star } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, FolderKanban, FileText, User, CalendarDays, Gift, Coffee } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { useUserStore } from '../store/UsersStore';
 import { useGetHolidayTimeEntrys } from '../hooks/useTimeEntry';
+import { useGetGlobalSettings } from '../hooks/useGlobalSettings';
 
 // Интерфейс для записи времени в новом формате
 interface TimeEntry {
@@ -43,12 +44,24 @@ interface HolidayTimeEntry extends TimeEntry {
   holidayDescription?: string;
 }
 
+// Маппинг дней недели (0 = Sunday, 1 = Monday, ...)
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 export function CalendarView() {
   const { filters } = useTimeTracker();
   const time_entries = useUserStore((state) => state.time_entries) as TimeEntry[];
   const calendar_holidays = useUserStore((state) => state.calendar_holidays) as CalendarHoliday[] | null;
   const currentMonth = useUserStore((state) => state.currentMonth);
   const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
+  const me = useUserStore((state) => state.me);
+  const globalSettings = useUserStore((state) => state.globalSettings);
+
+  // Используем новый хук useGetGlobalSettings с правильным параметром
+  const {
+    data: globSet,
+    refetch: refetchGlobalSettings,
+    isLoading: isLoadingSettings
+  } = useGetGlobalSettings(me?.country_id || '');
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDateEntries, setSelectedDateEntries] = useState<(TimeEntry | HolidayTimeEntry)[]>([]);
@@ -75,6 +88,19 @@ export function CalendarView() {
     return time_entries || [];
   }, [time_entries]);
 
+  // Функция для проверки, является ли день выходным (не входит в working_days)
+  const isDayOff = (dateStr: string): boolean => {
+    // Используем globSet из запроса или globalSettings из store
+    const settings = globSet || globalSettings;
+    if (!settings || !settings.working_days) return false;
+
+    const date = new Date(dateStr);
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+
+    // Если день недели не входит в список рабочих дней - это выходной
+    return !settings.working_days.includes(dayOfWeek);
+  };
+
   // Функция для проверки, является ли дата праздником
   const getHolidayForDate = (dateStr: string): CalendarHoliday | null => {
     if (!calendar_holidays || calendar_holidays.length === 0) {
@@ -86,7 +112,6 @@ export function CalendarView() {
     const day = date.getDate().toString().padStart(2, '0');
     const monthDay = `${month}-${day}`;
 
-    // Ищем праздник для этой даты
     const holiday = calendar_holidays.find(h => h.date === monthDay);
     return holiday || null;
   };
@@ -95,19 +120,16 @@ export function CalendarView() {
     const filtered = allEntries.filter(entry => {
       if (!entry) return false;
 
-      // Фильтрация по проектам
       if (filters.projects.length > 0 && entry.project &&
         !filters.projects.includes(entry.project)) {
         return false;
       }
 
-      // Фильтрация по тексту поиска
       if (filters.searchText && entry.description &&
         !entry.description.toLowerCase().includes(filters.searchText.toLowerCase())) {
         return false;
       }
 
-      // Фильтрация по диапазону часов
       if (filters.hoursRange !== 'all' && entry.hours) {
         const hours = entry.hours;
         if (filters.hoursRange === 'low' && hours >= 4) return false;
@@ -115,7 +137,6 @@ export function CalendarView() {
         if (filters.hoursRange === 'high' && hours <= 8) return false;
       }
 
-      // Фильтрация по диапазону дат
       if (filters.dateRange && entry.date) {
         const entryDate = new Date(entry.date);
         const [start, end] = filters.dateRange;
@@ -158,9 +179,8 @@ export function CalendarView() {
     const holiday = getHolidayForDate(dateStr);
 
     if (holiday) {
-      // Создаем объект праздника как задачу
       const holidayEntry: HolidayTimeEntry = {
-        id: -holiday.id, // Используем отрицательный ID для отличия от обычных задач
+        id: -holiday.id,
         user: 'System',
         country: null,
         client: null,
@@ -180,7 +200,6 @@ export function CalendarView() {
         holidayDescription: holiday.description
       };
 
-      // Возвращаем праздник вместе с обычными задачами
       return [holidayEntry, ...regularEntries];
     }
 
@@ -248,7 +267,6 @@ export function CalendarView() {
     return entry && entry.isHoliday === true;
   };
 
-  // Получение цвета проекта
   const getProjectColor = (entry: TimeEntry | HolidayTimeEntry) => {
     if (isHolidayEntry(entry)) {
       return '#DC2626';
@@ -256,7 +274,6 @@ export function CalendarView() {
     return entry.project_color || '#0066CC';
   };
 
-  // Получение кода проекта
   const getProjectCode = (entry: TimeEntry | HolidayTimeEntry) => {
     if (isHolidayEntry(entry)) {
       return 'HOL';
@@ -264,7 +281,6 @@ export function CalendarView() {
     return entry.project_code || 'PRJ';
   };
 
-  // Получение названия проекта
   const getProjectName = (entry: TimeEntry | HolidayTimeEntry) => {
     if (isHolidayEntry(entry)) {
       return 'Holiday';
@@ -272,7 +288,6 @@ export function CalendarView() {
     return entry.project_code || entry.project || 'Unknown Project';
   };
 
-  // Получение клиента
   const getClient = (entry: TimeEntry | HolidayTimeEntry) => {
     if (isHolidayEntry(entry)) {
       return 'Public Holiday';
@@ -280,7 +295,6 @@ export function CalendarView() {
     return entry.client || 'No client';
   };
 
-  // Получение типа задачи
   const getTaskType = (entry: TimeEntry | HolidayTimeEntry) => {
     if (isHolidayEntry(entry)) {
       return 'Holiday';
@@ -288,13 +302,14 @@ export function CalendarView() {
     return entry.task_type || 'No type';
   };
 
-  // Получение названия задачи
   const getTaskName = (entry: TimeEntry | HolidayTimeEntry) => {
     if (isHolidayEntry(entry)) {
       return entry.task || entry.holidayName || 'Public Holiday';
     }
     return entry.task || entry.task_type || 'No task';
   };
+
+  const currentSettings = globSet || globalSettings;
 
   return (
     <>
@@ -310,9 +325,23 @@ export function CalendarView() {
                 {allEntries.length > 0
                   ? `Click on a day to see task details (${allEntries.length} total entries)`
                   : 'No time entries yet'}
+                {currentSettings && (
+                  <span className="ml-2 text-xs">
+                    • Working days: {currentSettings.working_days?.map(d => dayNames[d]).join(', ')}
+                  </span>
+                )}
+                {isLoadingSettings && <span className="ml-2 text-xs text-gray-400">• Loading settings...</span>}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchGlobalSettings()}
+                disabled={isLoadingSettings}
+              >
+                Refresh
+              </Button>
               <Button variant="outline" size="icon" onClick={previousMonth}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
@@ -343,29 +372,55 @@ export function CalendarView() {
 
               const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const holiday = getHolidayForDate(dateStr);
+              const isDayOffDay = isDayOff(dateStr);
               const dayEntries = getEntriesForDate(day);
               const totalHours = getTotalHoursForDate(day);
               const isHoliday = holiday !== null;
+
+              // Определяем стиль для дня
+              let dayBgColor = '';
+              let dayBorderColor = '';
+              let dayTextColor = '';
+
+              if (isHoliday) {
+                // Праздничные дни - красный
+                dayBgColor = '#FEF2F2';
+                dayBorderColor = '#FECACA';
+                dayTextColor = '#DC2626';
+              } else if (isDayOffDay) {
+                // Выходные дни (не в working_days) - желтый
+                dayBgColor = '#FEFCE8';
+                dayBorderColor = '#FDE047';
+                dayTextColor = '#B45309';
+              } else if (isToday(day)) {
+                // Сегодняшний день - синий
+                dayBgColor = '#EFF6FF';
+                dayBorderColor = '#0066CC';
+                dayTextColor = '#0066CC';
+              } else {
+                // Обычные рабочие дни
+                dayBgColor = 'transparent';
+                dayBorderColor = '#E2E8F0';
+                dayTextColor = '#475569';
+              }
 
               return (
                 <button
                   key={day}
                   onClick={() => handleDayClick(day)}
-                  className={`aspect-square border rounded-lg p-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 
-                    ${isHoliday ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'hover:bg-slate-50 border-slate-200'}
-                    ${isToday(day) ? 'ring-2 ring-offset-1' : ''}`}
-                  style={isToday(day) && !isHoliday ? { borderColor: '#0066CC', backgroundColor: '#EFF6FF' } :
-                    isHoliday ? { borderColor: '#FECACA', backgroundColor: '#FEF2F2' } : {}}
+                  className="aspect-square border rounded-lg p-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-slate-50"
+                  style={{
+                    backgroundColor: dayBgColor,
+                    borderColor: dayBorderColor
+                  }}
                 >
                   <div className="h-full flex flex-col">
                     <div className="text-center mb-1 flex items-center justify-center gap-1">
-                      <span style={isToday(day) && !isHoliday ? { color: '#0066CC', fontWeight: 600 } :
-                        isHoliday ? { color: '#DC2626', fontWeight: 600 } : {}}>
+                      <span style={{ color: dayTextColor, fontWeight: isToday(day) || isHoliday ? 600 : 400 }}>
                         {day}
                       </span>
-                      {isHoliday && (
-                        <Gift className="w-3 h-3 text-red-500" />
-                      )}
+                      {isHoliday && <Gift className="w-3 h-3 text-red-500" />}
+                      {isDayOffDay && !isHoliday && <Coffee className="w-3 h-3 text-amber-500" />}
                     </div>
 
                     {isHoliday && holiday && (
@@ -374,8 +429,14 @@ export function CalendarView() {
                       </div>
                     )}
 
-                    {!isHoliday && dayEntries.filter(e => !isHolidayEntry(e)).length > 0 && (
-                      <div className="flex-1 space-y-1 overflow-hidden">
+                    {isDayOffDay && !isHoliday && (
+                      <div className="text-[10px] text-amber-600 text-center font-medium truncate px-1">
+                        Day Off
+                      </div>
+                    )}
+
+                    {!isHoliday && !isDayOffDay && dayEntries.filter(e => !isHolidayEntry(e)).length > 0 && (
+                      <div className="flex-1 space-y-1 overflow-hidden mt-1">
                         {dayEntries.filter(e => !isHolidayEntry(e)).slice(0, 2).map(entry => {
                           const projectColor = getProjectColor(entry);
                           const projectCode = getProjectCode(entry);
@@ -414,10 +475,10 @@ export function CalendarView() {
         </CardContent>
       </Card>
 
-      {/* Модальное окно с деталями дня - резиновая версия без скроллов */}
+      {/* Модальное окно с деталями дня - без изменений */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        {/* ... содержимое модального окна без изменений ... */}
         <DialogContent className="w-[90vw] h-[90vh] flex flex-col p-0">
-          {/* Заголовок */}
           <DialogHeader className="p-3 border-b shrink-0">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <DialogTitle className="flex items-center gap-2 text-xl">
@@ -435,7 +496,6 @@ export function CalendarView() {
             )}
           </DialogHeader>
 
-          {/* Содержимое */}
           <div className="flex-1 flex flex-col p-3 overflow-y-auto">
             {selectedDateEntries.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -447,10 +507,8 @@ export function CalendarView() {
             ) : (
               currentEntry && (
                 <div className="flex-1 flex flex-col h-full">
-                  {/* Карточка проекта - разбита на две колонки */}
                   <div style={{ marginBottom: '15px', padding: '10px' }} className={`p-5 rounded-xl mb-6 ${isHolidayEntry(currentEntry) ? 'bg-red-50 border border-red-100' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100'}`}>
                     <div className="flex gap-4">
-                      {/* Левая колонка - иконка и название */}
                       <div className="flex items-start gap-4 flex-1">
                         <div
                           className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
@@ -481,7 +539,6 @@ export function CalendarView() {
                         </div>
                       </div>
 
-                      {/* Правая колонка - тип задачи, клиент, часы */}
                       <div className="flex-1">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -516,9 +573,7 @@ export function CalendarView() {
                     </div>
                   </div>
 
-                  {/* Детали - сетка 2 колонки */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                    {/* Date блок */}
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                       <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Date</div>
                       <div className="text-gray-900">
@@ -531,7 +586,6 @@ export function CalendarView() {
                       </div>
                     </div>
 
-                    {/* User блок */}
                     {!isHolidayEntry(currentEntry) && currentEntry.user && (
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">User</div>
@@ -541,7 +595,6 @@ export function CalendarView() {
                       </div>
                     )}
 
-                    {/* Task блок */}
                     {currentEntry.task && (
                       <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -553,7 +606,6 @@ export function CalendarView() {
                       </div>
                     )}
 
-                    {/* Description блок - на всю ширину если есть место */}
                     {currentEntry.description && (
                       <div className="md:col-span-2 bg-gray-50 rounded-lg p-4 border border-gray-200">
                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Description</div>
@@ -564,7 +616,6 @@ export function CalendarView() {
                     )}
                   </div>
 
-                  {/* Навигация */}
                   <div className="flex items-center justify-between pt-6 mt-6 border-t border-gray-200">
                     <Button
                       variant="outline"

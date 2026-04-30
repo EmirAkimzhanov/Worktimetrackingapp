@@ -38,6 +38,7 @@ const queryClient = new QueryClient({
 
 
 // Компонент навигации
+// Компонент навигации
 function Navigation() {
   const location = useLocation();
   const isTimesheet = location.pathname === '/' || location.pathname === '/timesheet';
@@ -45,6 +46,26 @@ function Navigation() {
 
   const me = useUserStore((state) => state.me);
   const { mutate: logout } = useLogOut();
+
+  // Получаем полное имя пользователя
+  const getUserFullName = () => {
+    if (me?.first_name && me?.last_name) {
+      return `${me.first_name} ${me.last_name}`;
+    }
+    if (me?.first_name) return me.first_name;
+    if (me?.last_name) return me.last_name;
+    return me?.email?.split('@')[0] || 'User';
+  };
+
+  // Получаем инициалы для аватара
+  const getUserInitials = () => {
+    if (me?.first_name && me?.last_name) {
+      return `${me.first_name[0]}${me.last_name[0]}`.toUpperCase();
+    }
+    if (me?.first_name) return me.first_name[0].toUpperCase();
+    if (me?.last_name) return me.last_name[0].toUpperCase();
+    return me?.email?.[0]?.toUpperCase() || 'U';
+  };
 
   return (
     <header className="border-b border-slate-200 shadow-sm" style={{ backgroundColor: '#1F4E78' }}>
@@ -62,6 +83,19 @@ function Navigation() {
             </Link>
           </div>
           <div className="flex gap-2">
+            {/* Кнопка с именем пользователя */}
+            <Button
+              variant="ghost"
+              className="text-white hover:bg-white/10 flex items-center gap-2"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00A3A1] to-[#1F4E78] flex items-center justify-center">
+                <span className="text-white text-sm font-semibold">
+                  {getUserInitials()}
+                </span>
+              </div>
+              <span className="hidden md:inline">{getUserFullName()}</span>
+            </Button>
+
             <Button
               asChild
               variant={isTimesheet ? 'secondary' : 'ghost'}

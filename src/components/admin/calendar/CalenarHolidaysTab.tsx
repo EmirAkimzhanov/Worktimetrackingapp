@@ -23,6 +23,8 @@ import {
     useDeleteCalendar,
     useEditCalendar,
     useGetCalendar,
+    useGetHolidayTimeEntrys,
+    useGetTimeEntrys,
     useSendCalendar,
 } from "../../../hooks/useTimeEntry";
 import { useUserStore } from "../../../store/UsersStore";
@@ -69,7 +71,8 @@ export function CalendarHolidaysTab({
     const { mutate: editCalendar } = useEditCalendar();
     const { mutate: deleteCalendar } = useDeleteCalendar();
     const { mutate: getGlobalSettings } = useGetGlobalSettings();
-
+    const { mutate: getTimeEntrys } = useGetTimeEntrys();
+    const { mutate: getHolidays } = useGetHolidayTimeEntrys();
 
     // Состояние для попапа подтверждения удаления
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -78,7 +81,6 @@ export function CalendarHolidaysTab({
         name: string;
         type: "holiday" | "workWeekend";
     } | null>(null);
-
 
     const correctCountryId = useMemo(() => {
         if (!countries || !countries.length) {
@@ -98,8 +100,8 @@ export function CalendarHolidaysTab({
 
     useEffect(() => {
         getCalendar();
-
-    }, [correctCountryId]); // Добавляем correctCountryId в зависимости
+        // Загружаем time entries при монтировании
+    }, [correctCountryId]);
 
     const holidays = useMemo(() => {
         if (!calendar) return [];
@@ -159,12 +161,42 @@ export function CalendarHolidaysTab({
         }
     };
 
+    // Функция для обновления всех данных после изменений
+    const refreshAllData = () => {
+        getCalendar(undefined, {
+            onSuccess: () => {
+                console.log("Calendar refreshed successfully");
+            },
+            onError: (error) => {
+                console.error("Failed to refresh calendar:", error);
+            }
+        });
+
+        getTimeEntrys(true, {
+            onSuccess: (data) => {
+                console.log("Time entries refreshed successfully:", data?.length);
+            },
+            onError: (error) => {
+                console.error("Failed to refresh time entries:", error);
+            }
+        });
+        getHolidays(true, {
+            onSuccess: (data) => {
+                console.log("Time entries refreshed successfully:", data?.length);
+            },
+            onError: (error) => {
+                console.error("Failed to refresh time entries:", error);
+            }
+        });
+
+    };
+
     // Функция удаления элемента календаря по day_id
     const deleteCalendarItem = (day_id: number) => {
         deleteCalendar(day_id, {
             onSuccess: () => {
                 toast.success("Item deleted successfully");
-                getCalendar(); // Обновляем данные календаря
+                refreshAllData(); // Обновляем все данные после удаления
                 setDeleteDialogOpen(false);
                 setItemToDelete(null);
             },
@@ -202,7 +234,6 @@ export function CalendarHolidaysTab({
 
     // Обработчик сохранения праздника
     const handleSaveHoliday = (holiday: Omit<Holiday, "id" | "country_id">) => {
-        // Преобразуем данные для API
         const calendarData = {
             input_date: holiday.date,
             holiday_name: holiday.name || null,
@@ -212,9 +243,7 @@ export function CalendarHolidaysTab({
             country: correctCountryId,
         };
 
-        // Если редактируем существующий праздник
         if (editingHoliday && editingHoliday.id) {
-            // Используем editCalendar для обновления (PATCH)
             editCalendar(
                 {
                     body: calendarData,
@@ -227,8 +256,10 @@ export function CalendarHolidaysTab({
                             id: editingHoliday.id,
                             country_id: correctCountryId,
                         });
-                        getCalendar();
+                        refreshAllData(); // Обновляем все данные после обновления
                         toast.success("Holiday updated successfully");
+                        setIsHolidayDialogOpen(false);
+                        setEditingHoliday(null);
                     },
                     onError: (error) => {
                         console.error("Error updating holiday:", error);
@@ -237,7 +268,6 @@ export function CalendarHolidaysTab({
                 },
             );
         } else {
-
             sendCalendar(calendarData, {
                 onSuccess: () => {
                     onAddHoliday(correctCountryId, {
@@ -245,8 +275,10 @@ export function CalendarHolidaysTab({
                         id: Date.now(),
                         country_id: correctCountryId,
                     });
-                    getCalendar();
+                    refreshAllData(); // Обновляем все данные после добавления
                     toast.success("Holiday added successfully");
+                    setIsHolidayDialogOpen(false);
+                    setEditingHoliday(null);
                 },
                 onError: (error) => {
                     console.error("Error creating holiday:", error);
@@ -254,9 +286,6 @@ export function CalendarHolidaysTab({
                 },
             });
         }
-
-        setIsHolidayDialogOpen(false);
-        setEditingHoliday(null);
     };
 
     const handleSaveWorkWeekend = (
@@ -279,8 +308,10 @@ export function CalendarHolidaysTab({
                 },
                 {
                     onSuccess: () => {
-                        getCalendar();
+                        refreshAllData(); // Обновляем все данные после обновления
                         toast.success("Work weekend updated successfully");
+                        setIsWorkWeekendDialogOpen(false);
+                        setEditingWorkWeekend(null);
                     },
                     onError: (error) => {
                         console.error("Error updating work weekend:", error);
@@ -296,8 +327,10 @@ export function CalendarHolidaysTab({
                         id: Date.now(),
                         country_id: correctCountryId,
                     });
-                    getCalendar();
+                    refreshAllData(); // Обновляем все данные после добавления
                     toast.success("Work weekend added successfully");
+                    setIsWorkWeekendDialogOpen(false);
+                    setEditingWorkWeekend(null);
                 },
                 onError: (error) => {
                     console.error("Error creating work weekend:", error);
@@ -305,9 +338,6 @@ export function CalendarHolidaysTab({
                 },
             });
         }
-
-        setIsWorkWeekendDialogOpen(false);
-        setEditingWorkWeekend(null);
     };
 
     const handleDeleteHoliday = (countryId: number, holidayId: number) => {

@@ -87,10 +87,12 @@ export const useGetTimeEntrys = () => {
 
     return useMutation({
         mutationFn: async (forceRefresh?: boolean) => {
-            if (!forceRefresh) {
-                const cached = getCachedTimeEntries();
-                if (cached) {
-                    return cached;
+            // Если forceRefresh = true, игнорируем кэш
+            if (!forceRefresh && timeEntriesCache) {
+                const isCacheValid = Date.now() - timeEntriesCache.timestamp < CACHE_DURATION;
+                if (isCacheValid) {
+                    console.log('Returning cached time entries');
+                    return timeEntriesCache.data;
                 }
             }
 
@@ -108,6 +110,8 @@ export const useGetTimeEntrys = () => {
         },
     });
 };
+
+
 
 export const useEditTimeEntry = () => {
     return useMutation({

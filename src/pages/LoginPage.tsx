@@ -73,14 +73,6 @@ const CompanyName = styled.h1`
   letter-spacing: -0.5px;
 `;
 
-const AppName = styled.h2`
-  font-size: 16px;
-  font-weight: 400;
-  opacity: 0.95;
-  margin: 4px 0 0 0;
-  letter-spacing: 0.5px;
-`;
-
 const Tagline = styled.p`
   font-size: 15px;
   opacity: 0.9;
@@ -95,7 +87,6 @@ const TabsContainer = styled.div`
   background: white;
 `;
 
-// ИСПРАВЛЕНО: используем transient prop $active
 const Tab = styled.button<{ $active: boolean }>`
   flex: 1;
   padding: 20px 0 16px;
@@ -267,6 +258,29 @@ const PasswordStrengthIndicator = styled.div<{ $strength: number }>`
 
 type TabType = 'signin' | 'activate';
 
+// Упрощенная функция для извлечения сообщения об ошибке
+const extractErrorMessage = (error: any): string => {
+  console.log('Error object:', error);
+
+  if (!error) return 'An unexpected error occurred';
+
+  // Если ошибка уже имеет message (из сервиса)
+  if (error.message) {
+    return error.message;
+  }
+
+  // Если error - это строка
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  // Прямой доступ к response.data.detail (на всякий случай)
+  if (error?.response?.data?.detail) {
+    return error.response.data.detail;
+  }
+
+  return 'An unexpected error occurred. Please try again.';
+};
 const TimeTrackerLogin = () => {
   const [activeTab, setActiveTab] = useState<TabType>('signin');
 
@@ -322,12 +336,16 @@ const TimeTrackerLogin = () => {
     login(
       { email, password },
       {
-        onSuccess: async () => {
+        onSuccess: async (response) => {
+          console.log('Login success response:', response);
           await checkMe();
           setSuccessMessage('Login successful');
+          setFormError(null);
         },
-        onError: () => {
-          setFormError('Invalid email or password');
+        onError: (error) => {
+          console.error('Login error:', error);
+          const errorMessage = extractErrorMessage(error);
+          setFormError(errorMessage);
         }
       }
     );
@@ -380,6 +398,15 @@ const TimeTrackerLogin = () => {
       activation_code: activationKey,
       password: activatePassword,
       password_confirm: confirmPassword
+    }, {
+      onSuccess: (response) => {
+        console.log('Activation success response:', response);
+      },
+      onError: (error) => {
+        console.error('Activation error:', error);
+        const errorMessage = extractErrorMessage(error);
+        setFormError(errorMessage);
+      }
     });
   };
 
@@ -403,10 +430,22 @@ const TimeTrackerLogin = () => {
     }
   }, [isActivateSuccess]);
 
-  // Determine which error to show based on active tab
-  const displayError = activeTab === 'signin'
-    ? loginError?.message || formError
-    : activateError?.message || formError;
+  // Формируем сообщение об ошибке для отображения
+  const getDisplayError = () => {
+    if (activeTab === 'signin') {
+      if (loginError) {
+        return extractErrorMessage(loginError);
+      }
+      return formError;
+    } else {
+      if (activateError) {
+        return extractErrorMessage(activateError);
+      }
+      return formError;
+    }
+  };
+
+  const displayError = getDisplayError();
 
   return (
     <LoginContainer>
@@ -420,14 +459,12 @@ const TimeTrackerLogin = () => {
             <LogoIcon>⏱</LogoIcon>
             <LogoText>
               <CompanyName>TIME TRACKER</CompanyName>
-              {/* <AppName>TIME TRACKER</AppName> */}
             </LogoText>
           </Logo>
           <Tagline>Track your work hours and manage projects efficiently</Tagline>
         </LoginHeader>
 
         <TabsContainer>
-          {/* ИСПРАВЛЕНО: используем $active вместо active */}
           <Tab
             $active={activeTab === 'signin'}
             onClick={() => {
@@ -438,7 +475,6 @@ const TimeTrackerLogin = () => {
           >
             Sign In
           </Tab>
-          {/* ИСПРАВЛЕНО: используем $active вместо active */}
           <Tab
             $active={activeTab === 'activate'}
             onClick={() => {
@@ -457,6 +493,12 @@ const TimeTrackerLogin = () => {
               <ErrorMessage>
                 ⚠️ {displayError}
               </ErrorMessage>
+            )}
+
+            {successMessage && !displayError && (
+              <SuccessMessage>
+                ✓ {successMessage}
+              </SuccessMessage>
             )}
 
             <FormGroup>
@@ -514,7 +556,7 @@ const TimeTrackerLogin = () => {
               </ErrorMessage>
             )}
 
-            {successMessage && (
+            {successMessage && !displayError && (
               <SuccessMessage>
                 ✓ {successMessage}
               </SuccessMessage>
@@ -617,4 +659,4 @@ const TimeTrackerLogin = () => {
   );
 };
 
-export default TimeTrackerLogin;
+export default TimeTrackerLogin;  

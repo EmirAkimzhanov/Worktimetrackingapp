@@ -61,7 +61,7 @@ export function ServiceTypeDialog({
 
     const handleSubmit = async () => {
         if (!formData.name.trim()) {
-            toast.error('Please enter a pie name');
+            toast.error('Please enter a service type name');
             return;
         }
 
@@ -78,12 +78,12 @@ export function ServiceTypeDialog({
                     id: editingPie.id,
                     name: formData.name,
                 });
-                toast.success('Pie updated');
+                toast.success('service type updated');
             } else {
                 await createServiceType.mutateAsync({
                     name: formData.name,
                 });
-                toast.success('Pie created');
+                toast.success('service type created');
             }
 
             await refetchPies();
