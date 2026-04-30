@@ -25,6 +25,47 @@ import { Leave } from '../types/leave';
 type InputMode = 'single' | 'range';
 type TabType = 'internal' | 'external' | 'vacations';
 
+// Типы для нового формата данных
+interface ProjectCode {
+  id: number;
+  code: string;
+  project: number;
+  created_at: string;
+}
+
+interface ClientProject {
+  id: number;
+  status: string;
+  country: string;
+  manager: string;
+  client: string;
+  department: string;
+  service_line: string;
+  task_type: string;
+  service_type: string | null;
+  codes: ProjectCode[];
+  description: string;
+  entity: string;
+  ic: string;
+  project_color: string;
+  is_chargeable: boolean;
+  is_code_recurring: boolean;
+  agreement_date: string;
+}
+
+interface ClientWithProjects {
+  id: number;
+  projects: ClientProject[];
+  name: string;
+  group: string;
+  personal_number: string;
+  client_code: string;
+  bvd: string;
+  sector: number;
+  country: number;
+  pie: string | null;
+}
+
 export function TimeEntryForm() {
   const { addMultipleEntries } = useTimeTracker();
   const [inputMode, setInputMode] = useState<InputMode>('single');
@@ -47,6 +88,7 @@ export function TimeEntryForm() {
   const [localCountryOptions, setLocalCountryOptions] = useState<Array<{ value: string, label: string, code: string }>>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const [dateError, setDateError] = useState<string>('');
   const countriesLoadedRef = useRef(false);
   const internalTasksLoadedRef = useRef(false);
   const leavesLoadedRef = useRef(false);
@@ -61,7 +103,6 @@ export function TimeEntryForm() {
   const { mutate: getTimeEntrys } = useGetTimeEntrys();
   const { mutate: getCalendarHolidays } = useGetHolidayTimeEntrys();
 
-
   // Получаем данные из стора
   const countries = useUserStore((state) => state.countries);
   const selectedCountry = useUserStore((s) => s.selectedCountry);
@@ -74,6 +115,48 @@ export function TimeEntryForm() {
   const internal_tasks = useUserStore((state) => state.internal_tasks);
   const setInternalTasks = useUserStore((state) => state.setInternalTasks);
   const leaves = useUserStore((state) => state.leaves);
+
+  // Функция проверки является ли день выходным
+  const isWeekend = (dateString: string): boolean => {
+    const date = new Date(dateString);
+    const dayOfWeek = date.getDay();
+    return dayOfWeek === 0 || dayOfWeek === 6;
+  };
+
+  // Функция валидации даты для single mode
+  const validateSingleDate = (dateToCheck: string): boolean => {
+    if (inputMode === 'single' && isWeekend(dateToCheck)) {
+      setDateError('Weekends are not allowed for single date entries. Please select a weekday or use Date Range mode.');
+      return false;
+    }
+    setDateError('');
+    return true;
+  };
+
+  // Обработчик изменения даты для single mode
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate);
+    if (inputMode === 'single') {
+      validateSingleDate(newDate);
+    }
+  };
+
+  // Обработчик изменения startDate
+  const handleStartDateChange = (newDate: string) => {
+    setStartDate(newDate);
+    if (inputMode === 'single') {
+      validateSingleDate(newDate);
+    }
+  };
+
+  // Обработчик изменения режима ввода
+  const handleInputModeChange = (value: InputMode) => {
+    setInputMode(value);
+    setDateError('');
+    if (value === 'single' && isWeekend(date)) {
+      validateSingleDate(date);
+    }
+  };
 
   // Преобразуем клиентов в формат для Select
   const clientOptions = useMemo(() => {
@@ -90,20 +173,33 @@ export function TimeEntryForm() {
       }));
   }, [clients]);
 
-  // Преобразуем проекты в формат для Select
+  // Преобразуем проекты в формат для Select (НОВЫЙ ФОРМАТ)
   const projectOptions = useMemo(() => {
-    if (!client_projects?.projects || !Array.isArray(client_projects.projects)) return [];
+    // Проверяем наличие projects массива
+    if (!client_projects?.projects || !Array.isArray(client_projects.projects)) {
+      return [];
+    }
 
     return client_projects.projects
-      .filter((project: Project) => project && project.id != null && project.name)
-      .map((project: Project) => ({
+      .filter((project: ClientProject) => project && project.id != null)
+      .map((project: ClientProject) => ({
         value: String(project.id),
-        label: project.name || 'Unnamed Project',
-        code: project.code || '',
+        label: project.client || 'Unnamed Project',
+        code: project.codes?.[0]?.code || '',
         description: project.description || '',
         is_chargeable: project.is_chargeable || false,
         status: project.status || '',
-        manager: project.manager || ''
+        manager: project.manager || '',
+        country: project.country || '',
+        department: project.department || '',
+        service_line: project.service_line || '',
+        task_type: project.task_type || '',
+        project_color: project.project_color || '',
+        ic: project.ic || '',
+        entity: project.entity || '',
+        agreement_date: project.agreement_date || '',
+        is_code_recurring: project.is_code_recurring || false,
+        codes: project.codes || []
       }));
   }, [client_projects]);
 
@@ -273,7 +369,7 @@ export function TimeEntryForm() {
     }
   }, [country, activeTab]);
 
-  // Функция для загрузки проектов при выборе клиента
+  // Функция для загрузки проектов при выборе клиента (НОВЫЙ ФОРМАТ)
   const handleClientChange = (clientId: string) => {
     setClient(clientId);
     setProjectId('');
@@ -284,14 +380,21 @@ export function TimeEntryForm() {
       setIsLoadingProjects(true);
 
       getClientProjects(clientId, {
-        onSuccess: (data) => {
+        onSuccess: (data: ClientWithProjects) => {
+          // Сохраняем полные данные клиента с проектами
           setClientProjects(data);
           setIsLoadingProjects(false);
 
           if (data?.projects?.length > 0) {
-            toast.success(`Loaded ${data.projects.length} projects for the client`);
-          } else {
+            toast.success(`Loaded ${data.projects.length} projects for ${data.name}`);
+
+            // Логируем для отладки
+            console.log('Client data:', data.name);
+            console.log('Projects loaded:', data.projects);
+          } else if (data?.projects?.length === 0) {
             toast.warning('No projects found for this client');
+          } else {
+            toast.warning('Invalid project data structure');
           }
         },
         onError: (error) => {
@@ -310,6 +413,17 @@ export function TimeEntryForm() {
   const handleProjectChange = (projectId: string) => {
     setProjectId(projectId);
     setSelectedTask('');
+
+    // Находим выбранный проект для дополнительной информации
+    const selectedProject = client_projects?.projects?.find(
+      (p: ClientProject) => String(p.id) === projectId
+    );
+
+    if (selectedProject) {
+      console.log('Selected project:', selectedProject.client);
+      console.log('Project code:', selectedProject.codes?.[0]?.code);
+      console.log('Is chargeable:', selectedProject.is_chargeable);
+    }
 
     if (projectId) {
       setIsLoadingTasks(true);
@@ -355,6 +469,7 @@ export function TimeEntryForm() {
     if (tab !== 'vacations') {
       setSelectedLeaveType('');
     }
+    setDateError('');
   };
 
   const resetForm = () => {
@@ -363,10 +478,10 @@ export function TimeEntryForm() {
     setDescription('');
     setHours('8');
     setProjectId('');
+    setDateError('');
   };
 
   const createRequestBody = (): any => {
-    // Базовый объект с общими полями
     const baseBody = {
       description,
       hours: parseFloat(hours),
@@ -376,38 +491,53 @@ export function TimeEntryForm() {
       )
     };
 
-    // Добавляем поля в зависимости от активной вкладки
     switch (activeTab) {
-      case 'internal':
+      case 'external': {
+        const selectedCountryObj = localCountryOptions.find(c => c.value === country);
+        const selectedClient = clientOptions.find(c => c.value === client);
+        const selectedProject = projectOptions.find(p => p.value === projectId);
+        const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
+
+        // Получаем полные данные проекта из нового формата
+        const fullProject = client_projects?.projects?.find(
+          (p: ClientProject) => String(p.id) === projectId
+        );
+
+        return {
+          ...baseBody,
+          id: 0,
+          country: selectedCountryObj?.value ? parseInt(selectedCountryObj.value) : null,
+          client: selectedClient?.value ? parseInt(selectedClient.value) : null,
+          project: selectedProject?.value ? parseInt(selectedProject.value) : null,
+          task_type: selectedProjectTask?.task_type || fullProject?.task_type || null,
+          task: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : null,
+          // Дополнительные поля для аналитики из нового формата
+          project_code: fullProject?.codes?.[0]?.code || null,
+          project_name: fullProject?.client || null,
+          project_status: fullProject?.status || null,
+          department: fullProject?.department || null,
+          service_line: fullProject?.service_line || null,
+          is_chargeable: fullProject?.is_chargeable || false,
+          project_color: fullProject?.project_color || null,
+          ic: fullProject?.ic || null,
+          agreement_date: fullProject?.agreement_date || null
+        };
+      }
+
+      case 'internal': {
         const selectedInternalTask = internalTaskOptions.find(t => t.value === selectedTask);
         return {
           ...baseBody,
-          id: 0, // или генерируйте id
+          id: 0,
           country: null,
           client: null,
           project: null,
           task_type: selectedInternalTask?.task_type || null,
           task: selectedInternalTask?.value ? parseInt(selectedInternalTask.value) : null
         };
+      }
 
-      case 'external':
-        const selectedCountryObj = localCountryOptions.find(c => c.value === country);
-        const selectedClient = clientOptions.find(c => c.value === client);
-        const selectedProject = projectOptions.find(p => p.value === projectId);
-        const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
-
-        return {
-          ...baseBody,
-          id: 0,
-          country: selectedCountryObj?.value ? parseInt(selectedCountryObj.value) : null,
-          // ОТПРАВЛЯЕМ ID КЛИЕНТА ВМЕСТО ИМЕНИ
-          client: selectedClient?.value || null, // Изменено здесь
-          project: selectedProject?.value ? parseInt(selectedProject.value) : null,
-          task_type: selectedProjectTask?.task_type || null,
-          task: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : null
-        };
-
-      case 'vacations':
+      case 'vacations': {
         const selectedLeave = leaveOptions.find(l => l.value === selectedLeaveType);
         return {
           ...baseBody,
@@ -418,6 +548,7 @@ export function TimeEntryForm() {
           task_type: selectedLeave?.task_type || null,
           task: selectedLeave?.value ? parseInt(selectedLeave.value) : null
         };
+      }
 
       default:
         return baseBody;
@@ -426,6 +557,13 @@ export function TimeEntryForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Валидация выходного дня для single mode
+    if (inputMode === 'single' && isWeekend(date)) {
+      toast.error('Weekends are not allowed for single date entries. Please select a weekday or use Date Range mode.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Валидация
@@ -483,7 +621,6 @@ export function TimeEntryForm() {
         const selectedLeave = leaveOptions.find(l => l.value === selectedLeaveType);
 
         if (inputMode === 'single') {
-          // Одна запись
           let entry;
 
           if (activeTab === 'internal') {
@@ -508,7 +645,6 @@ export function TimeEntryForm() {
               hours: hoursNum,
               country: selectedCountryObj?.label || country,
               client: selectedClient?.label || client,
-              // Сохраняем ID клиента для локального состояния
               client_id: selectedClient?.value ? parseInt(selectedClient.value) : undefined,
             };
           } else if (activeTab === 'vacations') {
@@ -527,7 +663,6 @@ export function TimeEntryForm() {
             entriesToAdd.push(entry);
           }
         } else {
-          // Диапазон дат
           const start = new Date(startDate);
           const end = new Date(endDate);
           const currentDate = new Date(start);
@@ -536,9 +671,9 @@ export function TimeEntryForm() {
 
           while (currentDate < endDateForLoop) {
             const dayOfWeek = currentDate.getDay();
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+            const isWeekendDay = dayOfWeek === 0 || dayOfWeek === 6;
 
-            if (includeWeekends || !isWeekend) {
+            if (includeWeekends || !isWeekendDay) {
               let entry;
 
               if (activeTab === 'internal') {
@@ -563,7 +698,6 @@ export function TimeEntryForm() {
                   hours: hoursNum,
                   country: selectedCountryObj?.label || country,
                   client: selectedClient?.label || client,
-                  // Сохраняем ID клиента для локального состояния
                   client_id: selectedClient?.value ? parseInt(selectedClient.value) : undefined,
                 };
               } else if (activeTab === 'vacations') {
@@ -587,7 +721,6 @@ export function TimeEntryForm() {
           }
         }
 
-        // Добавляем записи в локальное состояние
         if (entriesToAdd.length > 0) {
           addMultipleEntries(entriesToAdd);
           const message = inputMode === 'single'
@@ -603,7 +736,6 @@ export function TimeEntryForm() {
           },
           onError: (error) => {
             console.error('Failed to refresh time entries:', error);
-            // Не показываем ошибку пользователю, чтобы не мешать основному флоу
           }
         });
 
@@ -623,6 +755,21 @@ export function TimeEntryForm() {
     activeTab === tab
       ? "bg-blue-50 text-blue-700 border-blue-200"
       : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100";
+
+  // Проверка, заблокирована ли кнопка отправки
+  const isSubmitDisabled = () => {
+    if (isSubmitting) return true;
+    if (inputMode === 'single' && isWeekend(date)) return true;
+
+    if (activeTab === 'external') {
+      return !projectId || !selectedTask || !country || !client;
+    } else if (activeTab === 'internal') {
+      return !selectedTask;
+    } else if (activeTab === 'vacations') {
+      return !selectedLeaveType;
+    }
+    return false;
+  };
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow border-t-4" style={{ borderTopColor: '#1F4E78' }}>
@@ -669,7 +816,7 @@ export function TimeEntryForm() {
               <ToggleGroup
                 type="single"
                 value={inputMode}
-                onValueChange={(value) => value && setInputMode(value as InputMode)}
+                onValueChange={(value) => value && handleInputModeChange(value as InputMode)}
                 className="justify-start"
               >
                 <ToggleGroupItem value="single" className="gap-2">
@@ -733,9 +880,13 @@ export function TimeEntryForm() {
                   id="date"
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   required
+                  className={dateError ? 'border-red-500' : ''}
                 />
+                {dateError && (
+                  <p className="text-sm text-red-500">{dateError}</p>
+                )}
               </div>
             ) : (
               <>
@@ -746,7 +897,7 @@ export function TimeEntryForm() {
                       id="startDate"
                       type="date"
                       value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
                       required
                     />
                   </div>
@@ -808,7 +959,7 @@ export function TimeEntryForm() {
               <Button
                 type="submit"
                 style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitting || !selectedTask}
+                disabled={isSubmitDisabled()}
                 className="px-6"
               >
                 {isSubmitting ? (
@@ -830,7 +981,7 @@ export function TimeEntryForm() {
               <ToggleGroup
                 type="single"
                 value={inputMode}
-                onValueChange={(value) => value && setInputMode(value as InputMode)}
+                onValueChange={(value) => value && handleInputModeChange(value as InputMode)}
                 className="justify-start"
               >
                 <ToggleGroupItem value="single" className="gap-2">
@@ -913,11 +1064,6 @@ export function TimeEntryForm() {
                     ))}
                   </SelectContent>
                 </Select>
-                {/* {country && clientOptions.length === 0 && !isLoadingClients && (
-                  <p className="text-sm text-amber-600">
-                    No clients available for this country.
-                  </p>
-                )} */}
               </div>
             </div>
 
@@ -947,20 +1093,51 @@ export function TimeEntryForm() {
                   )}
                 </SelectTrigger>
                 <SelectContent>
-                  {projectOptions.map(projectOption => (
-                    <SelectItem key={projectOption.value} value={projectOption.value}>
-                      <div className="flex flex-col py-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{projectOption.label}</span>
-                          {projectOption.is_chargeable && (
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
-                              Chargeable
+                  {projectOptions.map(projectOption => {
+                    const fullProject = client_projects?.projects?.find(
+                      (p: ClientProject) => String(p.id) === projectOption.value
+                    );
+
+                    return (
+                      <SelectItem key={projectOption.value} value={projectOption.value}>
+                        <div className="flex flex-col py-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">
+                              {fullProject?.codes?.[0]?.code && (
+                                <span className="font-mono text-xs text-slate-500 mr-2">
+                                  {fullProject.codes[0].code}
+                                </span>
+                              )}
+                              {projectOption.label}
                             </span>
-                          )}
+                            <div className="flex gap-1">
+                              {projectOption.is_chargeable && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                                  Chargeable
+                                </span>
+                              )}
+                              {fullProject?.project_color && (
+                                <div
+                                  className="w-4 h-4 rounded-full border"
+                                  style={{ backgroundColor: fullProject.project_color }}
+                                  title="Project color"
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 mt-1 text-xs text-gray-400">
+                            {fullProject?.status && (
+                              <span>Status: {fullProject.status}</span>
+                            )}
+                            {fullProject?.department && (
+                              <span>• Dept: {fullProject.department}</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </SelectItem>
-                  ))}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               {client && projectOptions.length === 0 && !isLoadingProjects && (
@@ -1006,21 +1183,11 @@ export function TimeEntryForm() {
                       </div>
                     </SelectItem>
                   ))}
-                  {projectTaskOptions.length === 0 && internalTaskOptions.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs text-gray-500">Project specific tasks not available</div>
-                      {internalTaskOptions.map(taskOption => (
-                        <SelectItem key={taskOption.value} value={taskOption.value}>
-                          {taskOption.label}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
                 </SelectContent>
               </Select>
               {projectId && projectTaskOptions.length === 0 && !isLoadingTasks && (
                 <p className="text-sm text-amber-600">
-                  No specific tasks found for this project. You can select from internal tasks.
+                  No specific tasks found for this project.
                 </p>
               )}
             </div>
@@ -1032,9 +1199,13 @@ export function TimeEntryForm() {
                   id="date"
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   required
+                  className={dateError ? 'border-red-500' : ''}
                 />
+                {dateError && (
+                  <p className="text-sm text-red-500">{dateError}</p>
+                )}
               </div>
             ) : (
               <>
@@ -1045,7 +1216,7 @@ export function TimeEntryForm() {
                       id="startDate"
                       type="date"
                       value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
                       required
                     />
                   </div>
@@ -1107,7 +1278,7 @@ export function TimeEntryForm() {
               <Button
                 type="submit"
                 style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitting || !projectId || !selectedTask || !country || !client}
+                disabled={isSubmitDisabled()}
                 className="px-6"
               >
                 {isSubmitting ? (
@@ -1129,7 +1300,7 @@ export function TimeEntryForm() {
               <ToggleGroup
                 type="single"
                 value={inputMode}
-                onValueChange={(value) => value && setInputMode(value as InputMode)}
+                onValueChange={(value) => value && handleInputModeChange(value as InputMode)}
                 className="justify-start"
               >
                 <ToggleGroupItem value="single" className="gap-2">
@@ -1193,9 +1364,13 @@ export function TimeEntryForm() {
                   id="date"
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   required
+                  className={dateError ? 'border-red-500' : ''}
                 />
+                {dateError && (
+                  <p className="text-sm text-red-500">{dateError}</p>
+                )}
               </div>
             ) : (
               <>
@@ -1206,7 +1381,7 @@ export function TimeEntryForm() {
                       id="startDate"
                       type="date"
                       value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
+                      onChange={(e) => handleStartDateChange(e.target.value)}
                       required
                     />
                   </div>
@@ -1268,7 +1443,7 @@ export function TimeEntryForm() {
               <Button
                 type="submit"
                 style={{ backgroundColor: '#1F4E78' }}
-                disabled={isSubmitting || !selectedLeaveType}
+                disabled={isSubmitDisabled()}
                 className="px-6"
               >
                 {isSubmitting ? (

@@ -16,6 +16,7 @@ export function FilterPanel() {
   const { filters, setFilters } = useTimeTracker();
   const { mutate: getProjects } = useGetProjects();
   const store_projects = useUserStore((state) => state.projects);
+  console.log(store_projects)
 
   // Загружаем проекты при монтировании компонента
   useEffect(() => {
@@ -166,6 +167,9 @@ export function FilterPanel() {
                 <SelectItem value="all">All Projects</SelectItem>
                 {store_projects?.map(project => {
                   const isSelected = filters.projects.includes(project.id.toString());
+                  const mainCode = project.codes?.[0]?.code;
+                  const hasMultipleCodes = project.codes?.length > 1;
+
                   return (
                     <SelectItem
                       key={project.id}
@@ -174,13 +178,20 @@ export function FilterPanel() {
                     >
                       <div className="flex items-center gap-2">
                         <div
-                          className="w-3 h-3 rounded-full"
+                          className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: project.project_color || '#0066CC' }}
                         />
-                        <span className="font-mono text-xs text-slate-500">{project.code}</span>
-                        <span>{project.name}</span>
-                        {isSelected && (
-                          <Badge variant="outline" className="ml-2 text-xs">Selected</Badge>
+                        {mainCode && (
+                          <code className="text-xs font-mono text-slate-500">{mainCode}</code>
+                        )}
+                        <span className="font-medium">{project.client || project.name}</span>
+                        {hasMultipleCodes && (
+                          <Badge variant="outline" className="text-xs">
+                            +{project.codes.length - 1} codes
+                          </Badge>
+                        )}
+                        {project.is_chargeable && !hasMultipleCodes && (
+                          <Badge variant="secondary" className="text-xs">Chargeable</Badge>
                         )}
                       </div>
                     </SelectItem>
@@ -243,23 +254,43 @@ export function FilterPanel() {
 
         {hasActiveFilters && (
           <div className="flex flex-wrap gap-2 pt-2 border-t">
+            {/* Отображение выбранных проектов с их кодами */}
             {filters.projects.map(projectId => {
               const project = store_projects?.find(p => p.id.toString() === projectId);
-              return project ? (
+              if (!project) return null;
+
+              const projectCodes = project.codes || [];
+              const mainCode = projectCodes[0]?.code;
+
+              return (
                 <Badge
                   key={projectId}
                   style={{
                     backgroundColor: project.project_color || '#0066CC',
                     color: '#ffffff'
                   }}
-                  className="gap-1 cursor-pointer"
+                  className="gap-1 cursor-pointer flex items-center"
                   onClick={() => toggleProject(projectId)}
                 >
-                  {project.name}
-                  <X className="w-3 h-3" />
+                  {/* Отображаем код проекта вместо имени */}
+                  {mainCode && (
+                    <code className="text-xs font-mono" style={{ color: '#ffffff' }}>
+                      {mainCode}
+                    </code>
+                  )}
+                  {/* Если нет кода, показываем название */}
+                  {!mainCode && (project.client || project.name)}
+
+                  {/* Если есть несколько кодов, показываем количество */}
+                  {projectCodes.length > 1 && (
+                    <span className="text-xs ml-1">+{projectCodes.length - 1}</span>
+                  )}
+
+                  <X className="w-3 h-3 ml-1" />
                 </Badge>
-              ) : null;
+              );
             })}
+
             {filters.hoursRange !== 'all' && (
               <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ hoursRange: 'all' })}>
                 {filters.hoursRange === 'low' ? '< 4 hours' :
@@ -267,12 +298,14 @@ export function FilterPanel() {
                 <X className="w-3 h-3" />
               </Badge>
             )}
+
             {filters.searchText && (
               <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ searchText: '' })}>
                 Search: {filters.searchText}
                 <X className="w-3 h-3" />
               </Badge>
             )}
+
             {filters.dateRange && (
               <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ dateRange: null })}>
                 {filters.dateRange[0]} to {filters.dateRange[1]}

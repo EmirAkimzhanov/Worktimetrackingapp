@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -39,16 +39,16 @@ export function UserDialog({
     onSave,
 }: UserDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const isInitializedRef = useRef(false);
+
     const department_roles = useUserStore((state) => state.department_roles) || [];
     const user_grades = useUserStore((state) => state.user_grades) || [];
     const countriesData = useUserStore((state) => state.countries);
     const store_departments = useUserStore((state) => state.departments) || [];
     const store_positions = useUserStore((state) => state.positions) || [];
-    const { mutate: sendUser } = useSendUsers();
+    const { mutate: sendUser, isLoading: isCreating } = useSendUsers();
     const { mutate: getUsers } = useGetUsers();
-    const { mutate: editUser } = useEditUsers();
-
-
+    const { mutate: editUser, isLoading: isEditing } = useEditUsers();
 
     // Преобразуем countries в массив, если это объект
     const countries = useMemo(() => {
@@ -65,33 +65,74 @@ export function UserDialog({
         return [];
     }, [countriesData]);
 
+    // Безопасное преобразование в строку
+    const safeToString = useCallback((value: any): string => {
+        if (value === null || value === undefined) return '';
+        return value.toString();
+    }, []);
+
+    // Функция для поиска ID по названию или прямого использования ID
+    const findId = useCallback((
+        items: any[],
+        value: any,
+        nameField: string = 'name'
+    ): number => {
+        if (!items || items.length === 0) return 0;
+
+        // Если value уже является числом (ID)
+        if (typeof value === 'number') {
+            const exists = items.find(item => item.id === value);
+            if (exists) return value;
+        }
+
+        // Если value является строкой (название)
+        if (typeof value === 'string') {
+            const item = items.find(item => item[nameField] === value);
+            if (item) return item.id;
+        }
+
+        // Если value является объектом с id
+        if (value && typeof value === 'object' && value.id) {
+            return value.id;
+        }
+
+        return items[0]?.id || 0;
+    }, []);
+
     // Загружаем данные пользователя в форму при редактировании
     useEffect(() => {
-        if (editingUser && open) {
-            // Находим ID по названию (так как в editingUser приходят названия, а не ID)
-            const findPositionId = () => {
-                const position = store_positions.find(p => p.name === editingUser.position);
-                return position?.id || (store_positions.length > 0 ? store_positions[0].id : 1);
+        if (editingUser && open && !isInitializedRef.current) {
+            isInitializedRef.current = true;
+
+            // Функции для получения ID с проверкой на существование
+            const getPositionId = () => {
+                if (editingUser.position_id) return editingUser.position_id;
+                if (editingUser.position) return findId(store_positions, editingUser.position);
+                return store_positions[0]?.id || 1;
             };
 
-            const findDepartmentId = () => {
-                const department = store_departments.find(d => d.name === editingUser.department);
-                return department?.id || (store_departments.length > 0 ? store_departments[0].id : 1);
+            const getDepartmentId = () => {
+                if (editingUser.department_id) return editingUser.department_id;
+                if (editingUser.department) return findId(store_departments, editingUser.department);
+                return store_departments[0]?.id || 1;
             };
 
-            const findDepartmentRoleId = () => {
-                const role = department_roles.find(r => r.name === editingUser.department_role);
-                return role?.id || (department_roles.length > 0 ? department_roles[0].id : 1);
+            const getDepartmentRoleId = () => {
+                if (editingUser.department_role_id) return editingUser.department_role_id;
+                if (editingUser.department_role) return findId(department_roles, editingUser.department_role);
+                return department_roles[0]?.id || 1;
             };
 
-            const findGradeId = () => {
-                const grade = user_grades.find(g => g.name === editingUser.grade);
-                return grade?.id || (user_grades.length > 0 ? user_grades[0].id : 10);
+            const getGradeId = () => {
+                if (editingUser.grade_id) return editingUser.grade_id;
+                if (editingUser.grade) return findId(user_grades, editingUser.grade);
+                return user_grades[0]?.id || 10;
             };
 
-            const findCountryId = () => {
-                const country = countries.find(c => c.name === editingUser.country || c.code === editingUser.country);
-                return country?.id || (countries.length > 0 ? countries[0].id : 1);
+            const getCountryId = () => {
+                if (editingUser.country_id) return editingUser.country_id;
+                if (editingUser.country) return findId(countries, editingUser.country);
+                return countries[0]?.id || 1;
             };
 
             setUserForm({
@@ -100,17 +141,20 @@ export function UserDialog({
                 last_name: editingUser.last_name || '',
                 password: '',
                 date_joined: editingUser.date_joined?.split('T')[0] || new Date().toISOString().split('T')[0],
-                leave_date: editingUser.date_left || '',
+                leave_date: editingUser.leave_date || editingUser.date_left || '',
                 is_active: editingUser.is_active ?? true,
-                position_id: findPositionId(),
-                department_id: findDepartmentId(),
+                position_id: getPositionId(),
+                department_id: getDepartmentId(),
                 role: editingUser.role || 'user',
-                department_role_id: findDepartmentRoleId(),
-                grade_id: findGradeId(),
-                country_id: findCountryId()
+                department_role_id: getDepartmentRoleId(),
+                grade_id: getGradeId(),
+                country_id: getCountryId()
             });
+        } else if (!open) {
+            isInitializedRef.current = false;
+            resetForm();
         }
-    }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, setUserForm]);
+    }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, setUserForm, findId]);
 
     const resetForm = () => {
         setUserForm({
@@ -137,13 +181,13 @@ export function UserDialog({
     };
 
     // Функция валидации email
-    const validateEmail = (email: string): boolean => {
+    const validateEmail = useCallback((email: string): boolean => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
-    };
+    }, []);
 
     // Валидация всей формы
-    const validateForm = (): boolean => {
+    const validateForm = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
         if (!userForm.email?.trim()) {
@@ -162,19 +206,19 @@ export function UserDialog({
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }, [userForm.email, userForm.first_name, userForm.last_name, validateEmail]);
 
     // Преобразование role string в number
-    const mapRoleToNumber = (role: string): number => {
+    const mapRoleToNumber = useCallback((role: string): number => {
         switch (role) {
             case 'admin': return 1;
             case 'manager': return 2;
             case 'user': return 3;
             default: return 3;
         }
-    };
+    }, []);
 
-    const handleSaveUser = () => {
+    const handleSaveUser = useCallback(() => {
         if (!validateForm()) {
             return;
         }
@@ -214,16 +258,10 @@ export function UserDialog({
                 }
             });
         }
-    };
-
-    // Безопасное преобразование в строку
-    const safeToString = (value: any): string => {
-        if (value === null || value === undefined) return '';
-        return value.toString();
-    };
+    }, [validateForm, userForm, editingUser, editUser, getUsers, handleClose, onSave, sendUser, mapRoleToNumber]);
 
     // Обработчик изменения email с валидацией
-    const handleEmailChange = (value: string) => {
+    const handleEmailChange = useCallback((value: string) => {
         setUserForm({ ...userForm, email: value });
 
         if (errors.email) {
@@ -233,7 +271,9 @@ export function UserDialog({
                 return newErrors;
             });
         }
-    };
+    }, [userForm, errors.email]);
+
+    const isLoading = isCreating || isEditing;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -255,6 +295,7 @@ export function UserDialog({
                                 onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })}
                                 placeholder="Enter first name"
                                 className={errors.first_name ? 'border-red-500' : ''}
+                                disabled={isLoading}
                             />
                             {errors.first_name && (
                                 <p className="text-sm text-red-500">{errors.first_name}</p>
@@ -268,6 +309,7 @@ export function UserDialog({
                                 onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })}
                                 placeholder="Enter last name"
                                 className={errors.last_name ? 'border-red-500' : ''}
+                                disabled={isLoading}
                             />
                             {errors.last_name && (
                                 <p className="text-sm text-red-500">{errors.last_name}</p>
@@ -286,6 +328,7 @@ export function UserDialog({
                                 onChange={(e) => handleEmailChange(e.target.value)}
                                 placeholder="Enter email address"
                                 className={errors.email ? 'border-red-500' : ''}
+                                disabled={isLoading}
                             />
                             {errors.email && (
                                 <p className="text-sm text-red-500">{errors.email}</p>
@@ -298,6 +341,7 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, grade_id: parseInt(value) })
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select grade" />
@@ -322,6 +366,7 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, position_id: parseInt(value) })
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select position" />
@@ -342,6 +387,7 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, department_id: parseInt(value) })
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select department" />
@@ -366,6 +412,7 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, department_role_id: parseInt(value) })
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select role" />
@@ -386,6 +433,7 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, country_id: parseInt(value) })
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select country" />
@@ -416,6 +464,7 @@ export function UserDialog({
                                 onValueChange={(value: 'admin' | 'user' | 'manager') =>
                                     setUserForm({ ...userForm, role: value })
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger>
                                     <SelectValue />
@@ -439,16 +488,21 @@ export function UserDialog({
                         </div>
                     </div>
                 </div>
-                <DialogFooter className='display-flex pt-4  justify-between'>
-                    <Button variant="outline" onClick={handleClose}>
+                <DialogFooter className='display-flex pt-4 justify-between'>
+                    <Button variant="outline" onClick={handleClose} disabled={isLoading}>
                         Cancel
                     </Button>
                     <Button
                         onClick={handleSaveUser}
                         style={{ backgroundColor: '#1F4E78' }}
-                        disabled={!userForm.email?.trim() || !userForm.first_name?.trim() || !userForm.last_name?.trim()}
+                        disabled={
+                            !userForm.email?.trim() ||
+                            !userForm.first_name?.trim() ||
+                            !userForm.last_name?.trim() ||
+                            isLoading
+                        }
                     >
-                        {editingUser ? 'Save Changes' : 'Add User'}
+                        {isLoading ? 'Saving...' : (editingUser ? 'Save Changes' : 'Add User')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

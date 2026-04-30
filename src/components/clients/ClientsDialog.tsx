@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -52,6 +52,7 @@ export function ClientDialog({
     ],
 }: ClientDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const isInitializedRef = useRef(false);
 
     const store_sectors = useUserStore((state) => state.sectors);
     const store_countries = useUserStore((state) => state.countries);
@@ -60,36 +61,52 @@ export function ClientDialog({
     const { mutate: editClient, isLoading: isEditing } = useEditClients();
     const { data: pieOptions } = useGetPIE();
 
+    // ✅ Функция для преобразования store_countries в массив
+    const getCountriesArray = useMemo(() => {
+        if (!store_countries) return [];
+        if (Array.isArray(store_countries)) return store_countries;
+        if (typeof store_countries === 'object') return Object.values(store_countries);
+        return [];
+    }, [store_countries]);
+
+    // ✅ Функция для преобразования store_sectors в массив
+    const getSectorsArray = useMemo(() => {
+        if (!store_sectors) return [];
+        if (Array.isArray(store_sectors)) return store_sectors;
+        if (typeof store_sectors === 'object') return Object.values(store_sectors);
+        return [];
+    }, [store_sectors]);
+
+    // Функции для поиска ID
+    const getSectorId = useCallback((sectorName: string) => {
+        if (!sectorName) return 0;
+        const sectorsArray = getSectorsArray;
+        const sector = sectorsArray.find(s => s.name === sectorName);
+        return sector?.id || 0;
+    }, [getSectorsArray]);
+
+    const getCountryId = useCallback((countryCode: string) => {
+        if (!countryCode) return 0;
+        const countriesArray = getCountriesArray;
+        const country = countriesArray.find(c => c.code === countryCode || c.name === countryCode);
+        return country?.id || 0;
+    }, [getCountriesArray]);
+
+    const getPieId = useCallback((pieValue: any) => {
+        if (!pieValue) return 0;
+        if (typeof pieValue === 'object' && pieValue.id) return pieValue.id;
+        if (typeof pieValue === 'number') return pieValue;
+        if (typeof pieValue === 'string') {
+            const pie = pieOptions?.find((p: any) => p.name === pieValue || p.title === pieValue);
+            return pie?.id || 0;
+        }
+        return 0;
+    }, [pieOptions]);
+
+    // Заполнение формы при редактировании
     useEffect(() => {
-        if (editingClient && open) {
-            // Функция для поиска ID сектора по названию
-            const getSectorId = (sectorName: string) => {
-                if (!sectorName) return 0;
-                const sector = store_sectors?.find(s => s.name === sectorName);
-                return sector?.id || 0;
-            };
-
-            // Функция для поиска ID страны по коду
-            const getCountryId = (countryCode: string) => {
-                if (!countryCode) return 0;
-                const country = store_countries?.find(c => c.code === countryCode || c.name === countryCode);
-                return country?.id || 0;
-            };
-
-            // Функция для поиска ID PIE по названию или ID
-            const getPieId = (pieValue: any) => {
-                if (!pieValue) return 0;
-                // Если pie приходит как объект с id
-                if (typeof pieValue === 'object' && pieValue.id) return pieValue.id;
-                // Если pie приходит как число
-                if (typeof pieValue === 'number') return pieValue;
-                // Если pie приходит как строка с названием
-                if (typeof pieValue === 'string') {
-                    const pie = pieOptions?.find((p: any) => p.name === pieValue || p.title === pieValue);
-                    return pie?.id || 0;
-                }
-                return 0;
-            };
+        if (editingClient && open && !isInitializedRef.current) {
+            isInitializedRef.current = true;
 
             setClientForm({
                 manager: editingClient.manager || editingClient.manager_id || 0,
@@ -103,12 +120,20 @@ export function ClientDialog({
                 country: getCountryId(editingClient.country),
             });
         } else if (!open) {
+            isInitializedRef.current = false;
             resetForm();
         }
-    }, [editingClient, open, setClientForm, store_sectors, store_countries, pieOptions]);
+    }, [editingClient, open, setClientForm, getSectorId, getCountryId, getPieId]);
 
     const getFormValue = (key: keyof ClientFormData) => {
-        return clientForm?.[key] ?? (key === 'manager' || key === 'sector' || key === 'country' || key === 'pie' ? 0 : '');
+        const value = clientForm?.[key];
+
+        if (value === undefined || value === null) {
+            if (['manager', 'sector', 'country', 'pie'].includes(key)) return 0;
+            return '';
+        }
+
+        return value;
     };
 
     const resetForm = () => {
@@ -215,8 +240,10 @@ export function ClientDialog({
         });
     };
 
-    const getSectorOptions = () => {
-        if (!store_sectors || store_sectors.length === 0) {
+    const getSectorOptions = useCallback(() => {
+        const sectorsArray = getSectorsArray;
+
+        if (!sectorsArray || sectorsArray.length === 0) {
             return [
                 { value: 0, label: 'Not selected' },
                 { value: 1, label: 'Technology' },
@@ -226,15 +253,19 @@ export function ClientDialog({
                 { value: 5, label: 'Retail' },
             ];
         }
-        const sectorOptions = store_sectors.map((sector) => ({
+
+        const sectorOptions = sectorsArray.map((sector) => ({
             value: sector.id,
             label: sector.name
         }));
-        return [{ value: 0, label: 'Not selected' }, ...sectorOptions];
-    };
 
-    const getCountryOptions = () => {
-        if (!store_countries || store_countries.length === 0) {
+        return [{ value: 0, label: 'Not selected' }, ...sectorOptions];
+    }, [getSectorsArray]);
+
+    const getCountryOptions = useCallback(() => {
+        const countriesArray = getCountriesArray;
+
+        if (!countriesArray || countriesArray.length === 0) {
             return [
                 { value: 0, label: 'Select country' },
                 { value: 1, label: 'Kazakhstan' },
@@ -244,14 +275,16 @@ export function ClientDialog({
                 { value: 5, label: 'Germany' },
             ];
         }
-        const countryOptions = store_countries.map((country) => ({
+
+        const countryOptions = countriesArray.map((country) => ({
             value: country.id,
             label: country.name
         }));
-        return [{ value: 0, label: 'Select country' }, ...countryOptions];
-    };
 
-    const getPieOptions = () => {
+        return [{ value: 0, label: 'Select country' }, ...countryOptions];
+    }, [getCountriesArray]);
+
+    const getPieOptions = useCallback(() => {
         if (!pieOptions || pieOptions.length === 0) {
             return [{ value: 0, label: 'No PIE available' }];
         }
@@ -262,18 +295,7 @@ export function ClientDialog({
                 label: item.name || item.title || `PIE ${item.id}`
             }))
         ];
-    };
-
-    // Добавим отладочный вывод
-    useEffect(() => {
-        if (editingClient && open) {
-            console.log('Editing client data:', editingClient);
-            console.log('Sectors available:', store_sectors);
-            console.log('Countries available:', store_countries);
-            console.log('PIE options:', pieOptions);
-            console.log('Form data after mapping:', clientForm);
-        }
-    }, [editingClient, open, store_sectors, store_countries, pieOptions, clientForm]);
+    }, [pieOptions]);
 
     const sectorOptions = getSectorOptions();
     const countryOptions = getCountryOptions();
@@ -354,7 +376,7 @@ export function ClientDialog({
                         <div className="space-y-2">
                             <Label htmlFor="sector">Sector</Label>
                             <Select
-                                value={getFormValue('sector')?.toString()}
+                                value={getFormValue('sector')?.toString() || "0"}
                                 onValueChange={(value: string) =>
                                     handleInputChange('sector', parseInt(value) || 0)
                                 }
@@ -363,11 +385,18 @@ export function ClientDialog({
                                     <SelectValue placeholder="Select sector" />
                                 </SelectTrigger>
                                 <SelectContent className="w-full">
-                                    {sectorOptions.map((sector) => (
-                                        <SelectItem key={sector.value} value={sector.value.toString()}>
-                                            {sector.label}
-                                        </SelectItem>
-                                    ))}
+                                    {sectorOptions.map((sector) => {
+                                        if (sector?.value === undefined || sector?.value === null) return null;
+
+                                        return (
+                                            <SelectItem
+                                                key={`sector-${sector.value}`}
+                                                value={String(sector.value)}
+                                            >
+                                                {sector.label}
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -377,7 +406,7 @@ export function ClientDialog({
                         <div className="space-y-2">
                             <Label htmlFor="pie">PIE *</Label>
                             <Select
-                                value={getFormValue('pie')?.toString()}
+                                value={String(getFormValue('pie') ?? 0)}
                                 onValueChange={(value: string) =>
                                     handleInputChange('pie', parseInt(value) || 0)
                                 }
@@ -386,11 +415,18 @@ export function ClientDialog({
                                     <SelectValue placeholder="Select PIE" />
                                 </SelectTrigger>
                                 <SelectContent className="w-full">
-                                    {pieSelectOptions.map((option) => (
-                                        <SelectItem key={option.value} value={option.value.toString()}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
+                                    {pieSelectOptions.map((option, index) => {
+                                        if (option?.value === undefined || option?.value === null) return null;
+
+                                        return (
+                                            <SelectItem
+                                                key={`pie-${option.value}-${index}`}
+                                                value={String(option.value)}
+                                            >
+                                                {option.label}
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                             {errors.pie && <p className="text-sm text-red-500">{errors.pie}</p>}
@@ -399,7 +435,7 @@ export function ClientDialog({
                         <div className="space-y-2">
                             <Label htmlFor="country">Country *</Label>
                             <Select
-                                value={getFormValue('country')?.toString()}
+                                value={getFormValue('country')?.toString() || "0"}
                                 onValueChange={(value: string) =>
                                     handleInputChange('country', parseInt(value) || 0)
                                 }
@@ -408,11 +444,18 @@ export function ClientDialog({
                                     <SelectValue placeholder="Select country" />
                                 </SelectTrigger>
                                 <SelectContent className="w-full">
-                                    {countryOptions.map((country) => (
-                                        <SelectItem key={country.value} value={country.value.toString()}>
-                                            {country.label}
-                                        </SelectItem>
-                                    ))}
+                                    {countryOptions.map((country) => {
+                                        if (country?.value === undefined || country?.value === null) return null;
+
+                                        return (
+                                            <SelectItem
+                                                key={`country-${country.value}`}
+                                                value={String(country.value)}
+                                            >
+                                                {country.label}
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                             {errors.country && <p className="text-sm text-red-500">{errors.country}</p>}

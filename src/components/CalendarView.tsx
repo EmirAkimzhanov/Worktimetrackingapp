@@ -45,13 +45,30 @@ interface HolidayTimeEntry extends TimeEntry {
 
 export function CalendarView() {
   const { filters } = useTimeTracker();
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const time_entries = useUserStore((state) => state.time_entries) as TimeEntry[];
+  const calendar_holidays = useUserStore((state) => state.calendar_holidays) as CalendarHoliday[] | null;
+  const currentMonth = useUserStore((state) => state.currentMonth);
+  const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
+
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDateEntries, setSelectedDateEntries] = useState<(TimeEntry | HolidayTimeEntry)[]>([]);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
-  const time_entries = useUserStore((state) => state.time_entries) as TimeEntry[];
-  const calendar_holidays = useUserStore((state) => state.calendar_holidays) as CalendarHoliday[] | null;
+
+  // Инициализация currentDate из store или текущей даты
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (currentMonth) {
+      return new Date(currentMonth);
+    }
+    return new Date();
+  });
+
+  // Сохраняем выбранный месяц в store при изменении
+  useEffect(() => {
+    if (setCurrentMonth) {
+      setCurrentMonth(currentDate);
+    }
+  }, [currentDate, setCurrentMonth]);
 
   // Получаем все записи времени из хранилища
   const allEntries = useMemo(() => {
@@ -125,6 +142,10 @@ export function CalendarView() {
 
   const nextMonth = () => {
     setCurrentDate(new Date(year, month + 1, 1));
+  };
+
+  const goToCurrentMonth = () => {
+    setCurrentDate(new Date());
   };
 
   const getEntriesForDate = (day: number): (TimeEntry | HolidayTimeEntry)[] => {
@@ -295,6 +316,9 @@ export function CalendarView() {
               <Button variant="outline" size="icon" onClick={previousMonth}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
+              <Button variant="outline" size="sm" onClick={goToCurrentMonth}>
+                Today
+              </Button>
               <div className="min-w-[180px] text-center font-medium">
                 {monthName}
               </div>
@@ -387,14 +411,6 @@ export function CalendarView() {
               );
             })}
           </div>
-
-          {allEntries.length === 0 && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-blue-700">
-                ℹ️ No time entries found. Add some using the form above.
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -549,7 +565,7 @@ export function CalendarView() {
                   </div>
 
                   {/* Навигация */}
-                  <div className="flex items-center justify-between pt-6 mt-6  border-gray-200">
+                  <div className="flex items-center justify-between pt-6 mt-6 border-t border-gray-200">
                     <Button
                       variant="outline"
                       onClick={handlePreviousEntry}

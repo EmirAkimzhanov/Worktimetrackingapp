@@ -69,6 +69,9 @@ export function TimeEntryList() {
   const [entryToDelete, setEntryToDelete] = useState<DeleteTarget | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [deleteErrors, setDeleteErrors] = useState<string[]>([]);
 
   // Состояния для формы редактирования
   const [editProjectId, setEditProjectId] = useState('');
@@ -84,7 +87,7 @@ export function TimeEntryList() {
   const { mutate: getTimeEntrys, isLoading: isLoadingEntries } = useGetTimeEntrys();
   const { mutate: getCalendarHolidays } = useGetHolidayTimeEntrys();
   const { mutate: editTimeEntry, isLoading: isEditing } = useEditTimeEntry();
-  const { mutate: deleteTimeEntry, isLoading: isDeleting } = useDeleteTimeEntry();
+  const { mutateAsync: deleteTimeEntry, isLoading: isDeletingMutation } = useDeleteTimeEntry();
   const { mutate: getProjects } = useGetProjects();
   const store_projects = useUserStore((state) => state.projects);
   const time_entries = useUserStore((state) => state.time_entries);
@@ -202,14 +205,18 @@ export function TimeEntryList() {
   }, []);
 
   const loadTimeEntries = () => {
-    getTimeEntrys(undefined, {
-      onSuccess: (data) => {
-        console.log('Loaded time entries:', data);
-      },
-      onError: (error) => {
-        console.error('Failed to load time entries:', error);
-        toast.error('Failed to load time entries');
-      }
+    return new Promise((resolve, reject) => {
+      getTimeEntrys(undefined, {
+        onSuccess: (data) => {
+          console.log('Loaded time entries:', data);
+          resolve(data);
+        },
+        onError: (error) => {
+          console.error('Failed to load time entries:', error);
+          toast.error('Failed to load time entries');
+          reject(error);
+        }
+      });
     });
   };
 
@@ -385,14 +392,12 @@ export function TimeEntryList() {
 
     setIsSubmitting(true);
 
-    // Подготавливаем данные для отправки на сервер
     const editData: any = {
       date: editDate,
       hours: hoursNum,
       description: editDescription,
     };
 
-    // Добавляем опциональные поля, если они изменились
     if (editTaskType !== editingEntry.task_type) {
       editData.task_type = editTaskType;
     }
@@ -417,7 +422,6 @@ export function TimeEntryList() {
       editData.weekends_included = editWeekendsIncluded;
     }
 
-    // Вызываем мутацию для обновления на сервере
     editTimeEntry(
       {
         day_id: editingEntry.id,
@@ -426,8 +430,6 @@ export function TimeEntryList() {
       {
         onSuccess: (data) => {
           console.log('Entry updated successfully:', data);
-
-          // Обновляем локальный state
           updateEntry(editingEntry.id, {
             projectId: editProjectId,
             projectName: editingEntry.projectName,
@@ -440,8 +442,6 @@ export function TimeEntryList() {
 
           toast.success('Entry updated successfully');
           setEditingEntry(null);
-
-          // Перезагружаем список записей
           loadTimeEntries();
         },
         onError: (error: any) => {
@@ -455,7 +455,7 @@ export function TimeEntryList() {
     );
   };
 
-  // Обработчик удаления отдельной записи из развернутой группы
+  // Обработчик удаления отдельной записи
   const handleDeleteSingle = (entryId: string) => {
     setEntryToDelete({
       id: entryId,
@@ -464,66 +464,103 @@ export function TimeEntryList() {
     setDeleteDialogOpen(true);
   };
 
-  const confirmDelete = () => {
+  // Подтверждение одиночного удаления
+  const confirmDelete = async () => {
     if (!entryToDelete) return;
 
-    setIsSubmitting(true);
+    setIsDeleting(true);
 
-    deleteTimeEntry(entryToDelete.id, {
-      onSuccess: (data) => {
-        console.log('Entry deleted successfully:', data);
+    try {
+      await new Promise((resolve, reject) => {
+        deleteTimeEntry(entryToDelete.id, {
+          onSuccess: (data) => {
+            console.log('Entry deleted successfully:', data);
+            deleteEntry(entryToDelete.id);
 
-        // Удаляем из локального state
-        deleteEntry(entryToDelete.id);
+            if (selectedEntries.includes(entryToDelete.id)) {
+              setSelectedEntries(selectedEntries.filter(id => id !== entryToDelete.id));
+            }
 
-        toast.success('Entry deleted successfully');
-        setEntryToDelete(null);
-        setDeleteDialogOpen(false);
+            resolve(data);
+          },
+          onError: (error) => {
+            console.error('Failed to delete entry:', error);
+            reject(error);
+          }
+        });
+      });
 
-        // Перезагружаем список записей
-        loadTimeEntries();
-      },
-      onError: (error: any) => {
-        console.error('Failed to delete entry:', error);
-        toast.error(error?.message || 'Failed to delete entry. Please try again.');
-      },
-      onSettled: () => {
-        setIsSubmitting(false);
-      }
-    });
+      toast.success('Entry deleted successfully');
+      setEntryToDelete(null);
+      setDeleteDialogOpen(false);
+      await loadTimeEntries();
+
+    } catch (error: any) {
+      console.error('Failed to delete entry:', error);
+      toast.error(error?.message || 'Failed to delete entry. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Массовое удаление
   const handleBulkDelete = () => {
+    if (selectedEntries.length === 0) {
+      toast.error('No entries selected');
+      return;
+    }
     setBulkDeleteDialogOpen(true);
   };
 
-  const confirmBulkDelete = () => {
-    setIsSubmitting(true);
+  // Подтверждение массового удаления
+  const confirmBulkDelete = async () => {
+    if (selectedEntries.length === 0) {
+      toast.error('No entries selected');
+      setBulkDeleteDialogOpen(false);
+      return;
+    }
 
-    const deletePromises = selectedEntries.map(id =>
-      new Promise((resolve, reject) => {
-        deleteTimeEntry(id, {
-          onSuccess: resolve,
-          onError: reject
-        });
-      })
-    );
+    setIsBulkDeleting(true);
+    setDeleteErrors([]);
 
-    Promise.all(deletePromises)
-      .then(() => {
-        deleteEntries(selectedEntries);
-        toast.success(`Deleted ${selectedEntries.length} entries`);
-        setBulkDeleteDialogOpen(false);
-        loadTimeEntries();
-      })
-      .catch((error) => {
-        console.error('Failed to delete some entries:', error);
-        toast.error('Failed to delete some entries');
-      })
-      .finally(() => {
-        setIsSubmitting(false);
+    try {
+      const results = await Promise.allSettled(
+        selectedEntries.map(id => deleteTimeEntry(id))
+      );
+
+      const successful: string[] = [];
+      const failed: { id: string; error: any }[] = [];
+
+      results.forEach((result, index) => {
+        const id = selectedEntries[index];
+
+        if (result.status === 'fulfilled') {
+          successful.push(id);
+        } else {
+          failed.push({ id, error: result.reason });
+        }
       });
+
+      if (successful.length > 0) {
+        deleteEntries(successful);
+        setSelectedEntries([]);
+        toast.success(`Deleted ${successful.length} of ${selectedEntries.length}`);
+      }
+
+      if (failed.length > 0) {
+        toast.error(`Failed to delete ${failed.length} entries`);
+        setDeleteErrors(failed.map(f => `ID ${f.id}`));
+      }
+
+      await loadTimeEntries();
+
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      toast.error('Something went wrong');
+    } finally {
+      setIsBulkDeleting(false);
+      setBulkDeleteDialogOpen(false);
+    }
   };
 
   const toggleSelectGroup = (group: GroupedTimeEntry) => {
@@ -608,7 +645,7 @@ export function TimeEntryList() {
               <CardDescription>
                 {filteredGroups.length} groups · {totalHours.toFixed(1)} total hours
                 {time_entries && ` · ${time_entries.length} total entries in database`}
-                {(isLoadingEntries || isSubmitting) && ' · Loading...'}
+                {(isLoadingEntries || isSubmitting || isDeleting || isBulkDeleting) && ' · Loading...'}
               </CardDescription>
             </div>
             {selectedEntries.length > 0 && (
@@ -621,7 +658,7 @@ export function TimeEntryList() {
                   size="sm"
                   style={{ backgroundColor: '#EF4444' }}
                   className="text-white hover:opacity-90"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isDeleting || isBulkDeleting}
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete Selected
@@ -641,7 +678,7 @@ export function TimeEntryList() {
                         <Checkbox
                           checked={selectedEntries.length === filteredGroups.flatMap(g => g.entryIds).length && filteredGroups.length > 0}
                           onCheckedChange={toggleSelectAll}
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || isDeleting || isBulkDeleting}
                         />
                       </TableHead>
                       <TableHead>Date Range</TableHead>
@@ -665,14 +702,12 @@ export function TimeEntryList() {
                     ) : (
                       filteredGroups.map(group => (
                         <React.Fragment key={group.key}>
-                          {/* Основная строка группы - без кнопок редактирования/удаления */}
-                          {/* Основная строка группы */}
                           <TableRow className="hover:bg-slate-50 bg-slate-50/30">
                             <TableCell>
                               <Checkbox
                                 checked={group.entryIds.every(id => selectedEntries.includes(id))}
                                 onCheckedChange={() => toggleSelectGroup(group)}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || isDeleting || isBulkDeleting}
                               />
                             </TableCell>
                             <TableCell>
@@ -733,12 +768,11 @@ export function TimeEntryList() {
                             <TableCell>
                               <div className="flex gap-1">
                                 {group.count > 1 ? (
-                                  // Для групп с несколькими записями - только кнопка раскрытия
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => toggleGroupExpand(group.key)}
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || isDeleting || isBulkDeleting}
                                   >
                                     {expandedGroups.has(group.key) ? (
                                       <ChevronUp className="w-4 h-4" />
@@ -747,13 +781,12 @@ export function TimeEntryList() {
                                     )}
                                   </Button>
                                 ) : (
-                                  // Для одиночных записей - кнопки редактирования и удаления
                                   <>
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => handleEdit(group)}
-                                      disabled={isSubmitting}
+                                      disabled={isSubmitting || isDeleting || isBulkDeleting}
                                       className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                                     >
                                       <Edit className="w-4 h-4" />
@@ -762,7 +795,7 @@ export function TimeEntryList() {
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => handleDeleteSingle(group.entryIds[0])}
-                                      disabled={isSubmitting}
+                                      disabled={isSubmitting || isDeleting || isBulkDeleting}
                                       className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                     >
                                       <Trash2 className="w-4 h-4" />
@@ -773,14 +806,13 @@ export function TimeEntryList() {
                             </TableCell>
                           </TableRow>
 
-                          {/* Развернутые отдельные записи группы - здесь есть кнопки редактирования/удаления */}
                           {expandedGroups.has(group.key) && group.dates.sort().map((date, idx) => (
                             <TableRow key={`${group.key}-${idx}`} className="bg-slate-100/50 text-sm">
                               <TableCell>
                                 <Checkbox
                                   checked={selectedEntries.includes(group.entryIds[idx])}
                                   onCheckedChange={() => toggleSelectEntry(group.entryIds[idx])}
-                                  disabled={isSubmitting}
+                                  disabled={isSubmitting || isDeleting || isBulkDeleting}
                                 />
                               </TableCell>
                               <TableCell>
@@ -823,7 +855,7 @@ export function TimeEntryList() {
                                       setEditClient(group.client || '');
                                       setEditWeekendsIncluded(group.weekends_included);
                                     }}
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || isDeleting || isBulkDeleting}
                                   >
                                     <Edit className="w-3 h-3" />
                                   </Button>
@@ -832,7 +864,7 @@ export function TimeEntryList() {
                                     size="icon"
                                     className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
                                     onClick={() => handleDeleteSingle(group.entryIds[idx])}
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || isDeleting || isBulkDeleting}
                                   >
                                     <Trash2 className="w-3 h-3" />
                                   </Button>
@@ -1027,7 +1059,7 @@ export function TimeEntryList() {
         </DialogContent>
       </Dialog>
 
-      {/* Диалог подтверждения удаления */}
+      {/* Диалог подтверждения одиночного удаления */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1037,14 +1069,14 @@ export function TimeEntryList() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              disabled={isSubmitting}
+              disabled={isDeleting}
               className="bg-red-500 hover:bg-red-600"
               style={{ backgroundColor: '#EF4444' }}
             >
-              {isSubmitting ? 'Deleting...' : 'Delete'}
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1060,14 +1092,14 @@ export function TimeEntryList() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmBulkDelete}
-              disabled={isSubmitting}
+              disabled={isBulkDeleting}
               className="bg-red-500 hover:bg-red-600"
               style={{ backgroundColor: '#EF4444' }}
             >
-              {isSubmitting ? 'Deleting...' : 'Delete All'}
+              {isBulkDeleting ? 'Deleting...' : 'Delete All'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

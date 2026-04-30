@@ -34,6 +34,7 @@ export interface FilterState {
   quickFilter: 'all' | 'today' | 'week' | 'month';
 }
 
+
 interface TimeTrackerContextType {
   entries: TimeEntry[];
   projects: Project[];

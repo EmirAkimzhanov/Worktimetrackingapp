@@ -56,7 +56,7 @@ function Navigation() {
                 <Clock className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-white">Professional Time Tracker</h1>
+                <h1 className="text-white"> Time Tracker</h1>
                 <p className="text-blue-100 text-sm">Track your work hours and manage projects</p>
               </div>
             </Link>

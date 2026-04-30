@@ -212,6 +212,8 @@ interface UserState {
 
   managers: Manager[] | null;
 
+  currentMonth: string | null;
+
   projectsPagination: ProjectsPagination | null;
   usersPagination: UsersPagination | null;
   clientsPagination: ClientsPagination | null;
@@ -242,6 +244,8 @@ interface UserState {
   getInternalTasksByType: (taskType: string) => Task[];
 
   setLeaves: (leaves: LeaveArray | null) => void;
+
+  setCurrentMonth: (currentMonth: string | null) => void;
 
   setProjectsPagination: (pagination: ProjectsPagination | null) => void;
   setUsersPagination: (pagination: UsersPagination | null) => void;
@@ -367,6 +371,7 @@ export const useUserStore = create<UserState>()(
       projectsPagination: null,
       usersPagination: null,
       clientsPagination: null,
+      currentMonth: null,
       reports: {
         timeReports: null,
         projectReports: null,
@@ -403,6 +408,8 @@ export const useUserStore = create<UserState>()(
       setSelectedCountry: (country) => set({ selectedCountry: country }),
 
       setGlobalSettings: (globalSettings) => set({ globalSettings }),
+
+      setCurrentMonth: (currentMonth) => set({ currentMonth }),
 
       setClientProjects: (clientProjects) =>
         set({ client_projects: clientProjects }),
