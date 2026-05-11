@@ -24,8 +24,7 @@ interface TimesheetRecord {
     detailed_grade: string;
     project_department: string;
     client_name: string;
-    project_name: string;
-    project_code: string;
+    code: string;
     project_service_line: string;
     task_type_name: string;
     task_name: string;
@@ -70,13 +69,7 @@ export function ReportsTab() {
     const store_reports = useUserStore((state) => state.reports);
     const { mutate: getReportsExcel } = useGetReportsExcel();
 
-    const [departments, setDepartments] = useState<Department[]>([
-        { id: 1, name: 'AOS & Tax', code: 'AOS' },
-        { id: 2, name: 'Admin', code: 'ADM' },
-        { id: 3, name: 'Audit', code: 'AUD' },
-        { id: 4, name: 'CONS', code: 'CONS' },
-        { id: 5, name: 'Compass support', code: 'CMP' }
-    ]);
+    const [departments, setDepartments] = useState<Department[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -88,6 +81,19 @@ export function ReportsTab() {
     useEffect(() => {
         getReports();
     }, []);
+
+    // Обновление списка отделов из данных
+    useEffect(() => {
+        if (store_reports && store_reports.length > 0) {
+            const uniqueDepartments = [...new Set(store_reports.map(report => report.user_department))];
+            const departmentList = uniqueDepartments.map((dept, index) => ({
+                id: index + 1,
+                name: dept,
+                code: dept
+            }));
+            setDepartments(departmentList);
+        }
+    }, [store_reports]);
 
     useEffect(() => {
         if (store_reports && store_reports.length > 0) {
@@ -102,8 +108,7 @@ export function ReportsTab() {
                 detailed_grade: report.detailed_grade,
                 project_department: report.project_department,
                 client_name: report.client_name,
-                project_name: report.project_name,
-                project_code: report.project_code,
+                code: report.code,
                 project_service_line: report.project_service_line,
                 task_type_name: report.task_type_name,
                 task_name: report.task_name,
@@ -127,8 +132,6 @@ export function ReportsTab() {
             setEmployees(uniqueEmployees);
 
             applyFilters(transformedData);
-
-            toast.success(`Loaded ${transformedData.length} records`);
         }
     }, [store_reports]);
 
@@ -151,13 +154,14 @@ export function ReportsTab() {
                 break;
             case 'thisWeek':
                 start = new Date(today);
-                start.setDate(start.getDate() - start.getDay());
+                const dayOfWeek = start.getDay();
+                start.setDate(start.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
                 end = new Date(start);
                 end.setDate(end.getDate() + 6);
                 break;
             case 'lastWeek':
                 start = new Date(today);
-                start.setDate(start.getDate() - start.getDay() - 7);
+                start.setDate(start.getDate() - start.getDay() - 6);
                 end = new Date(start);
                 end.setDate(end.getDate() + 6);
                 break;
@@ -217,10 +221,11 @@ export function ReportsTab() {
                 return (
                     record.user_email.toLowerCase().includes(searchLower) ||
                     record.client_name?.toLowerCase().includes(searchLower) ||
-                    record.project_name?.toLowerCase().includes(searchLower) ||
+                    record.code?.toLowerCase().includes(searchLower) ||
                     record.description?.toLowerCase().includes(searchLower) ||
                     record.task_name?.toLowerCase().includes(searchLower) ||
-                    record.project_code?.toLowerCase().includes(searchLower)
+                    record.user_department?.toLowerCase().includes(searchLower) ||
+                    record.project_service_line?.toLowerCase().includes(searchLower)
                 );
             }
 
@@ -261,8 +266,7 @@ export function ReportsTab() {
         setSearchQuery('');
         setCurrentPage(1);
 
-        // Показать все данные
-        setFilteredData(timesheetData);
+        applyFilters(timesheetData);
 
         toast.success('Filters reset');
     };
@@ -284,19 +288,17 @@ export function ReportsTab() {
                 return;
             }
 
-            // Получаем blob из API с правильной настройкой responseType
             const response = await axios({
                 url: `${api}api/calendars/time-entries/report/?export=excel`,
                 method: 'GET',
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
-                responseType: 'blob' // Важно! Указываем, что ожидаем бинарные данные
+                responseType: 'blob'
             });
 
             const blob = response.data;
 
-            // Пытаемся получить имя файла из заголовков
             const contentDisposition = response.headers['content-disposition'];
             let filename = `timesheet_report_${new Date().toISOString().split('T')[0]}.xlsx`;
 
@@ -307,27 +309,19 @@ export function ReportsTab() {
                 }
             }
 
-            // Создаем URL для blob
             const url = window.URL.createObjectURL(blob);
-
-            // Создаем временную ссылку для скачивания
             const link = document.createElement('a');
             link.href = url;
             link.setAttribute('download', filename);
-
-            // Добавляем ссылку в документ, кликаем и удаляем
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-
-            // Очищаем URL
             window.URL.revokeObjectURL(url);
 
             toast.success('Report exported successfully');
         } catch (error) {
             console.error('Failed to export data:', error);
 
-            // Проверяем, не вернулся ли ответ с ошибкой в формате JSON
             if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
                 try {
                     const errorText = await error.response.data.text();
@@ -605,8 +599,7 @@ export function ReportsTab() {
                                             <TableHead className="min-w-[100px]">Position</TableHead>
                                             <TableHead className="min-w-[120px]">Detailed Grade</TableHead>
                                             <TableHead className="min-w-[150px]">Client</TableHead>
-                                            <TableHead className="min-w-[150px]">Project</TableHead>
-                                            <TableHead className="min-w-[150px]">Project Code</TableHead>
+                                            <TableHead className="min-w-[200px]">Project Code</TableHead>
                                             <TableHead className="min-w-[150px]">Service Line</TableHead>
                                             <TableHead className="min-w-[100px]">Task Type</TableHead>
                                             <TableHead className="min-w-[150px]">Task Name</TableHead>
@@ -619,19 +612,21 @@ export function ReportsTab() {
                                                 <TableCell className="font-medium">
                                                     {new Date(record.date).toLocaleDateString('en-GB')}
                                                 </TableCell>
-                                                <TableCell className="font-mono">
+                                                <TableCell className="font-mono font-medium">
                                                     {formatHours(record.hours)}
                                                 </TableCell>
                                                 <TableCell className="text-sm text-gray-600">
                                                     {record.user_email}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">
+                                                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
                                                         {record.user_department}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {record.country_code}
+                                                    <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-mono">
+                                                        {record.country_code}
+                                                    </span>
                                                 </TableCell>
                                                 <TableCell>
                                                     {record.position}
@@ -642,13 +637,10 @@ export function ReportsTab() {
                                                 <TableCell className="font-medium">
                                                     {record.client_name}
                                                 </TableCell>
-                                                <TableCell>
-                                                    <span className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">
-                                                        {record.project_name}
+                                                <TableCell className="text-xs font-mono">
+                                                    <span className="px-2 py-1 bg-gray-50 rounded text-gray-600">
+                                                        {record.code}
                                                     </span>
-                                                </TableCell>
-                                                <TableCell className="text-sm font-mono">
-                                                    {record.project_code}
                                                 </TableCell>
                                                 <TableCell>
                                                     <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs">
@@ -664,7 +656,7 @@ export function ReportsTab() {
                                                     {record.task_name}
                                                 </TableCell>
                                                 <TableCell className="text-sm max-w-[250px] truncate" title={record.description}>
-                                                    {record.description}
+                                                    {record.description || '-'}
                                                 </TableCell>
                                             </TableRow>
                                         ))}
