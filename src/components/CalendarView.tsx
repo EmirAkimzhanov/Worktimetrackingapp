@@ -347,14 +347,14 @@ export function CalendarView() {
   return (
     <>
       <Card className="shadow-md hover:shadow-lg transition-shadow border-t-4" style={{ borderTopColor: '#0066CC' }}>
-        <CardHeader style={{ backgroundColor: '#F1F5F9' }} className="border-b">
+        <CardHeader style={{ backgroundColor: '#F1F5F9', height: '100px' }} className="border-b">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2" style={{ color: '#1F4E78' }}>
                 <CalendarIcon className="w-5 h-5" />
                 Calendar View
               </CardTitle>
-              <CardDescription>
+              {/* <CardDescription>
                 {allEntries.length > 0
                   ? `Click on a day to see task details (${allEntries.length} total entries)`
                   : 'No time entries yet'}
@@ -364,7 +364,7 @@ export function CalendarView() {
                   </span>
                 )}
                 {isLoadingSettings && <span className="ml-2 text-xs text-gray-400">• Loading settings...</span>}
-              </CardDescription>
+              </CardDescription> */}
             </div>
             <div className="flex items-center gap-2">
               <Button

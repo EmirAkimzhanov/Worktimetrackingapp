@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Edit, Trash2, FolderKanban, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Input } from '../../ui/input';
+import {
+    Edit, Trash2, FolderKanban, Plus, ChevronDown, ChevronUp,
+    ChevronLeft, ChevronRight, Search, X
+} from 'lucide-react';
 import { Project } from '../../TimeTrackerContext';
 import { Client, Department, Position, User } from '../../../types/types';
 import { useGetDepartments } from '../../../hooks/useDepartments';
@@ -31,6 +35,23 @@ import {
     SelectValue,
 } from '../../ui/select';
 
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+
+    return debouncedValue;
+}
+
 interface ProjectsTableProps {
     entries: any[];
     clients: Client[];
@@ -40,6 +61,32 @@ interface ProjectsTableProps {
     onEdit: (project: Project) => void;
     onAdd: () => void;
 }
+
+interface Filters {
+    code: string;
+    client: string;
+    manager: string;
+    country: string;
+    department: string;
+}
+
+type SortOption = {
+    value: string;
+    label: string;
+};
+
+const sortOptions: SortOption[] = [
+    { value: 'code', label: 'Code (A-Z)' },
+    { value: '-code', label: 'Code (Z-A)' },
+    { value: 'client_name', label: 'Client (A-Z)' },
+    { value: '-client_name', label: 'Client (Z-A)' },
+    { value: 'manager_email', label: 'Manager (A-Z)' },
+    { value: '-manager_email', label: 'Manager (Z-A)' },
+    { value: 'country_code', label: 'Country (A-Z)' },
+    { value: '-country_code', label: 'Country (Z-A)' },
+    { value: 'department_name', label: 'Department (A-Z)' },
+    { value: '-department_name', label: 'Department (Z-A)' },
+];
 
 export function ProjectsTable({
     entries,
@@ -61,11 +108,31 @@ export function ProjectsTable({
     const store_projects = useUserStore((state) => state.projects);
     const store_departments = useUserStore((state) => state.departments);
     const store_pagination = useUserStore((state) => state.projectsPagination);
+    const store_countries = useUserStore((state) => state.countries);
+    const store_statuses = useUserStore((state) => state.statuses);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [projectToDelete, setProjectToDelete] = useState<any>(null);
     const [expandedCodeDrawers, setExpandedCodeDrawers] = useState<Record<string, boolean>>({});
     const [currentPage, setCurrentPage] = useState(1);
+
+    const [localFilters, setLocalFilters] = useState<Filters>({
+        code: '',
+        client: '',
+        manager: '',
+        country: '',
+        department: '',
+    });
+
+    const debouncedCode = useDebounce(localFilters.code, 500);
+    const debouncedClient = useDebounce(localFilters.client, 500);
+    const debouncedManager = useDebounce(localFilters.manager, 500);
+    const debouncedCountry = useDebounce(localFilters.country, 300);
+    const debouncedDepartment = useDebounce(localFilters.department, 300);
+
+    const [ordering, setOrdering] = useState<string>('code');
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
+
     const pageSize = 30;
 
     // Загрузка справочников при монтировании
@@ -78,14 +145,48 @@ export function ProjectsTable({
         getTaskTypes();
     }, []);
 
-    // Загрузка первой страницы проектов
-    useEffect(() => {
-        loadProjects(1);
-    }, []);
+    const loadProjects = useCallback((page: number) => {
+        const params: any = {
+            page,
+            page_size: pageSize,
+            ordering: ordering,
+        };
 
-    const loadProjects = (page: number) => {
-        getProjects({ page, page_size: pageSize });
+        if (debouncedCode && debouncedCode.trim()) params.code = debouncedCode;
+        if (debouncedClient && debouncedClient.trim()) params.client_name = debouncedClient;
+        if (debouncedManager && debouncedManager.trim()) params.manager_email = debouncedManager;
+        if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
+        if (debouncedDepartment && debouncedDepartment.trim()) params.department_name = debouncedDepartment;
+
+        console.log('📦 Final params to send:', params);
+        getProjects(params);
         setCurrentPage(page);
+    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, ordering, pageSize, getProjects]);
+
+    // Эффект для загрузки проектов при изменении фильтров
+    useEffect(() => {
+        if (!isInitialLoad) {
+            loadProjects(1);
+        } else {
+            setIsInitialLoad(false);
+            loadProjects(1);
+        }
+    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, ordering]);
+
+    const handleFilterChange = (key: keyof Filters, value: string) => {
+        setLocalFilters(prev => ({ ...prev, [key]: value }));
+    };
+
+    const clearFilters = () => {
+        const emptyFilters = {
+            code: '',
+            client: '',
+            manager: '',
+            country: '',
+            department: '',
+        };
+        setLocalFilters(emptyFilters);
+        setCurrentPage(1);
     };
 
     const getProjectStats = (projectId: string) => {
@@ -135,7 +236,6 @@ export function ProjectsTable({
 
         deleteProject(projectToDelete.id, {
             onSuccess: () => {
-                // После удаления перезагружаем текущую страницу
                 loadProjects(currentPage);
                 setDeleteDialogOpen(false);
                 setProjectToDelete(null);
@@ -172,7 +272,6 @@ export function ProjectsTable({
         }
     };
 
-    // Функция для отображения номеров страниц
     const renderPageNumbers = () => {
         const pages = [];
         const maxVisiblePages = 5;
@@ -183,7 +282,6 @@ export function ProjectsTable({
             startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
 
-        // Добавляем первую страницу и эллипсис если нужно
         if (startPage > 1) {
             pages.push(
                 <Button
@@ -206,7 +304,6 @@ export function ProjectsTable({
             }
         }
 
-        // Основные страницы
         for (let i = startPage; i <= endPage; i++) {
             pages.push(
                 <Button
@@ -222,7 +319,6 @@ export function ProjectsTable({
             );
         }
 
-        // Добавляем последнюю страницу и эллипсис если нужно
         if (endPage < totalPages) {
             if (endPage < totalPages - 1) {
                 pages.push(
@@ -248,8 +344,21 @@ export function ProjectsTable({
         return pages;
     };
 
+    const activeFiltersCount = Object.values(localFilters).filter(v => v && v !== '' && v !== 'all').length;
+
+    // Удаляем дубликаты проектов по id
+    const uniqueProjects = useMemo(() => {
+        const uniqueMap = new Map();
+        projects.forEach((project: any) => {
+            if (!uniqueMap.has(project.id)) {
+                uniqueMap.set(project.id, project);
+            }
+        });
+        return Array.from(uniqueMap.values());
+    }, [projects]);
+
     // Показываем лоадер при первой загрузке
-    if (isLoadingProjects && projects.length === 0) {
+    if (isLoadingProjects && uniqueProjects.length === 0 && isInitialLoad) {
         return (
             <div className="space-y-4">
                 <div className="flex justify-between">
@@ -264,25 +373,6 @@ export function ProjectsTable({
                 <div className="rounded-md border p-8 text-center text-slate-500">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
                     Loading projects...
-                </div>
-            </div>
-        );
-    }
-
-    if (projects.length === 0 && !isLoadingProjects) {
-        return (
-            <div className="space-y-4">
-                <div className="flex justify-between">
-                    <div>
-                        <h2 className="text-xl font-bold">Projects</h2>
-                    </div>
-                    <Button onClick={onAdd} size="sm">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Project
-                    </Button>
-                </div>
-                <div className="rounded-md border p-8 text-center text-slate-500">
-                    No projects found. Click "Add Project" to create your first project.
                 </div>
             </div>
         );
@@ -303,137 +393,235 @@ export function ProjectsTable({
                 </Button>
             </div>
 
-            <div className="rounded-md border overflow-x-auto">
-                <Table className="table-fixed w-full text-sm">
-                    <colgroup>
-                        <col style={{ width: '140px' }} />
-                        <col style={{ width: '100px' }} />
-                        <col style={{ width: '140px' }} />
-                        <col style={{ width: '130px' }} />
-                        <col style={{ width: '60px' }} />
-                        <col style={{ width: '100px' }} />
-                        <col style={{ width: '70px' }} />
-                    </colgroup>
+            {/* Filters Row - все 6 элементов в одну строку */}
+            <div className="flex items-center gap-2">
+                <div className="relative w-[140px]">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <Input
+                        placeholder="Code..."
+                        value={localFilters.code}
+                        onChange={(e) => handleFilterChange('code', e.target.value)}
+                        className="text-sm pl-7 h-8"
+                        autoComplete="off"
+                    />
+                </div>
+                <div className="relative w-[140px]">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <Input
+                        placeholder="Client..."
+                        value={localFilters.client}
+                        onChange={(e) => handleFilterChange('client', e.target.value)}
+                        className="text-sm pl-7 h-8"
+                        autoComplete="off"
+                    />
+                </div>
+                <div className="relative w-[140px]">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    <Input
+                        placeholder="Manager..."
+                        value={localFilters.manager}
+                        onChange={(e) => handleFilterChange('manager', e.target.value)}
+                        className="text-sm pl-7 h-8"
+                        autoComplete="off"
+                    />
+                </div>
+                <Select
+                    value={localFilters.country || "all"}
+                    onValueChange={(value) => handleFilterChange('country', value === "all" ? "" : value)}
+                >
+                    <SelectTrigger className="h-8 w-[120px]">
+                        <SelectValue placeholder="Country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Countries</SelectItem>
+                        {store_countries?.map((country: any) => (
+                            <SelectItem key={country.id} value={country.code}>
+                                {country.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select
+                    value={localFilters.department || "all"}
+                    onValueChange={(value) => handleFilterChange('department', value === "all" ? "" : value)}
+                >
+                    <SelectTrigger className="h-8 w-[140px]">
+                        <SelectValue placeholder="Department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Departments</SelectItem>
+                        {store_departments?.map((dept: any) => (
+                            <SelectItem key={dept.id} value={dept.name}>
+                                {dept.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select
+                    value={ordering}
+                    onValueChange={(value) => setOrdering(value)}
+                >
+                    <SelectTrigger className="h-8 w-[140px]">
+                        <SelectValue placeholder="Sort by..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {sortOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {activeFiltersCount > 0 && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearFilters}
+                        title="Clear all filters"
+                        className="h-8 px-2"
+                    >
+                        <X className="w-4 h-4" />
+                    </Button>
+                )}
+            </div>
 
+            {/* Table */}
+            <div className="rounded-md border overflow-x-auto">
+                <Table className="w-full text-sm">
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Code</TableHead>
-                            <TableHead>IC</TableHead>
-                            <TableHead>Client</TableHead>
-                            <TableHead>Manager</TableHead>
-                            <TableHead>Country</TableHead>
-                            <TableHead>Department</TableHead>
-                            <TableHead>Actions</TableHead>
+                            <TableHead className="min-w-[100px]">Code</TableHead>
+                            <TableHead className="min-w-[120px]">Client</TableHead>
+                            <TableHead className="min-w-[150px]">Manager</TableHead>
+                            <TableHead className="min-w-[100px]">Reccuring</TableHead>
+                            <TableHead className="min-w-[100px]">Status</TableHead>
+                            <TableHead className="min-w-[100px]">Country</TableHead>
+                            <TableHead className="min-w-[120px]">Department</TableHead>
+                            <TableHead className="min-w-[80px]">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
 
                     <TableBody>
-                        {projects.map((project: any) => {
-                            const codes = project.codes || [];
-                            const lastCode = getLastCode(codes);
-                            const isExpanded = expandedCodeDrawers[project.id];
+                        {uniqueProjects.length === 0 && !isLoadingProjects ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                    No projects found matching your filters
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            uniqueProjects.map((project: any, index: number) => {
+                                const codes = project.codes || [];
+                                const lastCode = getLastCode(codes);
+                                const isExpanded = expandedCodeDrawers[project.id];
+                                const uniqueKey = `${project.id}-${index}-${currentPage}`;
 
-                            return (
-                                <React.Fragment key={project.id}>
-                                    <TableRow className="hover:bg-slate-50">
-                                        <TableCell className="min-w-0">
-                                            <div className="flex items-center gap-1 min-w-0">
-                                                <FolderKanban className="w-3 h-3 flex-shrink-0 text-slate-400" />
-                                                <span className="truncate text-xs font-mono">
-                                                    {lastCode?.code || 'No code'}
+                                return (
+                                    <React.Fragment key={uniqueKey}>
+                                        <TableRow className="hover:bg-slate-50">
+                                            <TableCell className="min-w-0">
+                                                <div className="flex items-center gap-1 min-w-0">
+                                                    <FolderKanban className="w-3 h-3 flex-shrink-0 text-slate-400" />
+                                                    <span className="truncate text-xs font-mono">
+                                                        {lastCode?.code || 'No code'}
+                                                    </span>
+                                                    {codes.length > 1 && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-5 w-5 p-0 flex-shrink-0"
+                                                            onClick={() => toggleCodeDrawer(project.id)}
+                                                        >
+                                                            {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+
+                                            <TableCell className="min-w-0">
+                                                <Badge variant="outline" className="truncate block max-w-full text-xs font-normal">
+                                                    {project.client || 'Not assigned'}
+                                                </Badge>
+                                            </TableCell>
+
+                                            <TableCell className="min-w-0">
+                                                <span className="truncate block text-xs">
+                                                    {getProjectManagerName(project.manager)}
                                                 </span>
-                                                {codes.length > 1 && (
+                                            </TableCell>
+                                            <TableCell className="min-w-0">
+                                                <span className="truncate block text-xs">
+                                                    {project.is_code_recurring ? ('yes') : ('no')}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="min-w-0">
+                                                <span className="truncate block text-xs">
+                                                    {project.status}
+                                                </span>
+                                            </TableCell>
+
+                                            <TableCell>
+                                                <Badge variant="outline" className="text-xs font-mono">
+                                                    {project.country || '-'}
+                                                </Badge>
+                                            </TableCell>
+
+                                            <TableCell className="min-w-0">
+                                                <span className="truncate block text-xs">
+                                                    {getDepartmentName(project.department)}
+                                                </span>
+                                            </TableCell>
+
+                                            <TableCell>
+                                                <div className="flex gap-1">
                                                     <Button
-                                                        size="sm"
+                                                        size="icon"
                                                         variant="ghost"
-                                                        className="h-5 w-5 p-0 flex-shrink-0"
-                                                        onClick={() => toggleCodeDrawer(project.id)}
+                                                        className="h-7 w-7"
+                                                        onClick={() => onEdit(project)}
                                                     >
-                                                        {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                                        <Edit size={14} />
                                                     </Button>
-                                                )}
-                                            </div>
-                                        </TableCell>
-
-                                        <TableCell className="min-w-0">
-                                            <span className="truncate block text-xs font-mono">
-                                                {project.ic || '-'}
-                                            </span>
-                                        </TableCell>
-
-                                        <TableCell className="min-w-0">
-                                            <Badge variant="outline" className="truncate block max-w-full text-xs font-normal">
-                                                {project.client || 'Not assigned'}
-                                            </Badge>
-                                        </TableCell>
-
-                                        <TableCell className="min-w-0">
-                                            <span className="truncate block text-xs">
-                                                {getProjectManagerName(project.manager)}
-                                            </span>
-                                        </TableCell>
-
-                                        <TableCell>
-                                            <span className="text-xs font-mono">{project.country || '-'}</span>
-                                        </TableCell>
-
-                                        <TableCell className="min-w-0">
-                                            <span className="truncate block text-xs">
-                                                {getDepartmentName(project.department)}
-                                            </span>
-                                        </TableCell>
-
-                                        <TableCell>
-                                            <div className="flex gap-1">
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-7 w-7"
-                                                    onClick={() => onEdit(project)}
-                                                >
-                                                    <Edit size={14} />
-                                                </Button>
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-7 w-7"
-                                                    onClick={() => handleDeleteClick(project)}
-                                                >
-                                                    <Trash2 size={14} className="text-red-500" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-
-                                    {isExpanded && codes.length > 1 && (
-                                        <TableRow>
-                                            <TableCell colSpan={7} className="bg-gray-50 p-2">
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {codes.map((c: any, index: number) => (
-                                                        <Badge key={index} variant="secondary" className="text-xs font-mono">
-                                                            {c.code}
-                                                        </Badge>
-                                                    ))}
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="h-7 w-7"
+                                                        onClick={() => handleDeleteClick(project)}
+                                                    >
+                                                        <Trash2 size={14} className="text-red-500" />
+                                                    </Button>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                    )}
-                                </React.Fragment>
-                            );
-                        })}
+
+                                        {isExpanded && codes.length > 1 && (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="bg-gray-50 p-2">
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {codes.map((c: any, codeIndex: number) => (
+                                                            <Badge key={`${project.id}-code-${codeIndex}`} variant="secondary" className="text-xs font-mono">
+                                                                {c.code}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
                     </TableBody>
                 </Table>
             </div>
 
-            {/* Улучшенная пагинация без кнопок First/Last */}
+            {/* Пагинация */}
             {totalPages > 0 && (
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
                     <div className="text-xs text-muted-foreground">
-                        Showing {projects.length} of {totalCount} projects
+                        Showing {uniqueProjects.length} of {totalCount} projects
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap justify-center">
-                        {/* Кнопка "Предыдущая" */}
                         <Button
                             variant="outline"
                             size="sm"
@@ -444,12 +632,10 @@ export function ProjectsTable({
                             Previous
                         </Button>
 
-                        {/* Номера страниц (десктоп) */}
                         <div className="hidden md:flex gap-1">
                             {renderPageNumbers()}
                         </div>
 
-                        {/* Выпадающий список для перехода (мобильные) */}
                         <div className="flex md:hidden items-center gap-2">
                             <Select
                                 value={currentPage.toString()}
@@ -469,13 +655,11 @@ export function ProjectsTable({
                             </Select>
                         </div>
 
-                        {/* Индикатор страницы (планшеты) */}
                         <div className="hidden sm:flex md:hidden items-center gap-2">
                             <span className="text-sm font-medium">{currentPage}</span>
                             <span className="text-sm text-muted-foreground">of {totalPages}</span>
                         </div>
 
-                        {/* Кнопка "Следующая" */}
                         <Button
                             variant="outline"
                             size="sm"
@@ -487,7 +671,6 @@ export function ProjectsTable({
                         </Button>
                     </div>
 
-                    {/* Прямой ввод номера страницы */}
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                             Go to page:
@@ -510,7 +693,6 @@ export function ProjectsTable({
                 </div>
             )}
 
-            {/* Дополнительная статистика пагинации */}
             {totalPages > 0 && (
                 <div className="text-center text-xs text-muted-foreground pt-2 border-t">
                     Page {currentPage} of {totalPages} • Total {totalCount} projects

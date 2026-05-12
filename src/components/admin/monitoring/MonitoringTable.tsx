@@ -19,7 +19,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '../../ui/dropdown-menu';
-import { Search, MoreHorizontal, Mail, Eye, Calendar, AlertCircle, PenSquare, CheckSquare, Square } from 'lucide-react';
+import { Search, MoreHorizontal, Mail, Eye, Calendar, AlertCircle, PenSquare, CheckSquare, Square, X } from 'lucide-react';
 import { TimeSheetMonitoring } from '../../../types/types';
 import { format } from 'date-fns';
 import { useSendLetter, useSendReminder } from '../../../hooks/useTimeEntry';
@@ -53,6 +53,210 @@ interface MonitoringTableProps {
     periodEnd?: string;
 }
 
+// Компонент для отображения детальной информации о пользователе (компактная версия)
+function UserDetailsDialog({
+    user,
+    periodStart,
+    periodEnd,
+    open,
+    onOpenChange
+}: {
+    user: TimeSheetMonitoring | null;
+    periodStart?: string;
+    periodEnd?: string;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    if (!user) return null;
+
+    // Получаем пропущенные дни из данных пользователя
+    const missingDaysList = user.missing_days || [];
+    const submittedDaysList = user.submitted_days || [];
+
+    // Подсчет общего количества пропущенных часов
+    const totalMissingHours = missingDaysList.reduce((sum, day) => sum + (day.missing_hours || 0), 0);
+
+    const getStatusConfig = () => {
+        if (user.completion >= 100) {
+            return { label: 'Completed', color: 'text-green-600 bg-green-50', icon: CheckSquare };
+        }
+        if (user.completion === 0 || (missingDaysList.length > 0 && user.total_hours === 0)) {
+            return { label: 'Missing', color: 'text-red-600 bg-red-50', icon: X };
+        }
+        return { label: 'Partial', color: 'text-yellow-600 bg-yellow-50', icon: AlertCircle };
+    };
+
+    const statusConfig = getStatusConfig();
+    const StatusIcon = statusConfig.icon;
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[90vw] md:max-w-[85vw] lg:max-w-[80vw] xl:max-w-[75vw] max-h-[40vh] overflow-y-auto">
+                <DialogHeader className="pb-2">
+                    <DialogTitle className="text-xl font-bold flex items-center justify-between">
+                        <span>Time Sheet Details - {user.user_email}</span>
+                        <Badge className={`${statusConfig.color} border-0`}>
+                            <StatusIcon className="w-3 h-3 mr-1" />
+                            {statusConfig.label}
+                        </Badge>
+                    </DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-3">
+                    {/* User Information - компактная сетка */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-sm">
+                        <div>
+                            <label className="text-xs text-gray-500">User ID</label>
+                            <p className="font-semibold">{user.user_id}</p>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Completion</label>
+                            <div className="flex items-center gap-1">
+                                <p className="font-semibold">{user.completion.toFixed(1)}%</p>
+                                <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                                    <div
+                                        className="h-1.5 rounded-full"
+                                        style={{
+                                            width: `${Math.min(user.completion, 100)}%`,
+                                            backgroundColor: user.completion >= 100 ? '#10b981' : user.completion === 0 ? '#ef4444' : '#f59e0b'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Logged Hours</label>
+                            <p className="font-semibold">{user.total_hours || 0}h</p>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Required Hours</label>
+                            <p className="font-semibold">{user.required_hours || 160}h</p>
+                        </div>
+                        {totalMissingHours > 0 && (
+                            <div>
+                                <label className="text-xs text-gray-500">Missing Hours</label>
+                                <p className="font-semibold text-red-600">{totalMissingHours}h</p>
+                            </div>
+                        )}
+                        <div>
+                            <label className="text-xs text-gray-500">Last Updated</label>
+                            <p className="font-semibold text-xs">
+                                {user.last_updated ? format(new Date(user.last_updated), 'dd.MM.yyyy') : 'Never'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Period Information - компактно */}
+                    {periodStart && periodEnd && (
+                        <div className="flex items-center gap-4 text-xs text-gray-600 bg-gray-50 p-2 rounded-md">
+                            <Calendar className="w-3 h-3" />
+                            <span>Period: {format(new Date(periodStart), 'dd.MM.yyyy')} - {format(new Date(periodEnd), 'dd.MM.yyyy')}</span>
+                            <span>•</span>
+                            <span>Missing: {missingDaysList.length} days</span>
+                            {submittedDaysList.length > 0 && (
+                                <>
+                                    <span>•</span>
+                                    <span>Submitted: {submittedDaysList.length} days</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Missing Days - компактный список в 3-4 колонки */}
+                    {missingDaysList.length > 0 && (
+                        <div className="border border-red-200 bg-red-50 rounded-md p-2">
+                            <div className="flex items-center gap-2 mb-2">
+                                <AlertCircle className="w-4 h-4 text-red-600" />
+                                <h3 className="font-semibold text-red-900 text-sm">
+                                    Missing Days ({missingDaysList.length} days)
+                                </h3>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 max-h-[120px] overflow-y-auto">
+                                {missingDaysList.map((day, idx) => (
+                                    <div key={idx} className="flex items-center justify-between text-xs p-1 bg-white rounded border border-red-100">
+                                        <span className="font-mono text-red-800">
+                                            {format(new Date(day.date), 'dd.MM')}
+                                        </span>
+                                        <span className="text-red-600 font-medium">
+                                            -{day.missing_hours || 8}h
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Submitted Days - компактный список если есть */}
+                    {submittedDaysList.length > 0 && (
+                        <div className="border border-green-200 bg-green-50 rounded-md p-2">
+                            <div className="flex items-center gap-2 mb-2">
+                                <CheckSquare className="w-4 h-4 text-green-600" />
+                                <h3 className="font-semibold text-green-900 text-sm">
+                                    Submitted Days ({submittedDaysList.length} days)
+                                </h3>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 max-h-[100px] overflow-y-auto">
+                                {submittedDaysList.slice(0, 20).map((day, idx) => (
+                                    <div key={idx} className="text-xs p-1 bg-white rounded border border-green-100">
+                                        <span className="font-mono text-green-800">
+                                            {typeof day === 'string'
+                                                ? format(new Date(day), 'dd.MM')
+                                                : format(new Date(day.date), 'dd.MM')}
+                                        </span>
+                                    </div>
+                                ))}
+                                {submittedDaysList.length > 20 && (
+                                    <div className="text-xs p-1 text-gray-500">
+                                        +{submittedDaysList.length - 20} more
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Progress Summary - компактная версия для partial */}
+                    {user.completion > 0 && user.completion < 100 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-md p-2">
+                            <div className="flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-blue-600" />
+                                <span className="text-xs text-blue-800">
+                                    Progress: {submittedDaysList.length} of {missingDaysList.length + submittedDaysList.length} days completed
+                                    {totalMissingHours > 0 && ` | ${totalMissingHours}h missing`}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Quick Actions - компактные кнопки */}
+                <DialogFooter className="gap-2 pt-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onOpenChange(false)}
+                    >
+                        Close
+                    </Button>
+                    {user.completion < 100 && missingDaysList.length > 0 && (
+                        <Button
+                            size="sm"
+                            className="bg-black hover:bg-gray-800 text-white"
+                            style={{ backgroundColor: "black" }}
+                            onClick={() => {
+                                onOpenChange(false);
+                                toast.info(`Reminder will be sent to ${user.user_email} for ${missingDaysList.length} missing days`);
+                            }}
+                        >
+                            <Mail className="w-3 h-3 mr-1" />
+                            Send Reminder
+                        </Button>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export function MonitoringTable({ data, onSendReminder, onViewDetails, periodStart, periodEnd }: MonitoringTableProps) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -63,6 +267,10 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
     const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
     const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
     const [isSelectMode, setIsSelectMode] = useState(false);
+
+    // Состояния для детального просмотра
+    const [selectedUserForDetails, setSelectedUserForDetails] = useState<TimeSheetMonitoring | null>(null);
+    const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
     const [selectedUser, setSelectedUser] = useState<{
         userId: number;
@@ -249,6 +457,13 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
                 }
             });
         }
+    };
+
+    // Обработчик открытия детальной информации
+    const handleViewDetails = (user: TimeSheetMonitoring) => {
+        setSelectedUserForDetails(user);
+        setDetailsDialogOpen(true);
+        onViewDetails(user.user_id);
     };
 
     // Обработчик открытия диалога письма
@@ -498,7 +713,7 @@ Administration`;
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => onViewDetails(item.user_id)}>
+                                                        <DropdownMenuItem onClick={() => handleViewDetails(item)}>
                                                             <Eye className="w-4 h-4 mr-2" />
                                                             View Details
                                                         </DropdownMenuItem>
@@ -527,6 +742,15 @@ Administration`;
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Dialog for User Details */}
+            <UserDetailsDialog
+                user={selectedUserForDetails}
+                periodStart={periodStart}
+                periodEnd={periodEnd}
+                open={detailsDialogOpen}
+                onOpenChange={setDetailsDialogOpen}
+            />
 
             {/* Диалог подтверждения отправки напоминания одному пользователю */}
             <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>

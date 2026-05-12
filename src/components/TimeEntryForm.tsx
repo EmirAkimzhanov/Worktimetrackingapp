@@ -759,12 +759,12 @@ export function TimeEntryForm() {
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow border-t-4" style={{ borderTopColor: '#1F4E78' }}>
-      <CardHeader style={{ backgroundColor: '#F1F5F9' }} className="border-b">
+      <CardHeader style={{ backgroundColor: '#F1F5F9', height: '100px' }} className="border-b">
         <CardTitle className="flex items-center gap-2" style={{ color: '#1F4E78' }}>
           <Plus className="w-5 h-5" />
           Add Time Entry
         </CardTitle>
-        <CardDescription>Track your work hours and vacations</CardDescription>
+        {/* <CardDescription style={{ margin: '0' }}>Track your work hours and vacations</CardDescription> */}
       </CardHeader>
       <CardContent className="pt-6">
         <div className="mb-6">

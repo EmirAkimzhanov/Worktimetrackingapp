@@ -1,17 +1,69 @@
+// hooks/useProjects.ts
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
 import { deleteProject, editProject, getProjects, getProjectTasks, sendProject } from '../services/project';
 import { ProjectBody } from '../types/project';
 
+// ========== ТИПЫ ==========
+
+interface GetProjectsParams {
+    page?: number;
+    page_size?: number;
+    forceRefresh?: boolean;
+    code?: string;
+    client_name?: string;
+    manager_email?: string;
+    country_code?: string;
+    department_name?: string;
+    status?: string;  // ДОБАВЛЕНО
+    is_code_recurring?: string;  // ДОБАВЛЕНО
+    ordering?: string;
+}
+
+interface CacheEntry {
+    data: any;
+    timestamp: number;
+    params?: GetProjectsParams;
+}
+
 // ========== КЭШ ДЛЯ ПРОЕКТОВ ==========
 
-// Кэш для всех проектов (с пагинацией)
-let projectsCache: { data: any; timestamp: number; params?: any } | null = null;
+// Кэш для всех проектов (с пагинацией и фильтрами)
+let projectsCache: CacheEntry | null = null;
 
 // Кэш для задач проекта (по project_id)
 const projectTasksCache = new Map<string, { data: any; timestamp: number }>();
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
+
+// Функция для генерации ключа кэша на основе параметров
+const getCacheKey = (params?: GetProjectsParams) => {
+    if (!params) return 'default';
+    const {
+        page,
+        page_size,
+        code,
+        client_name,
+        manager_email,
+        country_code,
+        department_name,
+        status,
+        is_code_recurring,
+        ordering
+    } = params;
+    return JSON.stringify({
+        page: page || 1,
+        page_size: page_size || 30,
+        code: code || '',
+        client_name: client_name || '',
+        manager_email: manager_email || '',
+        country_code: country_code || '',
+        department_name: department_name || '',
+        status: status || '',  // ДОБАВЛЕНО
+        is_code_recurring: is_code_recurring || '',  // ДОБАВЛЕНО
+        ordering: ordering || ''
+    });
+};
 
 // Функции очистки кэша
 const clearProjectsCache = () => {
@@ -36,13 +88,18 @@ const clearAllProjectsCaches = () => {
 };
 
 // Функции получения кэшированных данных
-const getCachedProjects = (params?: { page?: number; page_size?: number }) => {
+const getCachedProjects = (params?: GetProjectsParams) => {
     const now = Date.now();
     if (projectsCache && (now - projectsCache.timestamp) < CACHE_DURATION) {
+        const cacheKey = getCacheKey(projectsCache.params);
+        const currentKey = getCacheKey(params);
+
         // Проверяем, совпадают ли параметры кэша с запрашиваемыми
-        if (JSON.stringify(projectsCache.params) === JSON.stringify(params)) {
+        if (cacheKey === currentKey) {
             console.log('Returning cached projects data for params:', params);
             return projectsCache.data;
+        } else {
+            console.log('Cache params mismatch, fetching fresh data');
         }
     }
     return null;
@@ -126,19 +183,56 @@ export const useGetProjects = () => {
     const setProjectsPagination = useUserStore((state) => state.setProjectsPagination);
 
     return useMutation({
-        mutationFn: async (params?: { page?: number; page_size?: number; forceRefresh?: boolean }) => {
-            const { page = 1, page_size = 30, forceRefresh = false } = params || {};
-            const queryParams = { page, page_size };
+        mutationFn: async (params?: GetProjectsParams) => {
+            const {
+                page = 1,
+                page_size = 30,
+                forceRefresh = false,
+                code,
+                client_name,
+                manager_email,
+                country_code,
+                department_name,
+                status,
+                is_code_recurring,
+                ordering
+            } = params || {};
+
+            const queryParams = {
+                page,
+                page_size,
+                ...(code && { code }),
+                ...(client_name && { client_name }),
+                ...(manager_email && { manager_email }),
+                ...(country_code && { country_code }),
+                ...(department_name && { department_name }),
+                ...(status && { status }),  // ДОБАВЛЕНО
+                ...(is_code_recurring && { is_code_recurring }),  // ДОБАВЛЕНО
+                ...(ordering && { ordering })
+            };
+
+            console.log('🔍 Query params before cache check:', queryParams);
 
             // Проверяем кэш
             if (!forceRefresh) {
                 const cached = getCachedProjects(queryParams);
                 if (cached) {
+                    // Сохраняем в store даже из кэша
+                    setProjects(cached.results || cached);
+                    if (setProjectsPagination) {
+                        setProjectsPagination({
+                            count: cached.count,
+                            next: cached.next,
+                            previous: cached.previous,
+                            currentPage: page,
+                            pageSize: page_size
+                        });
+                    }
                     return cached;
                 }
             }
 
-            console.log(forceRefresh ? 'Force refreshing projects' : `Fetching fresh projects for page ${page}, page_size ${page_size}`);
+            console.log(forceRefresh ? 'Force refreshing projects' : `Fetching fresh projects with params:`, queryParams);
             const data = await getProjects(queryParams);
 
             // Сохраняем в кэш с параметрами
@@ -194,12 +288,13 @@ export const projectsCacheUtils = {
     clearProjectTasksCache: clearProjectTasksCache,
     clearAll: clearAllProjectsCaches,
 
-    isProjectsCacheValid: (params?: { page?: number; page_size?: number }) => {
+    isProjectsCacheValid: (params?: GetProjectsParams) => {
         if (!projectsCache) return false;
         const now = Date.now();
         const isTimeValid = (now - projectsCache.timestamp) < CACHE_DURATION;
-        const isParamsValid = JSON.stringify(projectsCache.params) === JSON.stringify(params);
-        return isTimeValid && isParamsValid;
+        const cacheKey = getCacheKey(projectsCache.params);
+        const currentKey = getCacheKey(params);
+        return isTimeValid && cacheKey === currentKey;
     },
 
     isProjectTasksCacheValid: (projectId: string) => {
@@ -244,16 +339,40 @@ export const projectsCacheUtils = {
         };
     },
 
-    refreshProjectsCache: async (params?: { page?: number; page_size?: number }) => {
-        const page = params?.page || 1;
-        const page_size = params?.page_size || 30;
-        const data = await getProjects({ page, page_size });
+    refreshProjectsCache: async (params?: GetProjectsParams) => {
+        const {
+            page = 1,
+            page_size = 30,
+            code,
+            client_name,
+            manager_email,
+            country_code,
+            department_name,
+            status,
+            is_code_recurring,
+            ordering
+        } = params || {};
+
+        const queryParams = {
+            page,
+            page_size,
+            ...(code && { code }),
+            ...(client_name && { client_name }),
+            ...(manager_email && { manager_email }),
+            ...(country_code && { country_code }),
+            ...(department_name && { department_name }),
+            ...(status && { status }),
+            ...(is_code_recurring && { is_code_recurring }),
+            ...(ordering && { ordering })
+        };
+
+        const data = await getProjects(queryParams);
         projectsCache = {
             data,
             timestamp: Date.now(),
-            params: { page, page_size }
+            params: queryParams
         };
-        console.log(`Projects cache refreshed for page ${page}, page_size ${page_size}`);
+        console.log(`Projects cache refreshed with params:`, queryParams);
         return data;
     },
 
@@ -262,5 +381,9 @@ export const projectsCacheUtils = {
         projectTasksCache.set(projectId, { data, timestamp: Date.now() });
         console.log(`Project tasks cache refreshed for: ${projectId}`);
         return data;
+    },
+
+    getCurrentCacheParams: () => {
+        return projectsCache?.params || null;
     }
 };
