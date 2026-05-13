@@ -3,8 +3,25 @@ import { api } from '../consts/api';
 import { useUserStore } from '../store/UsersStore';
 import { UserBody } from '../types/user';
 
+export interface GetUsersParams {
+    page?: number;
+    page_size?: number;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    position_name?: string;
+    department_name?: string;
+    department_role_name?: string;
+    grade_name?: string;
+    country_code?: string;
+    role_name?: string;
+    joined_after?: string;
+    joined_before?: string;
+    is_active?: string;
+    ordering?: string;
+}
 
-export const getUsers = async (params?: { page?: number; page_size?: number }) => {
+export const getUsers = async (params?: GetUsersParams) => {
     const token = useUserStore.getState().access_token;
 
     if (!token) {
@@ -12,10 +29,32 @@ export const getUsers = async (params?: { page?: number; page_size?: number }) =
     }
 
     const queryParams = new URLSearchParams();
+
+    // Пагинация
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
 
+    // Фильтры
+    if (params?.first_name) queryParams.append('first_name', params.first_name);
+    if (params?.last_name) queryParams.append('last_name', params.last_name);
+    if (params?.email) queryParams.append('email', params.email);
+    if (params?.position_name) queryParams.append('position_name', params.position_name);
+    if (params?.department_name) queryParams.append('department_name', params.department_name);
+    if (params?.department_role_name) queryParams.append('department_role_name', params.department_role_name);
+    if (params?.grade_name) queryParams.append('grade_name', params.grade_name);
+    if (params?.country_code) queryParams.append('country_code', params.country_code);
+    if (params?.role_name) queryParams.append('role_name', params.role_name);
+    if (params?.joined_after) queryParams.append('joined_after', params.joined_after);
+    if (params?.joined_before) queryParams.append('joined_before', params.joined_before);
+    if (params?.is_active) queryParams.append('is_active', params.is_active);
+
+    // Сортировка
+    if (params?.ordering) queryParams.append('ordering', params.ordering);
+
     const url = `${api}api/accounts/users/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
+    console.log('📦 Fetching users with params:', params);
+    console.log('🔗 URL:', url);
 
     const res = await axios(url, {
         headers: {
@@ -97,5 +136,3 @@ export const deleteUser = async (user_id: string) => {
     );
     return res.data;
 }
-
-

@@ -68,6 +68,7 @@ interface Filters {
     manager: string;
     country: string;
     department: string;
+    status: string;
 }
 
 type SortOption = {
@@ -86,6 +87,8 @@ const sortOptions: SortOption[] = [
     { value: '-country_code', label: 'Country (Z-A)' },
     { value: 'department_name', label: 'Department (A-Z)' },
     { value: '-department_name', label: 'Department (Z-A)' },
+    { value: 'status', label: 'Status (A-Z)' },
+    { value: '-status', label: 'Status (Z-A)' },
 ];
 
 export function ProjectsTable({
@@ -122,6 +125,7 @@ export function ProjectsTable({
         manager: '',
         country: '',
         department: '',
+        status: '',
     });
 
     const debouncedCode = useDebounce(localFilters.code, 500);
@@ -129,6 +133,7 @@ export function ProjectsTable({
     const debouncedManager = useDebounce(localFilters.manager, 500);
     const debouncedCountry = useDebounce(localFilters.country, 300);
     const debouncedDepartment = useDebounce(localFilters.department, 300);
+    const debouncedStatus = useDebounce(localFilters.status, 300);
 
     const [ordering, setOrdering] = useState<string>('code');
     const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -157,11 +162,12 @@ export function ProjectsTable({
         if (debouncedManager && debouncedManager.trim()) params.manager_email = debouncedManager;
         if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
         if (debouncedDepartment && debouncedDepartment.trim()) params.department_name = debouncedDepartment;
+        if (debouncedStatus && debouncedStatus.trim()) params.status_name = debouncedStatus;
 
         console.log('📦 Final params to send:', params);
         getProjects(params);
         setCurrentPage(page);
-    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, ordering, pageSize, getProjects]);
+    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering, pageSize, getProjects]);
 
     // Эффект для загрузки проектов при изменении фильтров
     useEffect(() => {
@@ -171,9 +177,10 @@ export function ProjectsTable({
             setIsInitialLoad(false);
             loadProjects(1);
         }
-    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, ordering]);
+    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering]);
 
     const handleFilterChange = (key: keyof Filters, value: string) => {
+        console.log('CHANGE:', key, value);
         setLocalFilters(prev => ({ ...prev, [key]: value }));
     };
 
@@ -184,6 +191,7 @@ export function ProjectsTable({
             manager: '',
             country: '',
             department: '',
+            status: '',
         };
         setLocalFilters(emptyFilters);
         setCurrentPage(1);
@@ -357,6 +365,27 @@ export function ProjectsTable({
         return Array.from(uniqueMap.values());
     }, [projects]);
 
+    // Функция для безопасного получения массива стран
+    const getCountriesArray = useCallback(() => {
+        if (Array.isArray(store_countries)) return store_countries;
+        if (store_countries && typeof store_countries === 'object') return Object.values(store_countries);
+        return [];
+    }, [store_countries]);
+
+    // Функция для безопасного получения массива департаментов
+    const getDepartmentsArray = useCallback(() => {
+        if (Array.isArray(store_departments)) return store_departments;
+        if (store_departments && typeof store_departments === 'object') return Object.values(store_departments);
+        return [];
+    }, [store_departments]);
+
+    // Функция для безопасного получения массива статусов
+    const getStatusesArray = useCallback(() => {
+        if (Array.isArray(store_statuses)) return store_statuses;
+        if (store_statuses && typeof store_statuses === 'object') return Object.values(store_statuses);
+        return [];
+    }, [store_statuses]);
+
     // Показываем лоадер при первой загрузке
     if (isLoadingProjects && uniqueProjects.length === 0 && isInitialLoad) {
         return (
@@ -378,6 +407,10 @@ export function ProjectsTable({
         );
     }
 
+    const countriesArray = getCountriesArray();
+    const departmentsArray = getDepartmentsArray();
+    const statusesArray = getStatusesArray();
+
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -393,8 +426,8 @@ export function ProjectsTable({
                 </Button>
             </div>
 
-            {/* Filters Row - все 6 элементов в одну строку */}
-            <div className="flex items-center gap-2">
+            {/* Filters Row */}
+            <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative w-[140px]">
                     <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
                     <Input
@@ -434,7 +467,7 @@ export function ProjectsTable({
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Countries</SelectItem>
-                        {store_countries?.map((country: any) => (
+                        {countriesArray.map((country: any) => (
                             <SelectItem key={country.id} value={country.code}>
                                 {country.name}
                             </SelectItem>
@@ -450,13 +483,32 @@ export function ProjectsTable({
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Departments</SelectItem>
-                        {store_departments?.map((dept: any) => (
+                        {departmentsArray.map((dept: any) => (
                             <SelectItem key={dept.id} value={dept.name}>
                                 {dept.name}
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
+
+                {/* Фильтр по статусу */}
+                <Select
+                    value={localFilters.status || "all"}
+                    onValueChange={(value) => handleFilterChange('status', value === "all" ? "" : value)}
+                >
+                    <SelectTrigger className="h-8 w-[140px]">
+                        <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        {statusesArray.map((status: any) => (
+                            <SelectItem key={status.id} value={status.name}>
+                                {status.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
                 <Select
                     value={ordering}
                     onValueChange={(value) => setOrdering(value)}
@@ -504,7 +556,7 @@ export function ProjectsTable({
                     <TableBody>
                         {uniqueProjects.length === 0 && !isLoadingProjects ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                                     No projects found matching your filters
                                 </TableCell>
                             </TableRow>
@@ -550,13 +602,13 @@ export function ProjectsTable({
                                             </TableCell>
                                             <TableCell className="min-w-0">
                                                 <span className="truncate block text-xs">
-                                                    {project.is_code_recurring ? ('yes') : ('no')}
+                                                    {project.is_code_recurring ? 'yes' : 'no'}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="min-w-0">
-                                                <span className="truncate block text-xs">
-                                                    {project.status}
-                                                </span>
+                                                <Badge variant="secondary" className="text-xs">
+                                                    {project.status_name || project.status || '-'}
+                                                </Badge>
                                             </TableCell>
 
                                             <TableCell>
@@ -595,7 +647,7 @@ export function ProjectsTable({
 
                                         {isExpanded && codes.length > 1 && (
                                             <TableRow>
-                                                <TableCell colSpan={6} className="bg-gray-50 p-2">
+                                                <TableCell colSpan={8} className="bg-gray-50 p-2">
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {codes.map((c: any, codeIndex: number) => (
                                                             <Badge key={`${project.id}-code-${codeIndex}`} variant="secondary" className="text-xs font-mono">

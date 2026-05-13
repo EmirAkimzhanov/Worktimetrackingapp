@@ -3,12 +3,78 @@ import { useUserStore } from '../store/UsersStore';
 import { deleteUser, editUser, getUserGrades, getUsers, sendUsers } from '../services/users';
 import { UserBody } from '../types/user';
 
+// ========== ТИПЫ ==========
+
+interface GetUsersParams {
+    page?: number;
+    page_size?: number;
+    forceRefresh?: boolean;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    position_name?: string;
+    department_name?: string;
+    department_role_name?: string;
+    grade_name?: string;
+    country_code?: string;
+    role_name?: string;
+    joined_after?: string;
+    joined_before?: string;
+    is_active?: string;
+    ordering?: string;
+}
+
+interface CacheEntry {
+    data: any;
+    timestamp: number;
+    params?: GetUsersParams;
+}
+
 // ========== КЭШ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ==========
 
-let usersCache: { data: any; timestamp: number; params?: any } | null = null;
+let usersCache: CacheEntry | null = null;
 let userGradesCache: { data: any[]; timestamp: number } | null = null;
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
+
+// Функция для генерации ключа кэша на основе параметров
+const getCacheKey = (params?: GetUsersParams) => {
+    if (!params) return 'default';
+    const {
+        page,
+        page_size,
+        first_name,
+        last_name,
+        email,
+        position_name,
+        department_name,
+        department_role_name,
+        grade_name,
+        country_code,
+        role_name,
+        joined_after,
+        joined_before,
+        is_active,
+        ordering
+    } = params;
+    return JSON.stringify({
+        page: page || 1,
+        page_size: page_size || 30,
+        first_name: first_name || '',
+        last_name: last_name || '',
+        email: email || '',
+        position_name: position_name || '',
+        department_name: department_name || '',
+        department_role_name: department_role_name || '',
+        grade_name: grade_name || '',
+        country_code: country_code || '',
+        role_name: role_name || '',
+        joined_after: joined_after || '',
+        joined_before: joined_before || '',
+        is_active: is_active || '',
+        ordering: ordering || ''
+    });
+};
 
 // Функции очистки кэша
 const clearUsersCache = () => {
@@ -28,12 +94,17 @@ const clearAllUsersCaches = () => {
 };
 
 // Функции получения кэшированных данных
-const getCachedUsers = (params?: { page?: number; page_size?: number }) => {
+const getCachedUsers = (params?: GetUsersParams) => {
     const now = Date.now();
     if (usersCache && (now - usersCache.timestamp) < CACHE_DURATION) {
-        if (JSON.stringify(usersCache.params) === JSON.stringify(params)) {
+        const cacheKey = getCacheKey(usersCache.params);
+        const currentKey = getCacheKey(params);
+
+        if (cacheKey === currentKey) {
             console.log('Returning cached users data for params:', params);
             return usersCache.data;
+        } else {
+            console.log('Cache params mismatch, fetching fresh data');
         }
     }
     return null;
@@ -55,26 +126,75 @@ export const useGetUsers = () => {
     const setUsersPagination = useUserStore((state) => state.setUsersPagination);
 
     return useMutation({
-        mutationFn: async (params?: { page?: number; page_size?: number; forceRefresh?: boolean }) => {
-            const { page = 1, page_size = 30, forceRefresh = false } = params || {};
-            const queryParams = { page, page_size };
+        mutationFn: async (params?: GetUsersParams) => {
+            const {
+                page = 1,
+                page_size = 30,
+                forceRefresh = false,
+                first_name,
+                last_name,
+                email,
+                position_name,
+                department_name,
+                department_role_name,
+                grade_name,
+                country_code,
+                role_name,
+                joined_after,
+                joined_before,
+                is_active,
+                ordering
+            } = params || {};
+
+            const queryParams = {
+                page,
+                page_size,
+                ...(first_name && { first_name }),
+                ...(last_name && { last_name }),
+                ...(email && { email }),
+                ...(position_name && { position_name }),
+                ...(department_name && { department_name }),
+                ...(department_role_name && { department_role_name }),
+                ...(grade_name && { grade_name }),
+                ...(country_code && { country_code }),
+                ...(role_name && { role_name }),
+                ...(joined_after && { joined_after }),
+                ...(joined_before && { joined_before }),
+                ...(is_active && { is_active }),
+                ...(ordering && { ordering })
+            };
+
+            console.log('🔍 Query params before cache check:', queryParams);
 
             // Проверяем кэш
             if (!forceRefresh) {
                 const cached = getCachedUsers(queryParams);
                 if (cached) {
+                    // Сохраняем в store даже из кэша
+                    setUsers(cached.results || cached);
+                    if (setUsersPagination) {
+                        setUsersPagination({
+                            count: cached.count,
+                            next: cached.next,
+                            previous: cached.previous,
+                            currentPage: page,
+                            pageSize: page_size
+                        });
+                    }
                     return cached;
                 }
             }
 
-            // Загружаем новые данные
-            console.log(forceRefresh ? 'Force refreshing users' : `Fetching fresh users for page ${page}, page_size ${page_size}`);
+            console.log(forceRefresh ? 'Force refreshing users' : `Fetching fresh users with params:`, queryParams);
             const data = await getUsers(queryParams);
+
+            // Сохраняем в кэш с параметрами
             usersCache = {
                 data,
                 timestamp: Date.now(),
                 params: queryParams
             };
+
             return data;
         },
         onSuccess: (data, params) => {
@@ -184,12 +304,13 @@ export const usersCacheUtils = {
     clearUserGradesCache: clearUserGradesCache,
     clearAll: clearAllUsersCaches,
 
-    isUsersCacheValid: (params?: { page?: number; page_size?: number }) => {
+    isUsersCacheValid: (params?: GetUsersParams) => {
         if (!usersCache) return false;
         const now = Date.now();
         const isTimeValid = (now - usersCache.timestamp) < CACHE_DURATION;
-        const isParamsValid = JSON.stringify(usersCache.params) === JSON.stringify(params);
-        return isTimeValid && isParamsValid;
+        const cacheKey = getCacheKey(usersCache.params);
+        const currentKey = getCacheKey(params);
+        return isTimeValid && cacheKey === currentKey;
     },
 
     isUserGradesCacheValid: () => {
@@ -201,7 +322,7 @@ export const usersCacheUtils = {
     getUsersCacheAge: () => {
         if (!usersCache) return null;
         const now = Date.now();
-        return Math.floor((now - usersCache.timestamp) / 1000); // в секундах
+        return Math.floor((now - usersCache.timestamp) / 1000);
     },
 
     getUserGradesCacheAge: () => {
@@ -242,16 +363,50 @@ export const usersCacheUtils = {
         return usersCache ? usersCache.params : null;
     },
 
-    refreshUsersCache: async (params?: { page?: number; page_size?: number }) => {
-        const page = params?.page || 1;
-        const page_size = params?.page_size || 30;
-        const data = await getUsers({ page, page_size });
+    refreshUsersCache: async (params?: GetUsersParams) => {
+        const {
+            page = 1,
+            page_size = 30,
+            first_name,
+            last_name,
+            email,
+            position_name,
+            department_name,
+            department_role_name,
+            grade_name,
+            country_code,
+            role_name,
+            joined_after,
+            joined_before,
+            is_active,
+            ordering
+        } = params || {};
+
+        const queryParams = {
+            page,
+            page_size,
+            ...(first_name && { first_name }),
+            ...(last_name && { last_name }),
+            ...(email && { email }),
+            ...(position_name && { position_name }),
+            ...(department_name && { department_name }),
+            ...(department_role_name && { department_role_name }),
+            ...(grade_name && { grade_name }),
+            ...(country_code && { country_code }),
+            ...(role_name && { role_name }),
+            ...(joined_after && { joined_after }),
+            ...(joined_before && { joined_before }),
+            ...(is_active && { is_active }),
+            ...(ordering && { ordering })
+        };
+
+        const data = await getUsers(queryParams);
         usersCache = {
             data,
             timestamp: Date.now(),
-            params: { page, page_size }
+            params: queryParams
         };
-        console.log(`Users cache refreshed for page ${page}, page_size ${page_size}`);
+        console.log(`Users cache refreshed with params:`, queryParams);
         return data;
     },
 
@@ -272,7 +427,8 @@ export const usersCacheUtils = {
             ageInMinutes: Math.floor((now - usersCache.timestamp) / 60000),
             size: usersCache.data.results?.length || usersCache.data.length || 0,
             currentPage: usersCache.params?.page || 1,
-            pageSize: usersCache.params?.page_size || 30
+            pageSize: usersCache.params?.page_size || 30,
+            params: usersCache.params
         };
 
         const userGradesInfo = !userGradesCache ? { exists: false } : {

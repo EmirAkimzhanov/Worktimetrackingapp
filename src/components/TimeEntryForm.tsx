@@ -80,7 +80,8 @@ export function TimeEntryForm() {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [hours, setHours] = useState('8');
-  const [includeWeekends, setIncludeWeekends] = useState(true);
+  const [includeWeekends, setIncludeWeekends] = useState(false); // по умолчанию выключен
+  const [includeHolidays, setIncludeHolidays] = useState(false); // ДОБАВЛЕН новый ползунок, по умолчанию выключен
   const [country, setCountry] = useState<string>('');
   const [client, setClient] = useState('');
   const [clientSearch, setClientSearch] = useState(''); // Состояние для поиска клиента
@@ -119,7 +120,6 @@ export function TimeEntryForm() {
   const setInternalTasks = useUserStore((state) => state.setInternalTasks);
   const leaves = useUserStore((state) => state.leaves);
 
-
   // Функция проверки является ли день выходным
   const isWeekend = (dateString: string): boolean => {
     const date = new Date(dateString);
@@ -127,12 +127,9 @@ export function TimeEntryForm() {
     return dayOfWeek === 0 || dayOfWeek === 6;
   };
 
-  // Функция валидации даты для single mode
+  // УБРАНА ВАЛИДАЦИЯ для single date - теперь можно выбрать любой день
   const validateSingleDate = (dateToCheck: string): boolean => {
-    if (inputMode === 'single' && isWeekend(dateToCheck)) {
-      setDateError('Weekends are not allowed for single date entries. Please select a weekday or use Date Range mode.');
-      return false;
-    }
+    // Валидация убрана - можно выбирать любой день, включая выходные
     setDateError('');
     return true;
   };
@@ -157,7 +154,7 @@ export function TimeEntryForm() {
   const handleInputModeChange = (value: InputMode) => {
     setInputMode(value);
     setDateError('');
-    if (value === 'single' && isWeekend(date)) {
+    if (value === 'single') {
       validateSingleDate(date);
     }
   };
@@ -491,7 +488,7 @@ export function TimeEntryForm() {
       hours: parseFloat(hours),
       ...(inputMode === 'single'
         ? { start_date: date, end_date: date }
-        : { start_date: startDate, end_date: endDate, weekends_included: includeWeekends }
+        : { start_date: startDate, end_date: endDate, weekends_included: includeWeekends, holidays_included: includeHolidays } // ДОБАВЛЕН holidays_included
       )
     };
 
@@ -548,10 +545,11 @@ export function TimeEntryForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (inputMode === 'single' && isWeekend(date)) {
-      toast.error('Weekends are not allowed for single date entries. Please select a weekday or use Date Range mode.');
-      return;
-    }
+    // УБРАНА проверка на выходные для single date
+    // if (inputMode === 'single' && isWeekend(date)) {
+    //   toast.error('Weekends are not allowed for single date entries. Please select a weekday or use Date Range mode.');
+    //   return;
+    // }
 
     setIsSubmitting(true);
 
@@ -745,7 +743,8 @@ export function TimeEntryForm() {
 
   const isSubmitDisabled = () => {
     if (isSubmitting) return true;
-    if (inputMode === 'single' && isWeekend(date)) return true;
+    // УБРАНА проверка на выходные для single date
+    // if (inputMode === 'single' && isWeekend(date)) return true;
 
     if (activeTab === 'external') {
       return !projectId || !selectedTask || !country || !client;
@@ -1017,7 +1016,17 @@ export function TimeEntryForm() {
                     onCheckedChange={setIncludeWeekends}
                   />
                   <Label htmlFor="weekends" className="cursor-pointer">
-                    {includeWeekends ? 'Include weekends' : 'Exclude weekends'}
+                    Include weekends
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
+                  <Switch
+                    id="holidays"
+                    checked={includeHolidays}
+                    onCheckedChange={setIncludeHolidays}
+                  />
+                  <Label htmlFor="holidays" className="cursor-pointer">
+                    Include holidays
                   </Label>
                 </div>
               </>
@@ -1046,7 +1055,7 @@ export function TimeEntryForm() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Detailed description of the work done"
                 rows={3}
-                required
+              // required
               />
             </div>
 
@@ -1059,7 +1068,7 @@ export function TimeEntryForm() {
           </form>
         )}
 
-        {/* Остальные вкладки internal и vacations остаются без изменений */}
+        {/* Для internal вкладки */}
         {activeTab === 'internal' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -1162,7 +1171,17 @@ export function TimeEntryForm() {
                     onCheckedChange={setIncludeWeekends}
                   />
                   <Label htmlFor="weekends" className="cursor-pointer">
-                    {includeWeekends ? 'Include weekends' : 'Exclude weekends'}
+                    Include weekends
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
+                  <Switch
+                    id="holidays"
+                    checked={includeHolidays}
+                    onCheckedChange={setIncludeHolidays}
+                  />
+                  <Label htmlFor="holidays" className="cursor-pointer">
+                    Include holidays
                   </Label>
                 </div>
               </>
@@ -1191,7 +1210,7 @@ export function TimeEntryForm() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Detailed description of the work done"
                 rows={3}
-                required
+              // required
               />
             </div>
 
@@ -1204,6 +1223,7 @@ export function TimeEntryForm() {
           </form>
         )}
 
+        {/* Для vacations вкладки */}
         {activeTab === 'vacations' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -1298,7 +1318,17 @@ export function TimeEntryForm() {
                     onCheckedChange={setIncludeWeekends}
                   />
                   <Label htmlFor="weekends" className="cursor-pointer">
-                    {includeWeekends ? 'Include weekends' : 'Exclude weekends'}
+                    Include weekends
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
+                  <Switch
+                    id="holidays"
+                    checked={includeHolidays}
+                    onCheckedChange={setIncludeHolidays}
+                  />
+                  <Label htmlFor="holidays" className="cursor-pointer">
+                    Include holidays
                   </Label>
                 </div>
               </>
@@ -1327,7 +1357,7 @@ export function TimeEntryForm() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Vacation description"
                 rows={3}
-                required
+              // required
               />
             </div>
 

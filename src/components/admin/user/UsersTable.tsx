@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
-import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Input } from '../../ui/input';
+import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { getRoleBadgeVariant } from '../../../const/consts';
 import { User as UserType, Position, Department } from '../../../types/types';
 import { useDeleteUsers, useGetUserGrades, useGetUsers } from '../../../hooks/useUsers';
@@ -28,12 +29,72 @@ import {
     SelectValue,
 } from '../../ui/select';
 
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+
+    return debouncedValue;
+}
+
 interface UsersTableProps {
     positions: Position[];
     departments: Department[];
     onEdit: (user: UserType) => void;
     onAdd: () => void;
 }
+
+interface Filters {
+    first_name: string;
+    last_name: string;
+    email: string;
+    position_name: string;
+    department_name: string;
+    department_role_name: string;
+    grade_name: string;
+    country_code: string;
+    role_name: string;
+    is_active: string;
+}
+
+type SortOption = {
+    value: string;
+    label: string;
+};
+
+const sortOptions: SortOption[] = [
+    { value: 'first_name', label: 'First Name (A-Z)' },
+    { value: '-first_name', label: 'First Name (Z-A)' },
+    { value: 'last_name', label: 'Last Name (A-Z)' },
+    { value: '-last_name', label: 'Last Name (Z-A)' },
+    { value: 'email', label: 'Email (A-Z)' },
+    { value: '-email', label: 'Email (Z-A)' },
+    { value: 'position_name', label: 'Position (A-Z)' },
+    { value: '-position_name', label: 'Position (Z-A)' },
+    { value: 'department_name', label: 'Department (A-Z)' },
+    { value: '-department_name', label: 'Department (Z-A)' },
+    { value: 'department_role_name', label: 'Department Role (A-Z)' },
+    { value: '-department_role_name', label: 'Department Role (Z-A)' },
+    { value: 'grade_name', label: 'Grade (A-Z)' },
+    { value: '-grade_name', label: 'Grade (Z-A)' },
+    { value: 'country_code', label: 'Country (A-Z)' },
+    { value: '-country_code', label: 'Country (Z-A)' },
+    { value: 'role_name', label: 'Role (A-Z)' },
+    { value: '-role_name', label: 'Role (Z-A)' },
+    { value: 'date_joined', label: 'Date Joined (Oldest first)' },
+    { value: '-date_joined', label: 'Date Joined (Newest first)' },
+    { value: 'is_active', label: 'Status (Active first)' },
+    { value: '-is_active', label: 'Status (Inactive first)' },
+];
 
 export function UsersTable({
     positions,
@@ -51,6 +112,26 @@ export function UsersTable({
 
     const store_users = useUserStore((state) => state.users);
     const usersPagination = useUserStore((state) => state.usersPagination);
+    const store_countries = useUserStore((state) => state.countries);
+    const store_department_roles = useUserStore((state) => state.department_roles);
+    const store_positions = useUserStore((state) => state.positions);
+    const store_departments = useUserStore((state) => state.departments);
+    const store_user_grades = useUserStore((state) => state.userGrades);
+
+    // Вытаскиваем все грейды из позиций
+    const allGradesFromPositions = useMemo(() => {
+        const grades: any[] = [];
+        if (store_positions && Array.isArray(store_positions)) {
+            store_positions.forEach((position: any) => {
+                if (position.grades && Array.isArray(position.grades)) {
+                    grades.push(...position.grades);
+                }
+            });
+        }
+        return grades;
+    }, [store_positions]);
+
+    const availableGrades = store_user_grades?.length > 0 ? store_user_grades : allGradesFromPositions;
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState<{
@@ -59,6 +140,32 @@ export function UsersTable({
     } | null>(null);
 
     const [currentPage, setCurrentPage] = useState(1);
+    const [ordering, setOrdering] = useState<string>('-date_joined');
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+    const [localFilters, setLocalFilters] = useState<Filters>({
+        first_name: '',
+        last_name: '',
+        email: '',
+        position_name: '',
+        department_name: '',
+        department_role_name: '',
+        grade_name: '',
+        country_code: '',
+        role_name: '',
+        is_active: '',
+    });
+
+    const debouncedFirstName = useDebounce(localFilters.first_name, 500);
+    const debouncedLastName = useDebounce(localFilters.last_name, 500);
+    const debouncedEmail = useDebounce(localFilters.email, 500);
+    const debouncedPosition = useDebounce(localFilters.position_name, 300);
+    const debouncedDepartment = useDebounce(localFilters.department_name, 300);
+    const debouncedDepartmentRole = useDebounce(localFilters.department_role_name, 300);
+    const debouncedGrade = useDebounce(localFilters.grade_name, 300);
+    const debouncedCountry = useDebounce(localFilters.country_code, 300);
+    const debouncedRole = useDebounce(localFilters.role_name, 300);
+
     const pageSize = 30;
 
     useEffect(() => {
@@ -70,12 +177,58 @@ export function UsersTable({
         loadUsers(1);
     }, []);
 
-    const loadUsers = (page: number) => {
-        getUsers({ page, page_size: pageSize });
+    const loadUsers = useCallback((page: number) => {
+        const params: any = {
+            page,
+            page_size: pageSize,
+            ordering: ordering,
+        };
+
+        if (debouncedFirstName && debouncedFirstName.trim()) params.first_name = debouncedFirstName;
+        if (debouncedLastName && debouncedLastName.trim()) params.last_name = debouncedLastName;
+        if (debouncedEmail && debouncedEmail.trim()) params.email = debouncedEmail;
+        if (debouncedPosition && debouncedPosition.trim()) params.position_name = debouncedPosition;
+        if (debouncedDepartment && debouncedDepartment.trim()) params.department_name = debouncedDepartment;
+        if (debouncedDepartmentRole && debouncedDepartmentRole.trim()) params.department_role_name = debouncedDepartmentRole;
+        if (debouncedGrade && debouncedGrade.trim()) params.grade_name = debouncedGrade;
+        if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
+        if (debouncedRole && debouncedRole.trim()) params.role_name = debouncedRole;
+        if (localFilters.is_active && localFilters.is_active !== 'all') params.is_active = localFilters.is_active;
+
+        console.log('📦 Loading users with params:', params);
+        getUsers(params);
         setCurrentPage(page);
+    }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.is_active, ordering, pageSize, getUsers]);
+
+    useEffect(() => {
+        if (!isInitialLoad) {
+            loadUsers(1);
+        } else {
+            setIsInitialLoad(false);
+            loadUsers(1);
+        }
+    }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.is_active, ordering]);
+
+    const handleFilterChange = (key: keyof Filters, value: string) => {
+        setLocalFilters(prev => ({ ...prev, [key]: value }));
     };
 
-    // Проверяем, что users это массив
+    const clearFilters = () => {
+        setLocalFilters({
+            first_name: '',
+            last_name: '',
+            email: '',
+            position_name: '',
+            department_name: '',
+            department_role_name: '',
+            grade_name: '',
+            country_code: '',
+            role_name: '',
+            is_active: '',
+        });
+        setCurrentPage(1);
+    };
+
     const users = Array.isArray(store_users) ? store_users : [];
     const totalCount = usersPagination?.count || 0;
     const totalPages = Math.ceil(totalCount / pageSize);
@@ -97,18 +250,6 @@ export function UsersTable({
     const handleGoToPage = (page: number) => {
         if (page >= 1 && page <= totalPages && page !== currentPage) {
             loadUsers(page);
-        }
-    };
-
-    const handleFirstPage = () => {
-        if (currentPage !== 1) {
-            loadUsers(1);
-        }
-    };
-
-    const handleLastPage = () => {
-        if (currentPage !== totalPages && totalPages > 0) {
-            loadUsers(totalPages);
         }
     };
 
@@ -155,7 +296,6 @@ export function UsersTable({
         }
     };
 
-    // Функция для отображения номеров страниц
     const renderPageNumbers = () => {
         const pages = [];
         const maxVisiblePages = 5;
@@ -166,7 +306,6 @@ export function UsersTable({
             startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
 
-        // Добавляем первую страницу, если нужно
         if (startPage > 1) {
             pages.push(
                 <Button
@@ -189,7 +328,6 @@ export function UsersTable({
             }
         }
 
-        // Основные страницы
         for (let i = startPage; i <= endPage; i++) {
             pages.push(
                 <Button
@@ -205,7 +343,6 @@ export function UsersTable({
             );
         }
 
-        // Добавляем последнюю страницу, если нужно
         if (endPage < totalPages) {
             if (endPage < totalPages - 1) {
                 pages.push(
@@ -231,7 +368,9 @@ export function UsersTable({
         return pages;
     };
 
-    if (isLoadingUsers && users.length === 0) {
+    const activeFiltersCount = Object.values(localFilters).filter(v => v && v !== '' && v !== 'all').length;
+
+    if (isLoadingUsers && users.length === 0 && isInitialLoad) {
         return (
             <div className="space-y-4">
                 <div className="flex justify-between items-center">
@@ -268,10 +407,202 @@ export function UsersTable({
                 </Button>
             </div>
 
+            {/* Filters Row - все в одну строку с горизонтальным скроллом */}
+            <div className="overflow-x-auto">
+                <div className="flex items-center gap-2 min-w-max">
+                    {/* Поиск по имени */}
+                    <div className="relative w-[100px]">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        <Input
+                            placeholder="First name"
+                            value={localFilters.first_name}
+                            onChange={(e) => handleFilterChange('first_name', e.target.value)}
+                            className="text-xs pl-7 h-7"
+                            autoComplete="off"
+                        />
+                    </div>
+
+                    {/* Поиск по фамилии */}
+                    <div className="relative w-[100px]">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        <Input
+                            placeholder="Last name"
+                            value={localFilters.last_name}
+                            onChange={(e) => handleFilterChange('last_name', e.target.value)}
+                            className="text-xs pl-7 h-7"
+                            autoComplete="off"
+                        />
+                    </div>
+
+                    {/* Поиск по email */}
+                    <div className="relative w-[150px]">
+                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        <Input
+                            placeholder="Email"
+                            value={localFilters.email}
+                            onChange={(e) => handleFilterChange('email', e.target.value)}
+                            className="text-xs pl-7 h-7"
+                            autoComplete="off"
+                        />
+                    </div>
+
+                    {/* Position */}
+                    <Select
+                        value={localFilters.position_name || "all"}
+                        onValueChange={(value) => handleFilterChange('position_name', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-7 w-[110px] text-xs">
+                            <SelectValue placeholder="Position" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Positions</SelectItem>
+                            {store_positions?.map((pos: any) => (
+                                <SelectItem key={pos.id} value={pos.name}>
+                                    {pos.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Department */}
+                    <Select
+                        value={localFilters.department_name || "all"}
+                        onValueChange={(value) => handleFilterChange('department_name', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-7 w-[110px] text-xs">
+                            <SelectValue placeholder="Department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Depts</SelectItem>
+                            {store_departments?.map((dept: any) => (
+                                <SelectItem key={dept.id} value={dept.name}>
+                                    {dept.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Department Role */}
+                    <Select
+                        value={localFilters.department_role_name || "all"}
+                        onValueChange={(value) => handleFilterChange('department_role_name', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-7 w-[110px] text-xs">
+                            <SelectValue placeholder="Dept Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Roles</SelectItem>
+                            {store_department_roles?.map((role: any) => (
+                                <SelectItem key={role.id} value={role.name}>
+                                    {role.display_name || role.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Grade */}
+                    <Select
+                        value={localFilters.grade_name || "all"}
+                        onValueChange={(value) => handleFilterChange('grade_name', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-7 w-[100px] text-xs">
+                            <SelectValue placeholder="Grade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Grades</SelectItem>
+                            {availableGrades?.map((grade: any) => (
+                                <SelectItem key={grade.id} value={grade.name}>
+                                    {grade.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Country */}
+                    <Select
+                        value={localFilters.country_code || "all"}
+                        onValueChange={(value) => handleFilterChange('country_code', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-7 w-[100px] text-xs">
+                            <SelectValue placeholder="Country" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Countries</SelectItem>
+                            {store_countries?.map((country: any) => (
+                                <SelectItem key={country.id} value={country.code}>
+                                    {country.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* User Role */}
+                    <Select
+                        value={localFilters.role_name || "all"}
+                        onValueChange={(value) => handleFilterChange('role_name', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-7 w-[90px] text-xs">
+                            <SelectValue placeholder="Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Roles</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="user">User</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {/* Status */}
+                    <Select
+                        value={localFilters.is_active || "all"}
+                        onValueChange={(value) => handleFilterChange('is_active', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-7 w-[90px] text-xs">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="true">Active</SelectItem>
+                            <SelectItem value="false">Inactive</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {/* Sort By */}
+                    <Select
+                        value={ordering}
+                        onValueChange={(value) => setOrdering(value)}
+                    >
+                        <SelectTrigger className="h-7 w-[130px] text-xs">
+                            <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {sortOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Clear filters button */}
+                    {activeFiltersCount > 0 && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={clearFilters}
+                            title="Clear all filters"
+                            className="h-7 px-2"
+                        >
+                            <X className="w-3 h-3" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+
             <div className="rounded-md border overflow-x-auto">
-                <Table className="min-w-[1200px] table-fixed">
+                <Table className="min-w-[1300px] table-fixed">
                     <colgroup>
-                        <col style={{ width: '150px' }} />
+                        <col style={{ width: '100px' }} />
+                        <col style={{ width: '100px' }} />
                         <col style={{ width: '200px' }} />
                         <col style={{ width: '100px' }} />
                         <col style={{ width: '100px' }} />
@@ -285,11 +616,12 @@ export function UsersTable({
                     </colgroup>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Name</TableHead>
+                            <TableHead>First Name</TableHead>
+                            <TableHead>Last Name</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Position</TableHead>
                             <TableHead>Department</TableHead>
-                            <TableHead>Department Role</TableHead>
+                            <TableHead>Dept Role</TableHead>
                             <TableHead>Grade</TableHead>
                             <TableHead>Country</TableHead>
                             <TableHead>Role</TableHead>
@@ -301,8 +633,8 @@ export function UsersTable({
                     <TableBody>
                         {users.length === 0 && !isLoadingUsers ? (
                             <TableRow>
-                                <TableCell colSpan={11} className="text-center text-slate-500 py-8">
-                                    No users found. Click "Add User" to create your first user.
+                                <TableCell colSpan={12} className="text-center text-slate-500 py-8">
+                                    No users found matching your filters.
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -310,45 +642,50 @@ export function UsersTable({
                                 <TableRow key={user.id} className="hover:bg-slate-50">
                                     <TableCell className="font-medium">
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <User className="w-4 h-4 text-slate-500 flex-shrink-0" />
-                                            <span className="truncate">
-                                                {user.first_name} {user.last_name}
+                                            <User className="w-3 h-3 text-slate-500 flex-shrink-0" />
+                                            <span className="truncate text-xs">
+                                                {user.first_name || '-'}
                                             </span>
                                         </div>
                                     </TableCell>
+                                    <TableCell className="font-medium">
+                                        <span className="truncate block text-xs">
+                                            {user.last_name || '-'}
+                                        </span>
+                                    </TableCell>
                                     <TableCell>
-                                        <span className="text-sm truncate block max-w-[180px]">
+                                        <span className="text-xs truncate block max-w-[180px]">
                                             {user.email}
                                         </span>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-sm truncate block max-w-[90px]">
-                                            {user.position || 'Not assigned'}
+                                        <span className="text-xs truncate block max-w-[90px]">
+                                            {user.position_name || user.position || '-'}
                                         </span>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-sm truncate block max-w-[90px]">
-                                            {user.department || 'Not assigned'}
+                                        <span className="text-xs truncate block max-w-[90px]">
+                                            {user.department_name || user.department || '-'}
                                         </span>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 truncate max-w-[110px]">
-                                            {user.department_role || 'Not assigned'}
+                                        <Badge variant="outline" className="text-xs truncate max-w-[110px]">
+                                            {user.department_role_name || user.department_role || '-'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-sm">{user.grade || '-'}</span>
+                                        <span className="text-xs">{user.grade_name || user.grade || '-'}</span>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-sm">{user.country || '-'}</span>
+                                        <span className="text-xs">{user.country_code || user.country || '-'}</span>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant={getRoleBadgeVariant(user.role)}>
-                                            {user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'User' : user.role || 'Not assigned'}
+                                        <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
+                                            {user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'User' : user.role || '-'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <div className="text-sm">{formatDate(user.date_joined)}</div>
+                                        <div className="text-xs">{formatDate(user.date_joined)}</div>
                                         {user.date_left && (
                                             <div className="text-xs text-red-600">
                                                 Left: {formatDate(user.date_left)}
@@ -358,9 +695,9 @@ export function UsersTable({
                                     <TableCell>
                                         <Badge
                                             variant={user.is_active ? 'default' : 'outline'}
-                                            className={`${user.is_active
-                                                ? 'bg-green-100 text-green-800 hover:bg-green-100'
-                                                : 'bg-gray-100 text-gray-800 hover:bg-gray-100'}`}
+                                            className={`text-xs ${user.is_active
+                                                ? 'bg-green-100 text-green-800'
+                                                : 'bg-gray-100 text-gray-800'}`}
                                         >
                                             {user.is_active ? 'Active' : 'Inactive'}
                                         </Badge>
@@ -370,18 +707,18 @@ export function UsersTable({
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7"
+                                                className="h-6 w-6"
                                                 onClick={() => onEdit(user)}
                                             >
-                                                <Edit className="w-3.5 h-3.5" />
+                                                <Edit className="w-3 h-3" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7"
+                                                className="h-6 w-6"
                                                 onClick={() => handleDeleteClick(user)}
                                             >
-                                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                                <Trash2 className="w-3 h-3 text-red-500" />
                                             </Button>
                                         </div>
                                     </TableCell>
@@ -392,7 +729,7 @@ export function UsersTable({
                 </Table>
             </div>
 
-            {/* Улучшенная пагинация */}
+            {/* Пагинация */}
             {totalPages > 0 && (
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
                     <div className="text-xs text-muted-foreground">
@@ -400,42 +737,28 @@ export function UsersTable({
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap justify-center">
-                        {/* Кнопка "Первая страница" */}
-                        {/* <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleFirstPage}
-                            disabled={currentPage === 1 || isLoadingUsers}
-                            className="hidden sm:flex"
-                        >
-                            <ChevronsLeft size={14} className="mr-1" />
-                            First
-                        </Button> */}
-
-                        {/* Кнопка "Предыдущая" */}
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={handlePrevPage}
                             disabled={!hasPrev || isLoadingUsers}
+                            className="h-7 text-xs"
                         >
-                            <ChevronLeft size={14} className="mr-1" />
-                            Previous
+                            <ChevronLeft size={12} className="mr-1" />
+                            Prev
                         </Button>
 
-                        {/* Номера страниц (десктоп) */}
                         <div className="hidden md:flex gap-1">
                             {renderPageNumbers()}
                         </div>
 
-                        {/* Выпадающий список для перехода (мобильные) */}
                         <div className="flex md:hidden items-center gap-2">
                             <Select
                                 value={currentPage.toString()}
                                 onValueChange={(value) => handleGoToPage(parseInt(value))}
                                 disabled={isLoadingUsers}
                             >
-                                <SelectTrigger className="w-[100px] h-8">
+                                <SelectTrigger className="w-[100px] h-7 text-xs">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -448,40 +771,26 @@ export function UsersTable({
                             </Select>
                         </div>
 
-                        {/* Индикатор страницы (планшеты) */}
-                        <div className="hidden sm:flex md:hidden items-center gap-2">
-                            <span className="text-sm font-medium">{currentPage}</span>
-                            <span className="text-sm text-muted-foreground">of {totalPages}</span>
+                        <div className="hidden sm:flex md:hidden items-center gap-2 text-xs">
+                            <span className="font-medium">{currentPage}</span>
+                            <span className="text-muted-foreground">of {totalPages}</span>
                         </div>
 
-                        {/* Кнопка "Следующая" */}
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={handleNextPage}
                             disabled={!hasNext || isLoadingUsers}
+                            className="h-7 text-xs"
                         >
-                            <ChevronRight size={14} className="ml-1" />
                             Next
+                            <ChevronRight size={12} className="ml-1" />
                         </Button>
-
-                        {/* Кнопка "Последняя страница" */}
-                        {/* <Button
-                            variant="outline"
-                            // size="sm"
-                            onClick={handleLastPage}
-                            disabled={currentPage === totalPages || isLoadingUsers}
-                            className="hidden sm:flex"
-                        >
-                            Last
-                            <ChevronsRight size={14} className="ml-1" />
-                        </Button> */}
                     </div>
 
-                    {/* Прямой ввод номера страницы */}
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            Go to page:
+                            Go to:
                         </span>
                         <input
                             type="number"
@@ -494,14 +803,13 @@ export function UsersTable({
                                     handleGoToPage(page);
                                 }
                             }}
-                            className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-14 h-7 px-2 text-xs border rounded-md"
                             disabled={isLoadingUsers}
                         />
                     </div>
                 </div>
             )}
 
-            {/* Дополнительная статистика пагинации */}
             {totalPages > 0 && (
                 <div className="text-center text-xs text-muted-foreground pt-2 border-t">
                     Page {currentPage} of {totalPages} • Total {totalCount} users

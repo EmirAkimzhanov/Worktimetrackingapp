@@ -81,6 +81,7 @@ export const getProjects = async (params?: {
     country_code?: string;
     department_name?: string;
     ordering?: string;
+    status_name?: string;
 }) => {
     const token = useUserStore.getState().access_token;
 
@@ -98,6 +99,7 @@ export const getProjects = async (params?: {
     if (params?.manager_email) queryParams.append('manager_email', params.manager_email);
     if (params?.country_code) queryParams.append('country_code', params.country_code);
     if (params?.department_name) queryParams.append('department_name', params.department_name);
+    if (params?.status_name) queryParams.append('status_name', params.status_name);
     if (params?.ordering) queryParams.append('ordering', params.ordering);
 
     const url = `${api}api/projects/projects/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;

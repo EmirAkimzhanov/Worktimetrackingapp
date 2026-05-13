@@ -15,8 +15,9 @@ interface GetProjectsParams {
     manager_email?: string;
     country_code?: string;
     department_name?: string;
-    status?: string;  // ДОБАВЛЕНО
-    is_code_recurring?: string;  // ДОБАВЛЕНО
+    status?: string;
+    status_name?: string;  // ДОБАВЛЕНО status_name
+    is_code_recurring?: string;
     ordering?: string;
 }
 
@@ -48,6 +49,7 @@ const getCacheKey = (params?: GetProjectsParams) => {
         country_code,
         department_name,
         status,
+        status_name,  // ДОБАВЛЕНО status_name
         is_code_recurring,
         ordering
     } = params;
@@ -59,8 +61,9 @@ const getCacheKey = (params?: GetProjectsParams) => {
         manager_email: manager_email || '',
         country_code: country_code || '',
         department_name: department_name || '',
-        status: status || '',  // ДОБАВЛЕНО
-        is_code_recurring: is_code_recurring || '',  // ДОБАВЛЕНО
+        status: status || '',
+        status_name: status_name || '',  // ДОБАВЛЕНО status_name
+        is_code_recurring: is_code_recurring || '',
         ordering: ordering || ''
     });
 };
@@ -194,6 +197,7 @@ export const useGetProjects = () => {
                 country_code,
                 department_name,
                 status,
+                status_name,  // ДОБАВЛЕНО status_name
                 is_code_recurring,
                 ordering
             } = params || {};
@@ -206,8 +210,9 @@ export const useGetProjects = () => {
                 ...(manager_email && { manager_email }),
                 ...(country_code && { country_code }),
                 ...(department_name && { department_name }),
-                ...(status && { status }),  // ДОБАВЛЕНО
-                ...(is_code_recurring && { is_code_recurring }),  // ДОБАВЛЕНО
+                ...(status && { status }),
+                ...(status_name && { status_name }),  // ДОБАВЛЕНО status_name
+                ...(is_code_recurring && { is_code_recurring }),
                 ...(ordering && { ordering })
             };
 
@@ -349,6 +354,7 @@ export const projectsCacheUtils = {
             country_code,
             department_name,
             status,
+            status_name,  // ДОБАВЛЕНО status_name
             is_code_recurring,
             ordering
         } = params || {};
@@ -362,6 +368,7 @@ export const projectsCacheUtils = {
             ...(country_code && { country_code }),
             ...(department_name && { department_name }),
             ...(status && { status }),
+            ...(status_name && { status_name }),  // ДОБАВЛЕНО status_name
             ...(is_code_recurring && { is_code_recurring }),
             ...(ordering && { ordering })
         };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -9,6 +9,7 @@ import {
 } from "../ui/table";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
 import {
   Edit,
   Trash2,
@@ -21,6 +22,8 @@ import {
   User,
   ChevronLeft,
   ChevronRight,
+  Search,
+  X,
 } from "lucide-react";
 import { Client } from "../../types/types";
 import { toast } from "sonner";
@@ -44,6 +47,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
+
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 // Sector options based on the actual data
 const SECTOR_OPTIONS = [
@@ -69,11 +89,34 @@ const SECTOR_OPTIONS = [
   { value: "Other", label: "Other" },
 ];
 
+type SortOption = {
+  value: string;
+  label: string;
+};
+
+const sortOptions: SortOption[] = [
+  { value: "name", label: "Name (A-Z)" },
+  { value: "-name", label: "Name (Z-A)" },
+  { value: "group", label: "Group (A-Z)" },
+  { value: "-group", label: "Group (Z-A)" },
+  { value: "personal_number", label: "Personal Number (A-Z)" },
+  { value: "-personal_number", label: "Personal Number (Z-A)" },
+  { value: "sector_name", label: "Sector (A-Z)" },
+  { value: "-sector_name", label: "Sector (Z-A)" },
+];
+
 interface ClientsTableProps {
   clients: Client[];
   onEdit: (client: Client) => void;
   onDelete: (id: number) => void;
   onAdd: () => void;
+}
+
+interface Filters {
+  name: string;
+  group: string;
+  personal_number: string;
+  sector_name: string;
 }
 
 export function ClientsTable({
@@ -89,6 +132,7 @@ export function ClientsTable({
 
   const store_clients = useUserStore((state) => state.clients);
   const clientsPagination = useUserStore((state) => state.clientsPagination);
+  const store_sectors = useUserStore((state) => state.sectors);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<{
@@ -96,19 +140,67 @@ export function ClientsTable({
     name: string;
   } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [ordering, setOrdering] = useState<string>("name");
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const pageSize = 30;
+
+  const [localFilters, setLocalFilters] = useState<Filters>({
+    name: "",
+    group: "",
+    personal_number: "",
+    sector_name: "",
+  });
+
+  const debouncedName = useDebounce(localFilters.name, 500);
+  const debouncedGroup = useDebounce(localFilters.group, 500);
+  const debouncedPersonalNumber = useDebounce(localFilters.personal_number, 500);
+  const debouncedSector = useDebounce(localFilters.sector_name, 300);
 
   // Загружаем первую страницу клиентов
   useEffect(() => {
+    getSectors();
     loadClients(1);
-    if (getSectors) {
-      getSectors();
-    }
   }, []);
 
-  const loadClients = (page: number) => {
-    getClients({ page, page_size: pageSize });
+  const loadClients = useCallback((page: number) => {
+    const params: any = {
+      page,
+      page_size: pageSize,
+      ordering: ordering,
+    };
+
+    if (debouncedName && debouncedName.trim()) params.name = debouncedName;
+    if (debouncedGroup && debouncedGroup.trim()) params.group = debouncedGroup;
+    if (debouncedPersonalNumber && debouncedPersonalNumber.trim()) params.personal_number = debouncedPersonalNumber;
+    if (debouncedSector && debouncedSector.trim()) params.sector_name = debouncedSector;
+
+    console.log("📦 Loading clients with params:", params);
+    getClients(params);
     setCurrentPage(page);
+  }, [debouncedName, debouncedGroup, debouncedPersonalNumber, debouncedSector, ordering, pageSize, getClients]);
+
+  // Эффект для загрузки клиентов при изменении фильтров
+  useEffect(() => {
+    if (!isInitialLoad) {
+      loadClients(1);
+    } else {
+      setIsInitialLoad(false);
+      loadClients(1);
+    }
+  }, [debouncedName, debouncedGroup, debouncedPersonalNumber, debouncedSector, ordering]);
+
+  const handleFilterChange = (key: keyof Filters, value: string) => {
+    setLocalFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setLocalFilters({
+      name: "",
+      group: "",
+      personal_number: "",
+      sector_name: "",
+    });
+    setCurrentPage(1);
   };
 
   // ✅ Исправлено: безопасное получение данных с проверкой на массив
@@ -215,6 +307,28 @@ export function ClientsTable({
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
 
+    if (startPage > 1) {
+      pages.push(
+        <Button
+          key="1"
+          variant="outline"
+          size="sm"
+          onClick={() => handleGoToPage(1)}
+          disabled={isLoadingClients}
+          className="min-w-[40px] hidden sm:inline-flex"
+        >
+          1
+        </Button>
+      );
+      if (startPage > 2) {
+        pages.push(
+          <span key="ellipsis1" className="px-1 text-muted-foreground hidden sm:inline">
+            ...
+          </span>
+        );
+      }
+    }
+
     for (let i = startPage; i <= endPage; i++) {
       pages.push(
         <Button
@@ -230,11 +344,35 @@ export function ClientsTable({
       );
     }
 
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        pages.push(
+          <span key="ellipsis2" className="px-1 text-muted-foreground hidden sm:inline">
+            ...
+          </span>
+        );
+      }
+      pages.push(
+        <Button
+          key={totalPages}
+          variant="outline"
+          size="sm"
+          onClick={() => handleGoToPage(totalPages)}
+          disabled={isLoadingClients}
+          className="min-w-[40px] hidden sm:inline-flex"
+        >
+          {totalPages}
+        </Button>
+      );
+    }
+
     return pages;
   };
 
+  const activeFiltersCount = Object.values(localFilters).filter(v => v && v !== '').length;
+
   // Показываем лоадер при первой загрузке
-  if (isLoadingClients && displayClients.length === 0) {
+  if (isLoadingClients && displayClients.length === 0 && isInitialLoad) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -272,6 +410,89 @@ export function ClientsTable({
         </Button>
       </div>
 
+      {/* Filters Row */}
+      <div className="overflow-x-auto">
+        <div className="flex items-center gap-2 min-w-max">
+          <div className="relative w-[150px]">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+            <Input
+              placeholder="Client name..."
+              value={localFilters.name}
+              onChange={(e) => handleFilterChange('name', e.target.value)}
+              className="text-xs pl-7 h-7"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="relative w-[120px]">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+            <Input
+              placeholder="Group..."
+              value={localFilters.group}
+              onChange={(e) => handleFilterChange('group', e.target.value)}
+              className="text-xs pl-7 h-7"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="relative w-[130px]">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+            <Input
+              placeholder="Personal number..."
+              value={localFilters.personal_number}
+              onChange={(e) => handleFilterChange('personal_number', e.target.value)}
+              className="text-xs pl-7 h-7"
+              autoComplete="off"
+            />
+          </div>
+
+          <Select
+            value={localFilters.sector_name || "all"}
+            onValueChange={(value) => handleFilterChange('sector_name', value === "all" ? "" : value)}
+          >
+            <SelectTrigger className="h-7 w-[130px] text-xs">
+              <SelectValue placeholder="Sector" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sectors</SelectItem>
+              {store_sectors?.map((sector: any) => (
+                <SelectItem key={sector.id} value={sector.name}>
+                  {sector.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={ordering}
+            onValueChange={(value) => setOrdering(value)}
+          >
+            <SelectTrigger className="h-7 w-[140px] text-xs">
+              <SelectValue placeholder="Sort by..." />
+            </SelectTrigger>
+            <SelectContent>
+              {sortOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {activeFiltersCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+              title="Clear all filters"
+              className="h-7 px-2"
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -294,8 +515,15 @@ export function ClientsTable({
                     <Building className="w-12 h-12 text-slate-300" />
                     <p className="text-lg font-medium">No clients found</p>
                     <p className="text-sm text-slate-500">
-                      Click "Add Client" to create your first client
+                      {activeFiltersCount > 0
+                        ? "No clients match your filters. Try clearing them."
+                        : "Click \"Add Client\" to create your first client"}
                     </p>
+                    {activeFiltersCount > 0 && (
+                      <Button variant="outline" size="sm" onClick={clearFilters}>
+                        Clear Filters
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -303,8 +531,8 @@ export function ClientsTable({
               displayClients.map((client) => {
                 if (!client) return null;
 
-                const sectorLabel = client.sector
-                  ? getSectorLabel(client.sector)
+                const sectorLabel = client.sector_name || client.sector
+                  ? getSectorLabel(client.sector_name || client.sector)
                   : "Not specified";
 
                 return (
@@ -368,7 +596,7 @@ export function ClientsTable({
                       </div>
                     </TableCell>
                     <TableCell>
-                      {client.sector && client.sector !== "N/A" ? (
+                      {client.sector_name || client.sector ? (
                         <Badge variant="secondary" className="text-xs">
                           <div className="flex items-center gap-1">
                             <Building2 className="w-3 h-3" />
@@ -388,18 +616,20 @@ export function ClientsTable({
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7"
                           onClick={() => client && onEdit(client)}
                           title="Edit client"
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="w-3.5 h-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7"
                           onClick={() => client && handleDeleteClick(client)}
                           title="Delete client"
                         >
-                          <Trash2 className="w-4 h-4 text-red-500" />
+                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
                         </Button>
                       </div>
                     </TableCell>
@@ -411,97 +641,68 @@ export function ClientsTable({
         </Table>
       </div>
 
-      {/* Улучшенная пагинация с отображением общего количества страниц и возможностью перехода */}
+      {/* Улучшенная пагинация */}
       {totalPages > 0 && (
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
           <div className="text-xs text-muted-foreground">
             Showing {displayClients.length} of {totalCount} clients
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Кнопка "Первая страница" */}
-            {/* <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleGoToPage(1)}
-              disabled={currentPage === 1 || isLoadingClients}
-              className="hidden sm:flex"
-            >
-              First
-            </Button> */}
-
-            {/* Кнопка "Предыдущая" */}
+          <div className="flex items-center gap-2 flex-wrap justify-center">
             <Button
               variant="outline"
               size="sm"
               onClick={handlePrevPage}
               disabled={!hasPrev || isLoadingClients}
+              className="h-7 text-xs"
             >
-              <ChevronLeft size={14} className="mr-1" />
+              <ChevronLeft size={12} className="mr-1" />
               Previous
             </Button>
 
-            {/* Номера страниц */}
             <div className="hidden md:flex gap-1">
               {renderPageNumbers()}
             </div>
 
-            {/* Выпадающий список для перехода на конкретную страницу (на мобильных устройствах) */}
             <div className="flex md:hidden items-center gap-2">
               <Select
                 value={currentPage.toString()}
                 onValueChange={(value) => handleGoToPage(parseInt(value))}
                 disabled={isLoadingClients}
               >
-                <SelectTrigger className="w-[80px] h-8">
+                <SelectTrigger className="w-[100px] h-7 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <SelectItem key={page} value={page.toString()}>
-                      Page {page}
+                      Page {page} of {totalPages}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <span className="text-xs text-muted-foreground">
-                of {totalPages}
-              </span>
             </div>
 
-            {/* Отображение текущей страницы и общего количества (на планшетах) */}
-            <div className="hidden sm:flex md:hidden items-center gap-1">
-              <span className="text-sm font-medium">{currentPage}</span>
-              <span className="text-sm text-muted-foreground">of {totalPages}</span>
+            <div className="hidden sm:flex md:hidden items-center gap-2 text-xs">
+              <span className="font-medium">{currentPage}</span>
+              <span className="text-muted-foreground">of {totalPages}</span>
             </div>
 
-            {/* Кнопка "Следующая" */}
             <Button
               variant="outline"
               size="sm"
               onClick={handleNextPage}
               disabled={!hasNext || isLoadingClients}
+              className="h-7 text-xs"
             >
               Next
-              <ChevronRight size={14} className="ml-1" />
+              <ChevronRight size={12} className="ml-1" />
             </Button>
-
-            {/* Кнопка "Последняя страница" */}
-            {/* <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleGoToPage(totalPages)}
-              disabled={currentPage === totalPages || isLoadingClients}
-              className="hidden sm:flex"
-            >
-              Last
-            </Button> */}
           </div>
 
-          {/* Прямой ввод номера страницы */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Go to page:
+              Go to:
             </span>
             <input
               type="number"
@@ -514,14 +715,13 @@ export function ClientsTable({
                   handleGoToPage(page);
                 }
               }}
-              className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-14 h-7 px-2 text-xs border rounded-md"
               disabled={isLoadingClients}
             />
           </div>
         </div>
       )}
 
-      {/* Дополнительная информация о пагинации */}
       {totalPages > 0 && (
         <div className="text-center text-xs text-muted-foreground pt-2">
           Page {currentPage} of {totalPages} • Total {totalCount} clients

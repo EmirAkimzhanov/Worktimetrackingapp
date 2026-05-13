@@ -1,37 +1,73 @@
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
-import { createClient, deleteClient, editClient, getClientProjects, getClients, getCountryClients } from '../services/clients';
+import { createClient, deleteClient, editClient, getClientProjects, getClients, getCountryClients, GetClientsParams } from '../services/clients';
 import { OnlyClient } from '../types/client';
+
+// ========== ТИПЫ ==========
+
+interface CacheEntry {
+    data: any;
+    timestamp: number;
+    params?: GetClientsParams;
+}
 
 // ========== КЭШ ДЛЯ РАЗНЫХ ТИПОВ ЗАПРОСОВ ==========
 
 // Кэш для getCountryClients (по countryId)
 const countryClientsCache = new Map<string, { data: any; timestamp: number }>();
-// Кэш для getClients (с пагинацией)
-let clientsCache: { data: any; timestamp: number; params?: any } | null = null;
+// Кэш для getClients (с пагинацией и фильтрами)
+let clientsCache: CacheEntry | null = null;
 // Кэш для getClientProjects (по clientId)
 const clientProjectsCache = new Map<string, { data: any; timestamp: number }>();
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
 
+// Функция для генерации ключа кэша на основе параметров
+const getCacheKey = (params?: GetClientsParams) => {
+    if (!params) return 'default';
+    const {
+        page,
+        page_size,
+        name,
+        group,
+        personal_number,
+        sector_name,
+        ordering
+    } = params;
+    return JSON.stringify({
+        page: page || 1,
+        page_size: page_size || 30,
+        name: name || '',
+        group: group || '',
+        personal_number: personal_number || '',
+        sector_name: sector_name || '',
+        ordering: ordering || ''
+    });
+};
+
 // Функции очистки кэша
 const clearCountryClientsCache = (countryId?: string) => {
     if (countryId) {
         countryClientsCache.delete(countryId);
+        console.log(`Country clients cache cleared for country: ${countryId}`);
     } else {
         countryClientsCache.clear();
+        console.log('All country clients cache cleared');
     }
 };
 
 const clearClientsCache = () => {
     clientsCache = null;
+    console.log('Clients cache cleared');
 };
 
 const clearClientProjectsCache = (clientId?: string) => {
     if (clientId) {
         clientProjectsCache.delete(clientId);
+        console.log(`Client projects cache cleared for client: ${clientId}`);
     } else {
         clientProjectsCache.clear();
+        console.log('All client projects cache cleared');
     }
 };
 
@@ -40,15 +76,21 @@ const clearAllCaches = () => {
     countryClientsCache.clear();
     clientsCache = null;
     clientProjectsCache.clear();
+    console.log('All clients caches cleared');
 };
 
 // Функция получения кэшированных клиентов
-const getCachedClients = (params?: { page?: number; page_size?: number }) => {
+const getCachedClients = (params?: GetClientsParams) => {
     const now = Date.now();
     if (clientsCache && (now - clientsCache.timestamp) < CACHE_DURATION) {
-        if (JSON.stringify(clientsCache.params) === JSON.stringify(params)) {
+        const cacheKey = getCacheKey(clientsCache.params);
+        const currentKey = getCacheKey(params);
+
+        if (cacheKey === currentKey) {
             console.log('Returning cached clients data for params:', params);
             return clientsCache.data;
+        } else {
+            console.log('Cache params mismatch, fetching fresh data');
         }
     }
     return null;
@@ -71,6 +113,7 @@ export const useGetCountryClients = () => {
             }
 
             // Загружаем новые данные
+            console.log(`Fetching fresh data for country ${countryId}`);
             const data = await getCountryClients(countryId);
             countryClientsCache.set(countryId, { data, timestamp: now });
             return data;
@@ -101,6 +144,7 @@ export const useGetCLientProjecs = () => {
             }
 
             // Загружаем новые данные
+            console.log(`Fetching fresh projects for client ${clientId}`);
             const data = await getClientProjects(clientId);
             clientProjectsCache.set(clientId, { data, timestamp: now });
             return data;
@@ -120,19 +164,50 @@ export const useGetClients = () => {
     const setClientsPagination = useUserStore((state) => state.setClientsPagination);
 
     return useMutation({
-        mutationFn: async (params?: { page?: number; page_size?: number; forceRefresh?: boolean }) => {
-            const { page = 1, page_size = 30, forceRefresh = false } = params || {};
-            const queryParams = { page, page_size };
+        mutationFn: async (params?: GetClientsParams) => {
+            const {
+                page = 1,
+                page_size = 30,
+                forceRefresh = false,
+                name,
+                group,
+                personal_number,
+                sector_name,
+                ordering
+            } = params || {};
+
+            const queryParams = {
+                page,
+                page_size,
+                ...(name && { name }),
+                ...(group && { group }),
+                ...(personal_number && { personal_number }),
+                ...(sector_name && { sector_name }),
+                ...(ordering && { ordering })
+            };
+
+            console.log('🔍 Query params before cache check:', queryParams);
 
             // Проверяем кэш
             if (!forceRefresh) {
                 const cached = getCachedClients(queryParams);
                 if (cached) {
+                    // Сохраняем в store даже из кэша
+                    setClients(cached.results || cached);
+                    if (setClientsPagination) {
+                        setClientsPagination({
+                            count: cached.count,
+                            next: cached.next,
+                            previous: cached.previous,
+                            currentPage: page,
+                            pageSize: page_size
+                        });
+                    }
                     return cached;
                 }
             }
 
-            console.log(forceRefresh ? 'Force refreshing clients' : `Fetching fresh clients for page ${page}, page_size ${page_size}`);
+            console.log(forceRefresh ? 'Force refreshing clients' : `Fetching fresh clients with params:`, queryParams);
             const data = await getClients(queryParams);
 
             // Сохраняем в кэш с параметрами
@@ -208,16 +283,92 @@ export const useDeleteClients = () => {
 
 // ========== ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ==========
 
-// Экспортируем функции для ручной очистки кэша (если понадобится)
 export const cacheUtils = {
     clearCountryClients: clearCountryClientsCache,
     clearClients: clearClientsCache,
     clearClientProjects: clearClientProjectsCache,
     clearAll: clearAllCaches,
+
+    isClientsCacheValid: (params?: GetClientsParams) => {
+        if (!clientsCache) return false;
+        const now = Date.now();
+        const isTimeValid = (now - clientsCache.timestamp) < CACHE_DURATION;
+        const cacheKey = getCacheKey(clientsCache.params);
+        const currentKey = getCacheKey(params);
+        return isTimeValid && cacheKey === currentKey;
+    },
+
+    getClientsCacheAge: () => {
+        if (!clientsCache) return null;
+        const now = Date.now();
+        return Math.floor((now - clientsCache.timestamp) / 1000);
+    },
+
+    getClientsCacheSize: () => {
+        return clientsCache ? (clientsCache.data.results?.length || clientsCache.data.length || 0) : 0;
+    },
+
+    getCurrentCacheParams: () => {
+        return clientsCache?.params || null;
+    },
+
+    refreshClientsCache: async (params?: GetClientsParams) => {
+        const {
+            page = 1,
+            page_size = 30,
+            name,
+            group,
+            personal_number,
+            sector_name,
+            ordering
+        } = params || {};
+
+        const queryParams = {
+            page,
+            page_size,
+            ...(name && { name }),
+            ...(group && { group }),
+            ...(personal_number && { personal_number }),
+            ...(sector_name && { sector_name }),
+            ...(ordering && { ordering })
+        };
+
+        const data = await getClients(queryParams);
+        clientsCache = {
+            data,
+            timestamp: Date.now(),
+            params: queryParams
+        };
+        console.log(`Clients cache refreshed with params:`, queryParams);
+        return data;
+    },
+
     getCacheStats: () => ({
         countryClientsSize: countryClientsCache.size,
         clientsCached: !!clientsCache,
         clientsCacheParams: clientsCache?.params || null,
+        clientsCacheAge: clientsCache ? Math.floor((Date.now() - clientsCache.timestamp) / 1000) : null,
         clientProjectsSize: clientProjectsCache.size,
     }),
+
+    getCacheInfo: () => {
+        const now = Date.now();
+        const clientsInfo = !clientsCache ? { exists: false } : {
+            exists: true,
+            isValid: (now - clientsCache.timestamp) < CACHE_DURATION,
+            ageInSeconds: Math.floor((now - clientsCache.timestamp) / 1000),
+            ageInMinutes: Math.floor((now - clientsCache.timestamp) / 60000),
+            size: clientsCache.data.results?.length || clientsCache.data.length || 0,
+            currentPage: clientsCache.params?.page || 1,
+            pageSize: clientsCache.params?.page_size || 30,
+            params: clientsCache.params
+        };
+
+        return {
+            clients: clientsInfo,
+            countryClientsCount: countryClientsCache.size,
+            clientProjectsCount: clientProjectsCache.size,
+            cacheDurationMinutes: CACHE_DURATION / 60000
+        };
+    }
 };
