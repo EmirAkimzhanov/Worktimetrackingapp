@@ -19,7 +19,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '../../ui/dropdown-menu';
-import { Search, MoreHorizontal, Mail, Eye, Calendar, AlertCircle, PenSquare, CheckSquare, Square, X } from 'lucide-react';
+import { Search, MoreHorizontal, Mail, Eye, Calendar, AlertCircle, PenSquare, CheckSquare, Square, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TimeSheetMonitoring } from '../../../types/types';
 import { format } from 'date-fns';
 import { useSendLetter, useSendReminder } from '../../../hooks/useTimeEntry';
@@ -44,13 +44,26 @@ import {
 } from '../../ui/dialog';
 import { Label } from '../../ui/label';
 import { Checkbox } from '../../ui/checkbox';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '../../ui/select';
 
 interface MonitoringTableProps {
     data: TimeSheetMonitoring[];
+    totalCount?: number;
+    currentPage?: number;
+    pageSize?: number;
+    onPageChange?: (page: number) => void;
+    onPageSizeChange?: (pageSize: number) => void;
     onSendReminder: (userIds: number[], period: { start: string; end: string }) => void;
     onViewDetails: (userId: number) => void;
     periodStart?: string;
     periodEnd?: string;
+    isLoading?: boolean;
 }
 
 // Компонент для отображения детальной информации о пользователе (компактная версия)
@@ -69,11 +82,8 @@ function UserDetailsDialog({
 }) {
     if (!user) return null;
 
-    // Получаем пропущенные дни из данных пользователя
     const missingDaysList = user.missing_days || [];
     const submittedDaysList = user.submitted_days || [];
-
-    // Подсчет общего количества пропущенных часов
     const totalMissingHours = missingDaysList.reduce((sum, day) => sum + (day.missing_hours || 0), 0);
 
     const getStatusConfig = () => {
@@ -103,7 +113,6 @@ function UserDetailsDialog({
                 </DialogHeader>
 
                 <div className="space-y-3">
-                    {/* User Information - компактная сетка */}
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-sm">
                         <div>
                             <label className="text-xs text-gray-500">User ID</label>
@@ -146,7 +155,6 @@ function UserDetailsDialog({
                         </div>
                     </div>
 
-                    {/* Period Information - компактно */}
                     {periodStart && periodEnd && (
                         <div className="flex items-center gap-4 text-xs text-gray-600 bg-gray-50 p-2 rounded-md">
                             <Calendar className="w-3 h-3" />
@@ -162,7 +170,6 @@ function UserDetailsDialog({
                         </div>
                     )}
 
-                    {/* Missing Days - компактный список в 3-4 колонки */}
                     {missingDaysList.length > 0 && (
                         <div className="border border-red-200 bg-red-50 rounded-md p-2">
                             <div className="flex items-center gap-2 mb-2">
@@ -186,7 +193,6 @@ function UserDetailsDialog({
                         </div>
                     )}
 
-                    {/* Submitted Days - компактный список если есть */}
                     {submittedDaysList.length > 0 && (
                         <div className="border border-green-200 bg-green-50 rounded-md p-2">
                             <div className="flex items-center gap-2 mb-2">
@@ -214,7 +220,6 @@ function UserDetailsDialog({
                         </div>
                     )}
 
-                    {/* Progress Summary - компактная версия для partial */}
                     {user.completion > 0 && user.completion < 100 && (
                         <div className="bg-blue-50 border border-blue-200 rounded-md p-2">
                             <div className="flex items-center gap-2">
@@ -228,47 +233,38 @@ function UserDetailsDialog({
                     )}
                 </div>
 
-                {/* Quick Actions - компактные кнопки */}
                 <DialogFooter className="gap-2 pt-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onOpenChange(false)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
                         Close
                     </Button>
-                    {user.completion < 100 && missingDaysList.length > 0 && (
-                        <Button
-                            size="sm"
-                            className="bg-black hover:bg-gray-800 text-white"
-                            style={{ backgroundColor: "black" }}
-                            onClick={() => {
-                                onOpenChange(false);
-                                toast.info(`Reminder will be sent to ${user.user_email} for ${missingDaysList.length} missing days`);
-                            }}
-                        >
-                            <Mail className="w-3 h-3 mr-1" />
-                            Send Reminder
-                        </Button>
-                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
 
-export function MonitoringTable({ data, onSendReminder, onViewDetails, periodStart, periodEnd }: MonitoringTableProps) {
+export function MonitoringTable({
+    data,
+    totalCount = 0,
+    currentPage = 1,
+    pageSize = 30,
+    onPageChange,
+    onPageSizeChange,
+    onSendReminder,
+    onViewDetails,
+    periodStart,
+    periodEnd,
+    isLoading = false
+}: MonitoringTableProps) {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const { mutate: sendReminder, isPending: isSending } = useSendReminder();
     const { mutate: sendLetter, isPending: isSendingLetter } = useSendLetter();
 
-    // Состояния для массовой отправки
     const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
     const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
     const [isSelectMode, setIsSelectMode] = useState(false);
 
-    // Состояния для детального просмотра
     const [selectedUserForDetails, setSelectedUserForDetails] = useState<TimeSheetMonitoring | null>(null);
     const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
@@ -290,14 +286,12 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         body: ''
     });
 
-    // Определяем статус на основе процента завершения
     const getStatus = (completion: number) => {
         if (completion >= 100) return 'completed';
         if (completion === 0) return 'missing';
         return 'partial';
     };
 
-    // Получаем цвет статуса
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'completed':
@@ -311,7 +305,6 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         }
     };
 
-    // Получаем текст статуса
     const getStatusText = (status: string) => {
         switch (status) {
             case 'completed':
@@ -325,23 +318,36 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         }
     };
 
-    // Форматируем дату для отправки в формате YYYY-MM-DD
     const formatDateForReminder = (date: string) => {
         if (!date) return '';
         return format(new Date(date), 'yyyy-MM-dd');
     };
 
-    // Получаем список пользователей, которые не заполнили таймшит (completion < 100)
     const getIncompleteUsers = useMemo(() => {
         return data.filter(item => item.completion < 100);
     }, [data]);
 
-    // Получаем emails пользователей, которые не заполнили
     const getIncompleteEmails = useMemo(() => {
         return getIncompleteUsers.map(user => user.user_email);
     }, [getIncompleteUsers]);
 
-    // Обработчик выбора пользователя для массовой отправки
+    // Фильтрация данных (только по поиску и статусу, пагинация на сервере)
+    const filteredData = useMemo(() => {
+        let result = data;
+
+        if (searchTerm) {
+            result = result.filter(item =>
+                item.user_email.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+
+        if (statusFilter !== 'all') {
+            result = result.filter(item => getStatus(item.completion) === statusFilter);
+        }
+
+        return result;
+    }, [data, searchTerm, statusFilter]);
+
     const toggleEmailSelection = (email: string) => {
         const newSelection = new Set(selectedEmails);
         if (newSelection.has(email)) {
@@ -352,18 +358,15 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         setSelectedEmails(newSelection);
     };
 
-    // Выбрать всех не заполнивших
     const selectAllIncomplete = () => {
         const allIncompleteEmails = getIncompleteUsers.map(user => user.user_email);
         setSelectedEmails(new Set(allIncompleteEmails));
     };
 
-    // Снять выделение со всех
     const clearSelection = () => {
         setSelectedEmails(new Set());
     };
 
-    // Открыть диалог массовой отправки
     const handleBulkSendReminder = () => {
         if (!periodStart || !periodEnd) {
             toast.error('Period dates are not available');
@@ -378,7 +381,6 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         setBulkDialogOpen(true);
     };
 
-    // Подтверждение массовой отправки напоминаний
     const confirmBulkSendReminder = () => {
         const emailsArray = Array.from(selectedEmails);
 
@@ -391,7 +393,6 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
                 toast.success(`Reminders sent successfully to ${emailsArray.length} user(s)`);
                 console.log('Bulk reminders sent:', response);
 
-                // Вызываем оригинальный onSendReminder для всех выбранных пользователей
                 const selectedUserIds = data
                     .filter(item => selectedEmails.has(item.user_email))
                     .map(item => item.user_id);
@@ -413,7 +414,6 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         });
     };
 
-    // Обработчик отправки напоминания одному пользователю
     const handleSendReminder = (userId: number, email: string) => {
         if (!periodStart || !periodEnd) {
             toast.error('Period dates are not available');
@@ -429,7 +429,6 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         setDialogOpen(true);
     };
 
-    // Подтверждение отправки напоминания одному пользователю
     const confirmSendReminder = () => {
         if (selectedUser) {
             sendReminder({
@@ -459,14 +458,12 @@ export function MonitoringTable({ data, onSendReminder, onViewDetails, periodSta
         }
     };
 
-    // Обработчик открытия детальной информации
     const handleViewDetails = (user: TimeSheetMonitoring) => {
         setSelectedUserForDetails(user);
         setDetailsDialogOpen(true);
         onViewDetails(user.user_id);
     };
 
-    // Обработчик открытия диалога письма
     const handleSendLetter = (email: string) => {
         const defaultTemplate = `Dear Team Member,
 
@@ -483,7 +480,6 @@ Administration`;
         setLetterDialogOpen(true);
     };
 
-    // Отправка письма
     const handleSubmitLetter = () => {
         if (!letterData.subject.trim()) {
             toast.error('Please enter a subject');
@@ -512,25 +508,100 @@ Administration`;
         });
     };
 
-    // Фильтрация данных
-    const filteredData = useMemo(() => {
-        return data.filter(item => {
-            const matchesSearch = item.user_email.toLowerCase().includes(searchTerm.toLowerCase());
-            const status = getStatus(item.completion);
-            const matchesStatus = statusFilter === 'all' || status === statusFilter;
-            return matchesSearch && matchesStatus;
-        });
-    }, [data, searchTerm, statusFilter]);
-
     // Статистика
     const stats = useMemo(() => {
         const total = data.length;
         const completed = data.filter(item => item.completion >= 100).length;
         const partial = data.filter(item => item.completion > 0 && item.completion < 100).length;
         const missing = data.filter(item => item.completion === 0).length;
-
         return { total, completed, partial, missing };
     }, [data]);
+
+    const totalPages = Math.ceil(totalCount / pageSize);
+
+    // Функция для отображения номеров страниц
+    const renderPageNumbers = () => {
+        const pages = [];
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+        if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+
+        if (startPage > 1) {
+            pages.push(
+                <Button
+                    key="1"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange?.(1)}
+                    disabled={isLoading}
+                    className="min-w-[32px] h-8 hidden sm:inline-flex"
+                >
+                    1
+                </Button>
+            );
+            if (startPage > 2) {
+                pages.push(
+                    <span key="ellipsis1" className="px-1 text-muted-foreground hidden sm:inline">
+                        ...
+                    </span>
+                );
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push(
+                <Button
+                    key={i}
+                    variant={currentPage === i ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => onPageChange?.(i)}
+                    disabled={isLoading}
+                    className="min-w-[32px] h-8"
+                >
+                    {i}
+                </Button>
+            );
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                pages.push(
+                    <span key="ellipsis2" className="px-1 text-muted-foreground hidden sm:inline">
+                        ...
+                    </span>
+                );
+            }
+            pages.push(
+                <Button
+                    key={totalPages}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange?.(totalPages)}
+                    disabled={isLoading}
+                    className="min-w-[32px] h-8 hidden sm:inline-flex"
+                >
+                    {totalPages}
+                </Button>
+            );
+        }
+
+        return pages;
+    };
+
+    if (isLoading && data.length === 0) {
+        return (
+            <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-4"></div>
+                    <p className="text-gray-500">Loading monitoring data...</p>
+                </CardContent>
+            </Card>
+        );
+    }
 
     if (!data || data.length === 0) {
         return (
@@ -548,9 +619,9 @@ Administration`;
         <>
             <Card>
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
                         <CardTitle>Time Sheet Monitoring</CardTitle>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className="bg-green-50">
                                 Completed: {stats.completed}
                             </Badge>
@@ -562,8 +633,8 @@ Administration`;
                             </Badge>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4 mt-4">
-                        <div className="relative flex-1">
+                    <div className="flex items-center gap-4 mt-4 flex-wrap">
+                        <div className="relative flex-1 min-w-[200px]">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
                                 placeholder="Search by email..."
@@ -572,18 +643,19 @@ Administration`;
                                 className="pl-10"
                             />
                         </div>
-                        <select
-                            className="px-3 py-2 border rounded-md text-sm"
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                            <option value="all">All Status</option>
-                            <option value="completed">Completed</option>
-                            <option value="partial">Partial</option>
-                            <option value="missing">Missing</option>
-                        </select>
 
-                        {/* Кнопки массовых операций */}
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-[130px]">
+                                <SelectValue placeholder="All Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Status</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="partial">Partial</SelectItem>
+                                <SelectItem value="missing">Missing</SelectItem>
+                            </SelectContent>
+                        </Select>
+
                         <div className="flex gap-2">
                             <Button
                                 variant="outline"
@@ -628,7 +700,7 @@ Administration`;
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="rounded-md border">
+                    <div className="rounded-md border overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -698,7 +770,7 @@ Administration`;
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                {format(new Date(item.last_updated), 'dd.MM.yyyy HH:mm')}
+                                                {item.last_updated ? format(new Date(item.last_updated), 'dd.MM.yyyy HH:mm') : '-'}
                                             </TableCell>
                                             <TableCell>
                                                 <Badge className={statusColor}>
@@ -740,10 +812,111 @@ Administration`;
                             </TableBody>
                         </Table>
                     </div>
+
+                    {/* Пагинация */}
+                    {totalPages > 1 && (
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">
+                                    Rows per page:
+                                </span>
+                                <Select
+                                    value={pageSize.toString()}
+                                    onValueChange={(value) => onPageSizeChange?.(parseInt(value))}
+                                    disabled={isLoading}
+                                >
+                                    <SelectTrigger className="w-[70px] h-8">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="25">25</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                        <SelectItem value="100">100</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="text-sm text-muted-foreground">
+                                Showing {filteredData.length} of {totalCount} records
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap justify-center">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => onPageChange?.(Math.max(currentPage - 1, 1))}
+                                    disabled={currentPage === 1 || isLoading}
+                                    className="h-8"
+                                >
+                                    <ChevronLeft className="w-4 h-4 mr-1" />
+                                    Previous
+                                </Button>
+
+                                <div className="hidden md:flex gap-1">
+                                    {renderPageNumbers()}
+                                </div>
+
+                                <div className="flex md:hidden items-center gap-2">
+                                    <Select
+                                        value={currentPage.toString()}
+                                        onValueChange={(value) => onPageChange?.(parseInt(value))}
+                                        disabled={isLoading}
+                                    >
+                                        <SelectTrigger className="w-[100px] h-8">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                                <SelectItem key={page} value={page.toString()}>
+                                                    Page {page} of {totalPages}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="hidden sm:flex md:hidden items-center gap-2 text-sm">
+                                    <span className="font-medium">{currentPage}</span>
+                                    <span className="text-muted-foreground">of {totalPages}</span>
+                                </div>
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => onPageChange?.(Math.min(currentPage + 1, totalPages))}
+                                    disabled={currentPage === totalPages || isLoading}
+                                    className="h-8"
+                                >
+                                    Next
+                                    <ChevronRight className="w-4 h-4 ml-1" />
+                                </Button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                    Go to page:
+                                </span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={totalPages}
+                                    value={currentPage}
+                                    onChange={(e) => {
+                                        const page = parseInt(e.target.value);
+                                        if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                                            onPageChange?.(page);
+                                        }
+                                    }}
+                                    className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    disabled={isLoading}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
-            {/* Dialog for User Details */}
             <UserDetailsDialog
                 user={selectedUserForDetails}
                 periodStart={periodStart}
@@ -752,7 +925,6 @@ Administration`;
                 onOpenChange={setDetailsDialogOpen}
             />
 
-            {/* Диалог подтверждения отправки напоминания одному пользователю */}
             <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -790,7 +962,6 @@ Administration`;
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Диалог подтверждения массовой отправки напоминаний */}
             <AlertDialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -831,7 +1002,6 @@ Administration`;
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Диалог для отправки письма */}
             <Dialog open={letterDialogOpen} onOpenChange={setLetterDialogOpen}>
                 <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
                     <DialogHeader>

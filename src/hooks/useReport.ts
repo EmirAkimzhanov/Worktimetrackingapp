@@ -1,108 +1,95 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
 import { getReports, getReportsExcel } from '../services/reprot';
+import { useEffect } from 'react';
 
-// ========== КЭШ ДЛЯ ОТЧЕТОВ ==========
+// ========== КЛЮЧИ ДЛЯ REACT QUERY ==========
+const REPORTS_QUERY_KEY = 'reports';
+const REPORTS_EXCEL_QUERY_KEY = 'reports-excel';
 
-// Кэш для отчетов
-let reportsCache: { data: any; timestamp: number } | null = null;
-
-// Кэш для Excel отчетов (обычно не кэшируем, но добавим для единообразия)
-let reportsExcelCache: { data: any; timestamp: number } | null = null;
-
-const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
-
-// Функции очистки кэша
-const clearReportsCache = () => {
-    reportsCache = null;
-    console.log('Reports cache cleared');
-};
-
-const clearReportsExcelCache = () => {
-    reportsExcelCache = null;
-    console.log('Reports Excel cache cleared');
-};
-
-const clearAllReportsCaches = () => {
-    clearReportsCache();
-    clearReportsExcelCache();
-    console.log('All reports caches cleared');
-};
-
-// Функции получения кэшированных данных
-const getCachedReports = () => {
-    const now = Date.now();
-    if (reportsCache && (now - reportsCache.timestamp) < CACHE_DURATION) {
-        console.log('Returning cached reports data');
-        return reportsCache.data;
-    }
-    return null;
-};
-
-const getCachedReportsExcel = () => {
-    const now = Date.now();
-    if (reportsExcelCache && (now - reportsExcelCache.timestamp) < CACHE_DURATION) {
-        console.log('Returning cached reports Excel data');
-        return reportsExcelCache.data;
-    }
-    return null;
-};
-
-// ========== ХУКИ С КЭШИРОВАНИЕМ ==========
-
-export const useGetReports = () => {
+// ========== ХУК ДЛЯ ПОЛУЧЕНИЯ ОТЧЕТОВ С ПАГИНАЦИЕЙ ==========
+export const useGetReports = (params?: {
+    page?: number;
+    page_size?: number;
+    start_date?: string;
+    end_date?: string;
+    project_id?: number;
+    user_id?: number;
+    country_id?: number;
+    ordering?: string;
+}) => {
     const setReports = useUserStore((state) => state.setReports);
+    const storeReports = useUserStore((state) => state.reports);
 
-    return useMutation({
-        mutationFn: async (forceRefresh?: boolean) => {
-            // Проверяем кэш
-            if (!forceRefresh) {
-                const cached = getCachedReports();
-                if (cached) {
-                    return cached;
-                }
-            }
-
-            // Загружаем новые данные
-            console.log(forceRefresh ? 'Force refreshing reports' : 'Fetching fresh reports');
-            const data = await getReports();
-            reportsCache = { data, timestamp: Date.now() };
+    const query = useQuery({
+        queryKey: [REPORTS_QUERY_KEY, params],
+        queryFn: async () => {
+            console.log('Fetching reports with params:', params);
+            const data = await getReports(params);
             return data;
         },
-        onSuccess: (data) => {
-            setReports(data);
-            console.log('Reports loaded:', data);
-        },
-        onError: (error: Error) => {
-            console.error("Get reports error:", error.message);
-        },
+        staleTime: 5 * 60 * 1000, // 5 минут данные считаются свежими
+        gcTime: 10 * 60 * 1000, // 10 минут кэш хранится в памяти
+        refetchOnWindowFocus: false,
+        refetchOnMount: true,
     });
+
+    // Сохраняем данные в store при их получении
+    useEffect(() => {
+        if (query.data) {
+            setReports(query.data);
+            console.log('Reports loaded:', query.data?.count, 'records');
+        }
+    }, [query.data, setReports]);
+
+    return query;
 };
 
+// ========== ХУК ДЛЯ ЭКСПОРТА ОТЧЕТОВ В EXCEL ==========
 export const useGetReportsExcel = () => {
     return useMutation({
-        mutationFn: async (forceRefresh?: boolean) => {
-            // Для Excel отчетов обычно не нужно кэширование, но добавим по желанию
-            if (!forceRefresh) {
-                const cached = getCachedReportsExcel();
-                if (cached) {
-                    console.log('Returning cached reports Excel data');
-                    return cached;
-                }
-            }
-
-            // Загружаем новые данные
-            console.log(forceRefresh ? 'Force refreshing reports Excel' : 'Fetching fresh reports Excel');
-            const data = await getReportsExcel();
-
-            // Для Excel отчетов обычно не кэшируем, так как файлы могут быть большими
-            // Но если нужно, раскомментируйте следующую строку
-            // reportsExcelCache = { data, timestamp: Date.now() };
-
+        mutationFn: async (params?: {
+            page?: number;
+            page_size?: number;
+            start_date?: string;
+            end_date?: string;
+            project_id?: number;
+            user_id?: number;
+            country_id?: number;
+            ordering?: string;
+        }) => {
+            console.log('Exporting reports Excel with params:', params);
+            const data = await getReportsExcel(params);
             return data;
         },
-        onSuccess: (data) => {
-            console.log('Reports Excel loaded');
+        onSuccess: (data, params) => {
+            // Создаем ссылку для скачивания файла
+            if (data instanceof Blob) {
+                const url = window.URL.createObjectURL(data);
+                const link = document.createElement('a');
+                link.href = url;
+
+                // Формируем имя файла
+                let filename = 'reports.xlsx';
+                if (params?.start_date && params?.end_date) {
+                    filename = `reports_${params.start_date}_to_${params.end_date}.xlsx`;
+                } else if (params?.start_date) {
+                    filename = `reports_from_${params.start_date}.xlsx`;
+                } else if (params?.end_date) {
+                    filename = `reports_until_${params.end_date}.xlsx`;
+                } else {
+                    const date = new Date().toISOString().split('T')[0];
+                    filename = `reports_${date}.xlsx`;
+                }
+
+                link.setAttribute('download', filename);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+
+                console.log('Reports Excel downloaded:', filename);
+            }
         },
         onError: (error: Error) => {
             console.error("Get reports Excel error:", error.message);
@@ -110,54 +97,93 @@ export const useGetReportsExcel = () => {
     });
 };
 
-// ========== ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ==========
+// ========== ХУК ДЛЯ ЗАГРУЗКИ ВСЕХ ОТЧЕТОВ (БЕЗ ПАГИНАЦИИ) ==========
+export const useGetAllReports = () => {
+    return useMutation({
+        mutationFn: async (params?: {
+            start_date?: string;
+            end_date?: string;
+            project_id?: number;
+            user_id?: number;
+            country_id?: number;
+            ordering?: string;
+        }) => {
+            let allResults: any[] = [];
+            let currentPage = 1;
+            let hasNext = true;
+            const pageSize = 100;
 
+            console.log('Fetching all reports...');
+
+            while (hasNext) {
+                const response = await getReports({
+                    ...params,
+                    page: currentPage,
+                    page_size: pageSize,
+                });
+
+                allResults = [...allResults, ...(response.results || [])];
+                hasNext = !!response.next;
+                currentPage++;
+
+                console.log(`Loaded page ${currentPage - 1}, total: ${allResults.length}`);
+            }
+
+            console.log(`All reports loaded: ${allResults.length} records`);
+            return {
+                results: allResults,
+                count: allResults.length,
+            };
+        },
+        onError: (error: Error) => {
+            console.error("Get all reports error:", error.message);
+        },
+    });
+};
+
+// ========== УТИЛИТЫ ДЛЯ РАБОТЫ С КЭШЕМ ==========
 export const reportsCacheUtils = {
-    clearReportsCache: clearReportsCache,
-    clearReportsExcelCache: clearReportsExcelCache,
-    clearAll: clearAllReportsCaches,
-
-    isReportsCacheValid: () => {
-        if (!reportsCache) return false;
-        const now = Date.now();
-        return (now - reportsCache.timestamp) < CACHE_DURATION;
+    // Очистка кэша конкретного запроса
+    clearReportsCache: (queryClient: any, params?: any) => {
+        if (params) {
+            queryClient.removeQueries({ queryKey: [REPORTS_QUERY_KEY, params] });
+        } else {
+            queryClient.removeQueries({ queryKey: [REPORTS_QUERY_KEY] });
+        }
+        console.log('Reports cache cleared');
     },
 
-    isReportsExcelCacheValid: () => {
-        if (!reportsExcelCache) return false;
-        const now = Date.now();
-        return (now - reportsExcelCache.timestamp) < CACHE_DURATION;
+    // Очистка всего кэша отчетов
+    clearAllReportsCache: (queryClient: any) => {
+        queryClient.removeQueries({ queryKey: [REPORTS_QUERY_KEY] });
+        console.log('All reports caches cleared');
     },
 
-    getReportsCacheAge: () => {
-        if (!reportsCache) return null;
-        const now = Date.now();
-        return Math.floor((now - reportsCache.timestamp) / 1000); // в секундах
+    // Инвалидация (помечает данные как устаревшие)
+    invalidateReports: (queryClient: any, params?: any) => {
+        if (params) {
+            queryClient.invalidateQueries({ queryKey: [REPORTS_QUERY_KEY, params] });
+        } else {
+            queryClient.invalidateQueries({ queryKey: [REPORTS_QUERY_KEY] });
+        }
+        console.log('Reports invalidated');
     },
 
-    getReportsCacheAgeInMinutes: () => {
-        if (!reportsCache) return null;
-        const now = Date.now();
-        return Math.floor((now - reportsCache.timestamp) / 60000); // в минутах
+    // Получение кэшированных данных
+    getCachedReports: (queryClient: any, params?: any) => {
+        if (params) {
+            return queryClient.getQueryData([REPORTS_QUERY_KEY, params]);
+        }
+        return queryClient.getQueryData([REPORTS_QUERY_KEY]);
     },
 
-    getReportsExcelCacheAge: () => {
-        if (!reportsExcelCache) return null;
-        const now = Date.now();
-        return Math.floor((now - reportsExcelCache.timestamp) / 1000);
+    // Установка данных в кэш
+    setCachedReports: (queryClient: any, data: any, params?: any) => {
+        if (params) {
+            queryClient.setQueryData([REPORTS_QUERY_KEY, params], data);
+        } else {
+            queryClient.setQueryData([REPORTS_QUERY_KEY], data);
+        }
+        console.log('Reports cached');
     },
-
-    refreshReportsCache: async () => {
-        const data = await getReports();
-        reportsCache = { data, timestamp: Date.now() };
-        console.log('Reports cache refreshed');
-        return data;
-    },
-
-    refreshReportsExcelCache: async () => {
-        const data = await getReportsExcel();
-        reportsExcelCache = { data, timestamp: Date.now() };
-        console.log('Reports Excel cache refreshed');
-        return data;
-    }
 };

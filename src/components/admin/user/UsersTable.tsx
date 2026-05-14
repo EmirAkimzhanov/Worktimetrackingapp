@@ -116,22 +116,63 @@ export function UsersTable({
     const store_department_roles = useUserStore((state) => state.department_roles);
     const store_positions = useUserStore((state) => state.positions);
     const store_departments = useUserStore((state) => state.departments);
+
+    // ✅ Безопасное преобразование departments в массив с фильтрацией null
+    const departmentsArray = useMemo(() => {
+        if (!store_departments) return [];
+        if (Array.isArray(store_departments)) return store_departments.filter(d => d && d !== null);
+        if (typeof store_departments === 'object') return Object.values(store_departments).filter(d => d && d !== null);
+        return [];
+    }, [store_departments]);
+
+    // ✅ Безопасное преобразование positions в массив с фильтрацией null
+    const positionsArray = useMemo(() => {
+        if (!store_positions) return [];
+        if (Array.isArray(store_positions)) return store_positions.filter(p => p && p !== null);
+        if (typeof store_positions === 'object') return Object.values(store_positions).filter(p => p && p !== null);
+        return [];
+    }, [store_positions]);
+
+    // ✅ Безопасное преобразование department_roles в массив с фильтрацией null
+    const departmentRolesArray = useMemo(() => {
+        if (!store_department_roles) return [];
+        if (Array.isArray(store_department_roles)) return store_department_roles.filter(r => r && r !== null);
+        if (typeof store_department_roles === 'object') return Object.values(store_department_roles).filter(r => r && r !== null);
+        return [];
+    }, [store_department_roles]);
+
+    // ✅ Безопасное преобразование countries в массив с фильтрацией null
+    const countriesArray = useMemo(() => {
+        if (!store_countries) return [];
+        if (Array.isArray(store_countries)) return store_countries.filter(c => c && c !== null);
+        if (typeof store_countries === 'object') return Object.values(store_countries).filter(c => c && c !== null);
+        return [];
+    }, [store_countries]);
+
     const store_user_grades = useUserStore((state) => state.userGrades);
+
+    // ✅ Безопасное преобразование user_grades в массив с фильтрацией null
+    const userGradesArray = useMemo(() => {
+        if (!store_user_grades) return [];
+        if (Array.isArray(store_user_grades)) return store_user_grades.filter(g => g && g !== null);
+        if (typeof store_user_grades === 'object') return Object.values(store_user_grades).filter(g => g && g !== null);
+        return [];
+    }, [store_user_grades]);
 
     // Вытаскиваем все грейды из позиций
     const allGradesFromPositions = useMemo(() => {
         const grades: any[] = [];
-        if (store_positions && Array.isArray(store_positions)) {
-            store_positions.forEach((position: any) => {
+        if (positionsArray.length > 0) {
+            positionsArray.forEach((position: any) => {
                 if (position.grades && Array.isArray(position.grades)) {
-                    grades.push(...position.grades);
+                    grades.push(...position.grades.filter(g => g && g !== null));
                 }
             });
         }
         return grades;
-    }, [store_positions]);
+    }, [positionsArray]);
 
-    const availableGrades = store_user_grades?.length > 0 ? store_user_grades : allGradesFromPositions;
+    const availableGrades = userGradesArray.length > 0 ? userGradesArray : allGradesFromPositions;
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState<{
@@ -407,7 +448,7 @@ export function UsersTable({
                 </Button>
             </div>
 
-            {/* Filters Row - все в одну строку с горизонтальным скроллом */}
+            {/* Filters Row */}
             <div className="overflow-x-auto">
                 <div className="flex items-center gap-2 min-w-max">
                     {/* Поиск по имени */}
@@ -446,7 +487,7 @@ export function UsersTable({
                         />
                     </div>
 
-                    {/* Position */}
+                    {/* Position - исправлено */}
                     <Select
                         value={localFilters.position_name || "all"}
                         onValueChange={(value) => handleFilterChange('position_name', value === "all" ? "" : value)}
@@ -456,15 +497,18 @@ export function UsersTable({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Positions</SelectItem>
-                            {store_positions?.map((pos: any) => (
-                                <SelectItem key={pos.id} value={pos.name}>
-                                    {pos.name}
-                                </SelectItem>
-                            ))}
+                            {positionsArray.map((pos: any, idx: number) => {
+                                if (!pos || pos === null) return null;
+                                return (
+                                    <SelectItem key={pos.id || idx} value={pos.name || String(pos.id)}>
+                                        {pos.name || 'Unknown'}
+                                    </SelectItem>
+                                );
+                            }).filter(Boolean)}
                         </SelectContent>
                     </Select>
 
-                    {/* Department */}
+                    {/* Department - исправлено */}
                     <Select
                         value={localFilters.department_name || "all"}
                         onValueChange={(value) => handleFilterChange('department_name', value === "all" ? "" : value)}
@@ -474,15 +518,18 @@ export function UsersTable({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Depts</SelectItem>
-                            {store_departments?.map((dept: any) => (
-                                <SelectItem key={dept.id} value={dept.name}>
-                                    {dept.name}
-                                </SelectItem>
-                            ))}
+                            {departmentsArray.map((dept: any, idx: number) => {
+                                if (!dept || dept === null) return null;
+                                return (
+                                    <SelectItem key={dept.id || idx} value={dept.name || String(dept.id)}>
+                                        {dept.name || 'Unknown'}
+                                    </SelectItem>
+                                );
+                            }).filter(Boolean)}
                         </SelectContent>
                     </Select>
 
-                    {/* Department Role */}
+                    {/* Department Role - исправлено */}
                     <Select
                         value={localFilters.department_role_name || "all"}
                         onValueChange={(value) => handleFilterChange('department_role_name', value === "all" ? "" : value)}
@@ -492,15 +539,18 @@ export function UsersTable({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Roles</SelectItem>
-                            {store_department_roles?.map((role: any) => (
-                                <SelectItem key={role.id} value={role.name}>
-                                    {role.display_name || role.name}
-                                </SelectItem>
-                            ))}
+                            {departmentRolesArray.map((role: any, idx: number) => {
+                                if (!role || role === null) return null;
+                                return (
+                                    <SelectItem key={role.id || idx} value={role.name || String(role.id)}>
+                                        {role.display_name || role.name || 'Unknown'}
+                                    </SelectItem>
+                                );
+                            }).filter(Boolean)}
                         </SelectContent>
                     </Select>
 
-                    {/* Grade */}
+                    {/* Grade - исправлено */}
                     <Select
                         value={localFilters.grade_name || "all"}
                         onValueChange={(value) => handleFilterChange('grade_name', value === "all" ? "" : value)}
@@ -510,15 +560,18 @@ export function UsersTable({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Grades</SelectItem>
-                            {availableGrades?.map((grade: any) => (
-                                <SelectItem key={grade.id} value={grade.name}>
-                                    {grade.name}
-                                </SelectItem>
-                            ))}
+                            {availableGrades.map((grade: any, idx: number) => {
+                                if (!grade || grade === null) return null;
+                                return (
+                                    <SelectItem key={grade.id || idx} value={grade.name || String(grade.id)}>
+                                        {grade.name || 'Unknown'}
+                                    </SelectItem>
+                                );
+                            }).filter(Boolean)}
                         </SelectContent>
                     </Select>
 
-                    {/* Country */}
+                    {/* Country - исправлено */}
                     <Select
                         value={localFilters.country_code || "all"}
                         onValueChange={(value) => handleFilterChange('country_code', value === "all" ? "" : value)}
@@ -528,11 +581,14 @@ export function UsersTable({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Countries</SelectItem>
-                            {store_countries?.map((country: any) => (
-                                <SelectItem key={country.id} value={country.code}>
-                                    {country.name}
-                                </SelectItem>
-                            ))}
+                            {countriesArray.map((country: any, idx: number) => {
+                                if (!country || country === null) return null;
+                                return (
+                                    <SelectItem key={country.id || idx} value={country.code || String(country.id)}>
+                                        {country.name || 'Unknown'}
+                                    </SelectItem>
+                                );
+                            }).filter(Boolean)}
                         </SelectContent>
                     </Select>
 

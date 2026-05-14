@@ -1,17 +1,14 @@
-// src/components/admin/ReportsTab.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Label } from '../../ui/label';
-import { Search, Download, Filter, Calendar, Users, Building, RefreshCw, ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
+import { Search, Download, Filter, Calendar, Users, Building, RefreshCw, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetReports, useGetReportsExcel } from '../../../hooks/useReport';
 import { useUserStore } from '../../../store/UsersStore';
-import axios from 'axios';
-import { api } from '../../../consts/api';
 
 interface TimesheetRecord {
     id: number;
@@ -29,14 +26,6 @@ interface TimesheetRecord {
     task_type_name: string;
     task_name: string;
     description: string;
-}
-
-interface Employee {
-    id: number;
-    name: string;
-    department: string;
-    email?: string;
-    status: 'active' | 'inactive';
 }
 
 interface Department {
@@ -59,46 +48,47 @@ export function ReportsTab() {
     });
     const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
     const [selectedPerson, setSelectedPerson] = useState<string>('all');
-    const [rowsPerPage, setRowsPerPage] = useState<number>(25);
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const [rowsPerPage, setRowsPerPage] = useState<number>(5);
 
-    // Состояния для данных
+    // Состояния для данных с пагинацией от API
     const [timesheetData, setTimesheetData] = useState<TimesheetRecord[]>([]);
-    const [filteredData, setFilteredData] = useState<TimesheetRecord[]>([]);
-    const { mutate: getReports } = useGetReports();
-    const store_reports = useUserStore((state) => state.reports);
-    const { mutate: getReportsExcel } = useGetReportsExcel();
-
-    const [departments, setDepartments] = useState<Department[]>([]);
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [isExporting, setIsExporting] = useState<boolean>(false);
-
-    // Пагинация
+    const [totalCount, setTotalCount] = useState<number>(0);
     const [currentPage, setCurrentPage] = useState<number>(1);
-    const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [employees, setEmployees] = useState<{ id: number; name: string; department: string; email: string }[]>([]);
 
-    useEffect(() => {
-        getReports();
-    }, []);
+    // Состояния для фильтров API
+    const [apiFilters, setApiFilters] = useState<{
+        start_date?: string;
+        end_date?: string;
+        department?: string;
+        user_email?: string;
+        search?: string;
+    }>({});
 
-    // Обновление списка отделов из данных
-    useEffect(() => {
-        if (store_reports && store_reports.length > 0) {
-            const uniqueDepartments = [...new Set(store_reports.map(report => report.user_department))];
-            const departmentList = uniqueDepartments.map((dept, index) => ({
-                id: index + 1,
-                name: dept,
-                code: dept
-            }));
-            setDepartments(departmentList);
-        }
-    }, [store_reports]);
+    const { data: reportsData, isLoading, refetch } = useGetReports({
+        page: currentPage,
+        page_size: rowsPerPage,
+        start_date: apiFilters.start_date,
+        end_date: apiFilters.end_date,
+        department: apiFilters.department,
+        user_email: apiFilters.user_email,
+        search: apiFilters.search,
+    });
 
+    const { mutate: exportExcel, isPending: isExporting } = useGetReportsExcel();
+
+    // Обновляем данные при изменении параметров запроса
     useEffect(() => {
-        if (store_reports && store_reports.length > 0) {
-            const transformedData: TimesheetRecord[] = store_reports.map((report, index) => ({
-                id: index + 1,
+        refetch();
+    }, [currentPage, rowsPerPage, apiFilters, refetch]);
+
+    // Обрабатываем полученные данные
+    useEffect(() => {
+        if (reportsData) {
+            const transformedData: TimesheetRecord[] = (reportsData.results || []).map((report: any, index: number) => ({
+                id: report.id || index + 1,
                 date: report.date,
                 hours: report.hours,
                 user_email: report.user_email,
@@ -116,26 +106,35 @@ export function ReportsTab() {
             }));
 
             setTimesheetData(transformedData);
+            setTotalCount(reportsData.count || 0);
 
-            const uniqueEmployees = transformedData
-                .filter((report, index, self) =>
-                    index === self.findIndex(r => r.user_email === report.user_email)
-                )
-                .map((report, idx) => ({
-                    id: idx + 1,
-                    name: report.user_email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    department: report.user_department,
-                    email: report.user_email,
-                    status: 'active' as const
+            // Обновляем списки отделов и сотрудников при первой загрузке
+            if (reportsData.results && reportsData.results.length > 0 && departments.length === 0) {
+                const uniqueDepartments = [...new Set(reportsData.results.map((report: any) => report.user_department))];
+                const departmentList = uniqueDepartments.map((dept, index) => ({
+                    id: index + 1,
+                    name: dept,
+                    code: dept
                 }));
+                setDepartments(departmentList);
 
-            setEmployees(uniqueEmployees);
-
-            applyFilters(transformedData);
+                const uniqueEmployees = reportsData.results
+                    .filter((report: any, index: number, self: any[]) =>
+                        index === self.findIndex((r: any) => r.user_email === report.user_email)
+                    )
+                    .map((report: any, idx: number) => ({
+                        id: idx + 1,
+                        name: report.user_email.split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+                        department: report.user_department,
+                        email: report.user_email
+                    }));
+                setEmployees(uniqueEmployees);
+            }
         }
-    }, [store_reports]);
+    }, [reportsData]);
 
-    const getDateRange = () => {
+    // Получение диапазона дат для API
+    const getDateRangeForAPI = useCallback(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         let start: Date;
@@ -185,74 +184,39 @@ export function ReportsTab() {
         start.setHours(0, 0, 0, 0);
         end.setHours(23, 59, 59, 999);
 
-        return { start, end };
-    };
+        return {
+            start_date: start.toISOString().split('T')[0],
+            end_date: end.toISOString().split('T')[0]
+        };
+    }, [dateType, customDateRange]);
 
     // Применение фильтров
-    const applyFilters = (data?: TimesheetRecord[]) => {
-        const recordsToFilter = data || timesheetData;
-        const { start, end } = getDateRange();
+    const applyFilters = useCallback(() => {
+        const { start_date, end_date } = getDateRangeForAPI();
 
-        let filtered = recordsToFilter.filter(record => {
-            const recordDate = new Date(record.date);
-            recordDate.setHours(0, 0, 0, 0);
+        const newFilters: typeof apiFilters = {
+            start_date,
+            end_date,
+        };
 
-            // Фильтр по дате
-            if (recordDate < start || recordDate > end) {
-                return false;
+        if (selectedDepartment !== 'all') {
+            newFilters.department = selectedDepartment;
+        }
+
+        if (selectedPerson !== 'all') {
+            const selectedEmployee = employees.find(emp => emp.id.toString() === selectedPerson);
+            if (selectedEmployee) {
+                newFilters.user_email = selectedEmployee.email;
             }
+        }
 
-            // Фильтр по отделу
-            if (selectedDepartment !== 'all' && record.user_department !== selectedDepartment) {
-                return false;
-            }
+        if (searchQuery) {
+            newFilters.search = searchQuery;
+        }
 
-            // Фильтр по сотруднику
-            if (selectedPerson !== 'all') {
-                const selectedEmployee = employees.find(emp => emp.id.toString() === selectedPerson);
-                if (selectedEmployee && record.user_email !== selectedEmployee.email) {
-                    return false;
-                }
-            }
-
-            // Фильтр по поиску
-            if (searchQuery) {
-                const searchLower = searchQuery.toLowerCase();
-                return (
-                    record.user_email.toLowerCase().includes(searchLower) ||
-                    record.client_name?.toLowerCase().includes(searchLower) ||
-                    record.code?.toLowerCase().includes(searchLower) ||
-                    record.description?.toLowerCase().includes(searchLower) ||
-                    record.task_name?.toLowerCase().includes(searchLower) ||
-                    record.user_department?.toLowerCase().includes(searchLower) ||
-                    record.project_service_line?.toLowerCase().includes(searchLower)
-                );
-            }
-
-            return true;
-        });
-
-        setFilteredData(filtered);
+        setApiFilters(newFilters);
         setCurrentPage(1);
-
-        if (filtered.length === 0 && recordsToFilter.length > 0) {
-            toast.warning('No records found with current filters');
-        }
-    };
-
-    // Ручная загрузка данных
-    const loadTimesheetData = async () => {
-        setIsLoading(true);
-        try {
-            getReports();
-            toast.success('Data loaded successfully');
-        } catch (error) {
-            console.error('Failed to load data:', error);
-            toast.error('Failed to load data');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    }, [dateType, customDateRange, selectedDepartment, selectedPerson, searchQuery, employees, getDateRangeForAPI]);
 
     // Сброс фильтров
     const resetFilters = () => {
@@ -266,104 +230,126 @@ export function ReportsTab() {
         setSearchQuery('');
         setCurrentPage(1);
 
-        applyFilters(timesheetData);
+        const { start_date, end_date } = getDateRangeForAPI();
+        setApiFilters({ start_date, end_date });
 
         toast.success('Filters reset');
     };
 
-    // Экспорт в Excel через API
-    const exportToExcel = async () => {
-        if (filteredData.length === 0) {
-            toast.error('No data to export');
-            return;
+    // Экспорт в Excel
+    const handleExportExcel = () => {
+        const { start_date, end_date } = getDateRangeForAPI();
+
+        const exportParams: any = {
+            start_date,
+            end_date,
+        };
+
+        if (selectedDepartment !== 'all') {
+            exportParams.department = selectedDepartment;
         }
 
-        try {
-            setIsExporting(true);
-
-            const token = useUserStore.getState().access_token;
-
-            if (!token) {
-                toast.error('No access token available');
-                return;
+        if (selectedPerson !== 'all') {
+            const selectedEmployee = employees.find(emp => emp.id.toString() === selectedPerson);
+            if (selectedEmployee) {
+                exportParams.user_email = selectedEmployee.email;
             }
-
-            const response = await axios({
-                url: `${api}api/calendars/time-entries/report/?export=excel`,
-                method: 'GET',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-                responseType: 'blob'
-            });
-
-            const blob = response.data;
-
-            const contentDisposition = response.headers['content-disposition'];
-            let filename = `timesheet_report_${new Date().toISOString().split('T')[0]}.xlsx`;
-
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                if (filenameMatch && filenameMatch[1]) {
-                    filename = filenameMatch[1].replace(/['"]/g, '');
-                }
-            }
-
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', filename);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-
-            toast.success('Report exported successfully');
-        } catch (error) {
-            console.error('Failed to export data:', error);
-
-            if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
-                try {
-                    const errorText = await error.response.data.text();
-                    const errorData = JSON.parse(errorText);
-                    toast.error(errorData.message || 'Failed to export data');
-                } catch {
-                    toast.error('Failed to export data');
-                }
-            } else {
-                toast.error('Failed to export data');
-            }
-        } finally {
-            setIsExporting(false);
         }
+
+        if (searchQuery) {
+            exportParams.search = searchQuery;
+        }
+
+        exportExcel(exportParams);
     };
 
-    // Получение данных для текущей страницы
-    const getCurrentPageData = () => {
-        const startIndex = (currentPage - 1) * rowsPerPage;
-        const endIndex = startIndex + rowsPerPage;
-        return filteredData.slice(startIndex, endIndex);
-    };
-
-    // Автоматическое применение фильтров при изменении настроек
+    // Автоматическое применение фильтров при изменении
     useEffect(() => {
-        if (timesheetData.length > 0) {
-            const timeoutId = setTimeout(() => {
-                applyFilters();
-            }, 300);
+        const timeoutId = setTimeout(() => {
+            applyFilters();
+        }, 500);
 
-            return () => clearTimeout(timeoutId);
-        }
-    }, [dateType, customDateRange, selectedDepartment, selectedPerson, searchQuery]);
-
-    // При изменении rowsPerPage сбрасываем на первую страницу
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [rowsPerPage]);
+        return () => clearTimeout(timeoutId);
+    }, [dateType, customDateRange, selectedDepartment, selectedPerson, searchQuery, applyFilters]);
 
     // Форматирование часов
     const formatHours = (hours: number) => {
         return hours.toFixed(2);
+    };
+
+    const totalPages = Math.ceil(totalCount / rowsPerPage);
+
+    // Функция для отображения номеров страниц
+    const renderPageNumbers = () => {
+        const pages = [];
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+        if (endPage - startPage + 1 < maxVisiblePages) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+
+        if (startPage > 1) {
+            pages.push(
+                <Button
+                    key="1"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={isLoading}
+                    className="min-w-[32px] h-8 hidden sm:inline-flex"
+                >
+                    1
+                </Button>
+            );
+            if (startPage > 2) {
+                pages.push(
+                    <span key="ellipsis1" className="px-1 text-muted-foreground hidden sm:inline">
+                        ...
+                    </span>
+                );
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push(
+                <Button
+                    key={i}
+                    variant={currentPage === i ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(i)}
+                    disabled={isLoading}
+                    className="min-w-[32px] h-8"
+                >
+                    {i}
+                </Button>
+            );
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                pages.push(
+                    <span key="ellipsis2" className="px-1 text-muted-foreground hidden sm:inline">
+                        ...
+                    </span>
+                );
+            }
+            pages.push(
+                <Button
+                    key={totalPages}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={isLoading}
+                    className="min-w-[32px] h-8 hidden sm:inline-flex"
+                >
+                    {totalPages}
+                </Button>
+            );
+        }
+
+        return pages;
     };
 
     return (
@@ -378,7 +364,7 @@ export function ReportsTab() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={loadTimesheetData}
+                        onClick={() => refetch()}
                         disabled={isLoading || isExporting}
                     >
                         <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
@@ -502,12 +488,16 @@ export function ReportsTab() {
                             </Label>
                             <Select
                                 value={rowsPerPage.toString()}
-                                onValueChange={(value) => setRowsPerPage(parseInt(value))}
+                                onValueChange={(value) => {
+                                    setRowsPerPage(parseInt(value));
+                                    setCurrentPage(1);
+                                }}
                             >
                                 <SelectTrigger id="rowsPerPage">
                                     <SelectValue placeholder="Rows per page" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="5">5</SelectItem>
                                     <SelectItem value="10">10</SelectItem>
                                     <SelectItem value="25">25</SelectItem>
                                     <SelectItem value="50">50</SelectItem>
@@ -539,12 +529,13 @@ export function ReportsTab() {
                             className="flex-1"
                             disabled={isExporting}
                         >
+                            <X className="w-4 h-4 mr-2" />
                             Reset Filters
                         </Button>
                         <Button
-                            onClick={exportToExcel}
+                            onClick={handleExportExcel}
                             className="flex-1"
-                            disabled={filteredData.length === 0 || isExporting}
+                            disabled={totalCount === 0 || isExporting}
                         >
                             {isExporting ? (
                                 <>
@@ -570,8 +561,8 @@ export function ReportsTab() {
                             Report Results
                         </CardTitle>
                         <div className="text-sm text-muted-foreground">
-                            Showing {filteredData.length > 0 ? ((currentPage - 1) * rowsPerPage) + 1 : 0}-
-                            {Math.min(currentPage * rowsPerPage, filteredData.length)} of {filteredData.length} records
+                            Showing {totalCount > 0 ? ((currentPage - 1) * rowsPerPage) + 1 : 0}-
+                            {Math.min(currentPage * rowsPerPage, totalCount)} of {totalCount} records
                         </div>
                     </div>
                 </CardHeader>
@@ -581,7 +572,7 @@ export function ReportsTab() {
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
                             <span className="ml-2">Loading data...</span>
                         </div>
-                    ) : filteredData.length === 0 ? (
+                    ) : timesheetData.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                             No records found. Try adjusting your filters or click "Reset Filters".
                         </div>
@@ -607,7 +598,7 @@ export function ReportsTab() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {getCurrentPageData().map((record) => (
+                                        {timesheetData.map((record) => (
                                             <TableRow key={record.id} className="hover:bg-gray-50">
                                                 <TableCell className="font-medium">
                                                     {new Date(record.date).toLocaleDateString('en-GB')}
@@ -664,31 +655,83 @@ export function ReportsTab() {
                                 </Table>
                             </div>
 
-                            {/* Пагинация */}
+                            {/* Пагинация с номерами страниц */}
                             {totalPages > 1 && (
-                                <div className="flex items-center justify-between mt-4">
+                                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4">
                                     <div className="text-sm text-muted-foreground">
                                         Page {currentPage} of {totalPages}
                                     </div>
-                                    <div className="flex gap-2">
+
+                                    <div className="flex items-center gap-2 flex-wrap justify-center">
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                            disabled={currentPage === 1}
+                                            disabled={currentPage === 1 || isLoading}
+                                            className="h-8"
                                         >
                                             <ChevronLeft className="w-4 h-4 mr-1" />
                                             Previous
                                         </Button>
+
+                                        <div className="hidden md:flex gap-1">
+                                            {renderPageNumbers()}
+                                        </div>
+
+                                        <div className="flex md:hidden items-center gap-2">
+                                            <Select
+                                                value={currentPage.toString()}
+                                                onValueChange={(value) => setCurrentPage(parseInt(value))}
+                                                disabled={isLoading}
+                                            >
+                                                <SelectTrigger className="w-[100px] h-8">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                                        <SelectItem key={page} value={page.toString()}>
+                                                            Page {page} of {totalPages}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="hidden sm:flex md:hidden items-center gap-2 text-sm">
+                                            <span className="font-medium">{currentPage}</span>
+                                            <span className="text-muted-foreground">of {totalPages}</span>
+                                        </div>
+
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                            disabled={currentPage === totalPages}
+                                            disabled={currentPage === totalPages || isLoading}
+                                            className="h-8"
                                         >
                                             Next
                                             <ChevronRight className="w-4 h-4 ml-1" />
                                         </Button>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                            Go to page:
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={totalPages}
+                                            value={currentPage}
+                                            onChange={(e) => {
+                                                const page = parseInt(e.target.value);
+                                                if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                                                    setCurrentPage(page);
+                                                }
+                                            }}
+                                            className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={isLoading}
+                                        />
                                     </div>
                                 </div>
                             )}

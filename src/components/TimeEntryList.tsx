@@ -92,6 +92,9 @@ export function TimeEntryList() {
   const store_projects = useUserStore((state) => state.projects);
   const time_entries = useUserStore((state) => state.time_entries);
 
+  // ✅ ГЛАВНОЕ ИСПРАВЛЕНИЕ: проверяем, что time_entries - это массив
+  const safeTimeEntries = Array.isArray(time_entries) ? time_entries : [];
+
   // Вспомогательная функция для получения названия задачи
   const getTaskName = (taskId: number | null, taskType: string | null): string => {
     if (!taskId) return taskType || 'Unknown Task';
@@ -220,23 +223,23 @@ export function TimeEntryList() {
     });
   };
 
-  // Получаем реальные записи из стора и группируем их
+  // ✅ Исправлено: используем safeTimeEntries вместо time_entries
   const groupedEntries = useMemo(() => {
-    if (!time_entries || time_entries.length === 0) {
+    if (safeTimeEntries.length === 0) {
       return [];
     }
 
-    const transformedEntries = time_entries.map(entry => {
+    const transformedEntries = safeTimeEntries.map(entry => {
       const dateValue = entry.date || entry.start_date;
 
       return {
-        id: entry.id.toString(),
+        id: entry.id?.toString() || Math.random().toString(),
         user: entry.user,
         date: dateValue,
         start_date: entry.start_date,
         end_date: entry.end_date,
-        hours: entry.hours,
-        description: entry.description,
+        hours: entry.hours || 0,
+        description: entry.description || '',
         country: entry.country,
         client: entry.client,
         project: entry.project,
@@ -304,7 +307,7 @@ export function TimeEntryList() {
     return Array.from(groups.values()).sort((a, b) => {
       return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
     });
-  }, [time_entries]);
+  }, [safeTimeEntries]);
 
   // Применяем фильтры к сгруппированным записям
   const filteredGroups = useMemo(() => {
@@ -644,7 +647,7 @@ export function TimeEntryList() {
               </CardTitle>
               <CardDescription>
                 {filteredGroups.length} groups · {totalHours.toFixed(1)} total hours
-                {time_entries && ` · ${time_entries.length} total entries in database`}
+                {safeTimeEntries && ` · ${safeTimeEntries.length} total entries in database`}
                 {(isLoadingEntries || isSubmitting || isDeleting || isBulkDeleting) && ' · Loading...'}
               </CardDescription>
             </div>
@@ -694,7 +697,7 @@ export function TimeEntryList() {
                     {filteredGroups.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={8} className="text-center text-slate-500 py-8">
-                          {time_entries && time_entries.length > 0
+                          {safeTimeEntries.length > 0
                             ? 'No time entries match your filters'
                             : 'No time entries found. Add some using the form above.'}
                         </TableCell>
@@ -882,7 +885,7 @@ export function TimeEntryList() {
             <div className="border-t bg-slate-50 px-6 py-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-slate-600">
-                  Showing {filteredGroups.length} groups ({filteredGroups.reduce((sum, g) => sum + g.count, 0)} entries) of {groupedEntries.length} groups ({time_entries?.length || 0} entries in database)
+                  Showing {filteredGroups.length} groups ({filteredGroups.reduce((sum, g) => sum + g.count, 0)} entries) of {groupedEntries.length} groups ({safeTimeEntries.length} entries in database)
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 text-sm">

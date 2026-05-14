@@ -19,7 +19,6 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useSendReminder } from '../../../hooks/useTimeEntry';
 
-// Моковые уведомления пока оставим, так как для них еще нет API
 const mockNotifications: TimeSheetNotification[] = [
     {
         id: '1',
@@ -43,23 +42,30 @@ const mockNotifications: TimeSheetNotification[] = [
     }
 ];
 
-// Функция для определения статуса на основе completion (только 3 статуса)
-const getStatusFromCompletion = (completion: number) => {
-    if (completion >= 100) return 'completed';
-    if (completion === 0) return 'missing';
-    return 'partial'; // от 1 до 99
-};
-
 export default function MonitoringPage() {
     const [selectedCountry, setSelectedCountry] = useState<string>('');
     const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
+    // Состояния для пагинации
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
+    // Флаг, что данные были загружены хотя бы раз
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
+
     const { mutate: getMonitoring, isPending: isMonitoringLoading } = useGetMonitoring();
     const { mutate: getCountries } = useGetCountries();
     const { mutate: sendReminder } = useSendReminder();
     const countries = useUserStore((state) => state.countries);
-    const monitoring = useUserStore((state) => state.monitoring);
+    const monitoringData = useUserStore((state) => state.monitoring);
+
+    // Данные с пагинацией от API
+    const [paginatedData, setPaginatedData] = useState<{
+        results: TimeSheetMonitoring[];
+        count: number;
+        next: string | null;
+        previous: string | null;
+    } | null>(null);
 
     useEffect(() => {
         getCountries();
@@ -84,19 +90,53 @@ export default function MonitoringPage() {
             return;
         }
 
+        // Сбрасываем на первую страницу при новом запросе
+        setCurrentPage(1);
+        setIsDataLoaded(true);
+
         getMonitoring({
             start_date: startDate,
             end_date: endDate,
-            country: selectedCountry
+            country_id: parseInt(selectedCountry),
+            page: 1,
+            page_size: pageSize
         }, {
+            onSuccess: (data) => {
+                setPaginatedData(data);
+                console.log('Monitoring data loaded:', data);
+            },
             onError: (error) => {
                 toast.error(`Failed to load monitoring data: ${error.message}`);
             }
         });
     };
 
-    // Используем реальные данные из store
-    const displayData = monitoring || [];
+    // Обновляем данные только если данные уже были загружены (при смене страницы)
+    useEffect(() => {
+        if (isDataLoaded && selectedCountry && startDate && endDate) {
+            getMonitoring({
+                start_date: startDate,
+                end_date: endDate,
+                country_id: parseInt(selectedCountry),
+                page: currentPage,
+                page_size: pageSize
+            }, {
+                onSuccess: (data) => {
+                    setPaginatedData(data);
+                },
+                onError: (error) => {
+                    console.error('Failed to load monitoring data:', error);
+                }
+            });
+        }
+    }, [currentPage, pageSize]);
+
+    // Безопасное получение данных
+    const safeMonitoringData = Array.isArray(monitoringData) ? monitoringData : [];
+
+    // Используем данные с пагинацией или все данные из store
+    const displayData = paginatedData?.results || safeMonitoringData;
+    const totalCount = paginatedData?.count || safeMonitoringData.length;
 
     const getDisplayPeriod = () => {
         if (startDate && endDate) {
@@ -108,9 +148,11 @@ export default function MonitoringPage() {
         return 'Select date range';
     };
 
-    // Вычисляем статистику на основе реальных данных (только 3 категории)
+    // Статистика на основе всех данных
     const stats = useMemo(() => {
-        if (!displayData || displayData.length === 0) {
+        const allData = safeMonitoringData;
+
+        if (allData.length === 0) {
             return {
                 totalUsers: 0,
                 averageCompletion: 0,
@@ -120,21 +162,42 @@ export default function MonitoringPage() {
             };
         }
 
-        const totalCompletion = displayData.reduce((sum, item) => sum + item.completion, 0);
-        const averageCompletion = totalCompletion / displayData.length;
+        const totalCompletion = allData.reduce((sum, item) => sum + (item?.completion || 0), 0);
+        const averageCompletion = totalCompletion / allData.length;
 
-        const completed = displayData.filter(item => item.completion >= 100).length;
-        const partial = displayData.filter(item => item.completion > 0 && item.completion < 100).length;
-        const missing = displayData.filter(item => item.completion === 0).length;
+        const completed = allData.filter(item => (item?.completion || 0) >= 100).length;
+        const partial = allData.filter(item => (item?.completion || 0) > 0 && (item?.completion || 0) < 100).length;
+        const missing = allData.filter(item => (item?.completion || 0) === 0).length;
 
         return {
-            totalUsers: displayData.length,
+            totalUsers: allData.length,
             averageCompletion: Math.round(averageCompletion * 10) / 10,
             completed,
             partial,
             missing
         };
-    }, [displayData]);
+    }, [safeMonitoringData]);
+
+    const handleSendReminder = (userIds: number[], period: { start: string; end: string }) => {
+        sendReminder({
+            emails: userIds.map(id => id.toString()),
+            start_date: period.start,
+            end_date: period.end
+        }, {
+            onSuccess: () => {
+                toast.success(`Reminders sent to ${userIds.length} user(s)`);
+                // Обновляем данные после отправки
+                handleLoadMonitoring();
+            },
+            onError: (error) => {
+                toast.error(`Failed to send reminders: ${error.message}`);
+            }
+        });
+    };
+
+    const handleViewDetails = (userId: number) => {
+        console.log('View details for user:', userId);
+    };
 
     return (
         <div className="space-y-6">
@@ -246,67 +309,69 @@ export default function MonitoringPage() {
                 </CardContent>
             </Card>
 
-            {/* Dashboard Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Total Users
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stats.totalUsers}</div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Active team members
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Completion Rate
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">
-                            {stats.averageCompletion}%
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Average completion rate
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Completed
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">
-                            {stats.completed}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Fully completed
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">
-                            Missing
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-red-600">
-                            {stats.missing}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            No entries
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Dashboard Stats - показываем только если данные загружены */}
+            {isDataLoaded && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Total Users
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{stats.totalUsers}</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Active team members
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Completion Rate
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {stats.averageCompletion}%
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Average completion rate
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Completed
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-green-600">
+                                {stats.completed}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Fully completed
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Missing
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-red-600">
+                                {stats.missing}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                No entries
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* Main Content Tabs */}
             <Tabs defaultValue="monitoring" className="space-y-4">
@@ -315,33 +380,22 @@ export default function MonitoringPage() {
                         <Calendar className="w-4 h-4" />
                         Monitoring
                     </TabsTrigger>
-
-                    {/* <TabsTrigger value="settings" className="gap-2">
-                        <Settings className="w-4 h-4" />
-                        Settings
-                    </TabsTrigger> */}
                 </TabsList>
 
                 <TabsContent value="monitoring" className="space-y-4">
                     <MonitoringTable
                         data={displayData}
-                        onSendReminder={(userIds, period) => {
-                            console.log('Send reminder to:', userIds, 'for period:', period);
-                        }}
-                        onViewDetails={(userId) => {
-                            console.log('View details for user:', userId);
-                        }}
+                        totalCount={totalCount}
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={setPageSize}
+                        onSendReminder={handleSendReminder}
+                        onViewDetails={handleViewDetails}
                         periodStart={startDate}
                         periodEnd={endDate}
+                        isLoading={isMonitoringLoading}
                     />
-                </TabsContent>
-
-                <TabsContent value="notifications" className="space-y-4">
-                    <NotificationHistory notifications={mockNotifications} />
-                </TabsContent>
-
-                <TabsContent value="settings" className="space-y-4">
-                    <SettingsPanel />
                 </TabsContent>
             </Tabs>
         </div>

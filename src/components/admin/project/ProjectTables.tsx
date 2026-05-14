@@ -199,7 +199,7 @@ export function ProjectsTable({
 
     const getProjectStats = (projectId: string) => {
         const projectEntries = entries.filter(e => e.projectId === projectId);
-        const totalHours = projectEntries.reduce((sum, e) => sum + e.hours, 0);
+        const totalHours = projectEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
         return {
             entriesCount: projectEntries.length,
             totalHours: totalHours.toFixed(1),
@@ -209,17 +209,32 @@ export function ProjectsTable({
 
     const getProjectManagerName = (managerEmail?: string) => {
         if (!managerEmail) return 'Not assigned';
-        const user = users.find(u => u.email === managerEmail);
-        return user ? `${user.first_name} ${user.last_name}` : managerEmail;
+        const user = users?.find(u => u?.email === managerEmail);
+        if (user) {
+            const firstName = user.first_name || '';
+            const lastName = user.last_name || '';
+            const fullName = `${firstName} ${lastName}`.trim();
+            return fullName || managerEmail;
+        }
+        return managerEmail;
     };
 
     const getDepartmentName = (departmentName?: string) => {
         if (!departmentName) return '-';
-        const department = store_departments?.find(d => d.name === departmentName);
-        return department ? department.name : departmentName;
+
+        const department = departmentsArray.find(
+            (d: any) => d?.name === departmentName
+        );
+
+        return department?.name || departmentName;
     };
 
-    const getLastCode = (codes: any[]) => codes?.[codes.length - 1];
+    // ✅ Безопасная функция получения последнего кода
+    const getLastCode = (codes: any[]) => {
+        if (!Array.isArray(codes) || codes.length === 0) return null;
+        const last = codes[codes.length - 1];
+        return last && typeof last === 'object' ? last : null;
+    };
 
     const toggleCodeDrawer = (projectId: string) => {
         setExpandedCodeDrawers(prev => ({
@@ -354,35 +369,52 @@ export function ProjectsTable({
 
     const activeFiltersCount = Object.values(localFilters).filter(v => v && v !== '' && v !== 'all').length;
 
-    // Удаляем дубликаты проектов по id
+    // ✅ Удаляем дубликаты проектов по id
     const uniqueProjects = useMemo(() => {
         const uniqueMap = new Map();
-        projects.forEach((project: any) => {
-            if (!uniqueMap.has(project.id)) {
-                uniqueMap.set(project.id, project);
-            }
-        });
+        if (Array.isArray(projects)) {
+            projects.forEach((project: any) => {
+                if (project && project.id && !uniqueMap.has(project.id)) {
+                    uniqueMap.set(project.id, project);
+                }
+            });
+        }
         return Array.from(uniqueMap.values());
     }, [projects]);
 
-    // Функция для безопасного получения массива стран
-    const getCountriesArray = useCallback(() => {
-        if (Array.isArray(store_countries)) return store_countries;
-        if (store_countries && typeof store_countries === 'object') return Object.values(store_countries);
+    // ✅ Функция для безопасного получения массива стран
+    const getCountriesArray = useMemo(() => {
+        if (!store_countries) return [];
+        if (Array.isArray(store_countries)) {
+            return store_countries.filter(c => c && c !== null);
+        }
+        if (typeof store_countries === 'object') {
+            return Object.values(store_countries).filter(c => c && c !== null);
+        }
         return [];
     }, [store_countries]);
 
-    // Функция для безопасного получения массива департаментов
-    const getDepartmentsArray = useCallback(() => {
-        if (Array.isArray(store_departments)) return store_departments;
-        if (store_departments && typeof store_departments === 'object') return Object.values(store_departments);
+    // ✅ Функция для безопасного получения массива департаментов
+    const getDepartmentsArray = useMemo(() => {
+        if (!store_departments) return [];
+        if (Array.isArray(store_departments)) {
+            return store_departments.filter(d => d && d !== null);
+        }
+        if (typeof store_departments === 'object') {
+            return Object.values(store_departments).filter(d => d && d !== null);
+        }
         return [];
     }, [store_departments]);
 
-    // Функция для безопасного получения массива статусов
-    const getStatusesArray = useCallback(() => {
-        if (Array.isArray(store_statuses)) return store_statuses;
-        if (store_statuses && typeof store_statuses === 'object') return Object.values(store_statuses);
+    // ✅ Функция для безопасного получения массива статусов
+    const getStatusesArray = useMemo(() => {
+        if (!store_statuses) return [];
+        if (Array.isArray(store_statuses)) {
+            return store_statuses.filter(s => s && s !== null);
+        }
+        if (typeof store_statuses === 'object') {
+            return Object.values(store_statuses).filter(s => s && s !== null);
+        }
         return [];
     }, [store_statuses]);
 
@@ -407,9 +439,9 @@ export function ProjectsTable({
         );
     }
 
-    const countriesArray = getCountriesArray();
-    const departmentsArray = getDepartmentsArray();
-    const statusesArray = getStatusesArray();
+    const countriesArray = getCountriesArray;
+    const departmentsArray = getDepartmentsArray;
+    const statusesArray = getStatusesArray;
 
     return (
         <div className="space-y-4">
@@ -458,6 +490,8 @@ export function ProjectsTable({
                         autoComplete="off"
                     />
                 </div>
+
+                {/* ✅ Исправленный Select для стран с проверкой на null */}
                 <Select
                     value={localFilters.country || "all"}
                     onValueChange={(value) => handleFilterChange('country', value === "all" ? "" : value)}
@@ -467,13 +501,18 @@ export function ProjectsTable({
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Countries</SelectItem>
-                        {countriesArray.map((country: any) => (
-                            <SelectItem key={country.id} value={country.code}>
-                                {country.name}
-                            </SelectItem>
-                        ))}
+                        {countriesArray.map((country: any, idx: number) => {
+                            if (!country || country === null) return null;
+                            return (
+                                <SelectItem key={country.id || idx} value={country.code || String(country.id)}>
+                                    {country.name || 'Unknown'}
+                                </SelectItem>
+                            );
+                        })}
                     </SelectContent>
                 </Select>
+
+                {/* ✅ Исправленный Select для департаментов с проверкой на null */}
                 <Select
                     value={localFilters.department || "all"}
                     onValueChange={(value) => handleFilterChange('department', value === "all" ? "" : value)}
@@ -483,15 +522,18 @@ export function ProjectsTable({
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Departments</SelectItem>
-                        {departmentsArray.map((dept: any) => (
-                            <SelectItem key={dept.id} value={dept.name}>
-                                {dept.name}
-                            </SelectItem>
-                        ))}
+                        {departmentsArray.map((dept: any, idx: number) => {
+                            if (!dept || dept === null) return null;
+                            return (
+                                <SelectItem key={dept.id || idx} value={dept.name || String(dept.id)}>
+                                    {dept.name || 'Unknown'}
+                                </SelectItem>
+                            );
+                        })}
                     </SelectContent>
                 </Select>
 
-                {/* Фильтр по статусу */}
+                {/* ✅ Исправленный Select для статусов с проверкой на null */}
                 <Select
                     value={localFilters.status || "all"}
                     onValueChange={(value) => handleFilterChange('status', value === "all" ? "" : value)}
@@ -501,11 +543,14 @@ export function ProjectsTable({
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Statuses</SelectItem>
-                        {statusesArray.map((status: any) => (
-                            <SelectItem key={status.id} value={status.name}>
-                                {status.name}
-                            </SelectItem>
-                        ))}
+                        {statusesArray.map((status: any, idx: number) => {
+                            if (!status || status === null) return null;
+                            return (
+                                <SelectItem key={status.id || idx} value={status.name || String(status.id)}>
+                                    {status.name || 'Unknown'}
+                                </SelectItem>
+                            );
+                        })}
                     </SelectContent>
                 </Select>
 
@@ -524,6 +569,7 @@ export function ProjectsTable({
                         ))}
                     </SelectContent>
                 </Select>
+
                 {activeFiltersCount > 0 && (
                     <Button
                         variant="outline"
@@ -562,7 +608,8 @@ export function ProjectsTable({
                             </TableRow>
                         ) : (
                             uniqueProjects.map((project: any, index: number) => {
-                                const codes = project.codes || [];
+                                // ✅ Безопасная проверка codes
+                                const codes = Array.isArray(project?.codes) ? project.codes : [];
                                 const lastCode = getLastCode(codes);
                                 const isExpanded = expandedCodeDrawers[project.id];
                                 const uniqueKey = `${project.id}-${index}-${currentPage}`;
@@ -574,7 +621,7 @@ export function ProjectsTable({
                                                 <div className="flex items-center gap-1 min-w-0">
                                                     <FolderKanban className="w-3 h-3 flex-shrink-0 text-slate-400" />
                                                     <span className="truncate text-xs font-mono">
-                                                        {lastCode?.code || 'No code'}
+                                                        {lastCode && lastCode.code ? lastCode.code : 'No code'}
                                                     </span>
                                                     {codes.length > 1 && (
                                                         <Button
@@ -591,35 +638,37 @@ export function ProjectsTable({
 
                                             <TableCell className="min-w-0">
                                                 <Badge variant="outline" className="truncate block max-w-full text-xs font-normal">
-                                                    {project.client || 'Not assigned'}
+                                                    {project?.client || 'Not assigned'}
                                                 </Badge>
                                             </TableCell>
 
                                             <TableCell className="min-w-0">
                                                 <span className="truncate block text-xs">
-                                                    {getProjectManagerName(project.manager)}
+                                                    {getProjectManagerName(project?.manager)}
                                                 </span>
                                             </TableCell>
+
                                             <TableCell className="min-w-0">
                                                 <span className="truncate block text-xs">
-                                                    {project.is_code_recurring ? 'yes' : 'no'}
+                                                    {project?.is_code_recurring ? 'yes' : 'no'}
                                                 </span>
                                             </TableCell>
+
                                             <TableCell className="min-w-0">
                                                 <Badge variant="secondary" className="text-xs">
-                                                    {project.status_name || project.status || '-'}
+                                                    {project?.status_name || project?.status || '-'}
                                                 </Badge>
                                             </TableCell>
 
                                             <TableCell>
                                                 <Badge variant="outline" className="text-xs font-mono">
-                                                    {project.country || '-'}
+                                                    {project?.country || '-'}
                                                 </Badge>
                                             </TableCell>
 
                                             <TableCell className="min-w-0">
                                                 <span className="truncate block text-xs">
-                                                    {getDepartmentName(project.department)}
+                                                    {getDepartmentName(project?.department)}
                                                 </span>
                                             </TableCell>
 
@@ -651,7 +700,7 @@ export function ProjectsTable({
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {codes.map((c: any, codeIndex: number) => (
                                                             <Badge key={`${project.id}-code-${codeIndex}`} variant="secondary" className="text-xs font-mono">
-                                                                {c.code}
+                                                                {c?.code || 'Unknown'}
                                                             </Badge>
                                                         ))}
                                                     </div>

@@ -27,7 +27,10 @@ export function StatisticsPanel() {
   };
 
   const statistics = useMemo(() => {
-    if (!time_entries || time_entries.length === 0) {
+    // ✅ Главное исправление: проверяем, что time_entries - это массив
+    const entries = Array.isArray(time_entries) ? time_entries : [];
+
+    if (entries.length === 0) {
       return {
         totalHours: '0.0',
         avgHoursPerDay: '0.0',
@@ -51,11 +54,11 @@ export function StatisticsPanel() {
     }
 
     // Трансформируем записи из стора в формат для фильтрации
-    const transformedEntries = time_entries.map(entry => ({
+    const transformedEntries = entries.map(entry => ({
       id: entry.id,
       date: entry.date || entry.start_date,
-      hours: entry.hours,
-      description: entry.description,
+      hours: entry.hours || 0,
+      description: entry.description || '',
       projectId: entry.project?.toString() || '',
       projectCode: entry.project_code || '',
       projectName: entry.project_name || '',
@@ -222,8 +225,6 @@ export function StatisticsPanel() {
           );
         })}
       </div>
-
-
     </div>
   );
 }

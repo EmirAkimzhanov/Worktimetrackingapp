@@ -41,37 +41,81 @@ export function UserDialog({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const isInitializedRef = useRef(false);
 
-    const department_roles = useUserStore((state) => state.department_roles) || [];
-    const user_grades = useUserStore((state) => state.user_grades) || [];
+    // ✅ Безопасное получение данных из store
+    const department_roles = useMemo(() => {
+        const roles = useUserStore.getState().department_roles;
+        if (!roles) return [];
+        if (Array.isArray(roles)) {
+            return roles.filter(role => role && role !== null);
+        }
+        if (typeof roles === 'object') {
+            return Object.values(roles).filter(role => role && role !== null);
+        }
+        return [];
+    }, []);
+
+    const user_grades = useMemo(() => {
+        const grades = useUserStore.getState().user_grades;
+        if (!grades) return [];
+        if (Array.isArray(grades)) {
+            return grades.filter(grade => grade && grade !== null);
+        }
+        if (typeof grades === 'object') {
+            return Object.values(grades).filter(grade => grade && grade !== null);
+        }
+        return [];
+    }, []);
+
     const countriesData = useUserStore((state) => state.countries);
-    const store_departments = useUserStore((state) => state.departments) || [];
-    const store_positions = useUserStore((state) => state.positions) || [];
+    const store_departments = useMemo(() => {
+        const depts = useUserStore.getState().departments;
+        if (!depts) return [];
+        if (Array.isArray(depts)) {
+            return depts.filter(dept => dept && dept !== null);
+        }
+        if (typeof depts === 'object') {
+            return Object.values(depts).filter(dept => dept && dept !== null);
+        }
+        return [];
+    }, []);
+
+    const store_positions = useMemo(() => {
+        const positions = useUserStore.getState().positions;
+        if (!positions) return [];
+        if (Array.isArray(positions)) {
+            return positions.filter(pos => pos && pos !== null);
+        }
+        if (typeof positions === 'object') {
+            return Object.values(positions).filter(pos => pos && pos !== null);
+        }
+        return [];
+    }, []);
+
     const { mutate: sendUser, isLoading: isCreating } = useSendUsers();
     const { mutate: getUsers } = useGetUsers();
     const { mutate: editUser, isLoading: isEditing } = useEditUsers();
 
-    // Преобразуем countries в массив, если это объект
+    // ✅ Преобразуем countries в массив, если это объект
     const countries = useMemo(() => {
         if (!countriesData) return [];
         if (Array.isArray(countriesData)) {
-            return countriesData;
+            return countriesData.filter(country => country && country !== null);
         }
         if (typeof countriesData === 'object') {
-            if (countriesData && 'map' in countriesData && typeof countriesData.map === 'function') {
-                return countriesData as Country[];
-            }
-            return Object.values(countriesData);
+            return Object.values(countriesData).filter(country => country && country !== null);
         }
         return [];
     }, [countriesData]);
 
-    // Безопасное преобразование в строку
+    // ✅ Безопасное преобразование в строку
     const safeToString = useCallback((value: any): string => {
         if (value === null || value === undefined) return '';
-        return value.toString();
+        if (typeof value === 'number') return value.toString();
+        if (typeof value === 'string') return value;
+        return '';
     }, []);
 
-    // Функция для поиска ID по названию или прямого использования ID
+    // ✅ Функция для поиска ID по названию или прямого использования ID
     const findId = useCallback((
         items: any[],
         value: any,
@@ -81,14 +125,14 @@ export function UserDialog({
 
         // Если value уже является числом (ID)
         if (typeof value === 'number') {
-            const exists = items.find(item => item.id === value);
+            const exists = items.find(item => item?.id === value);
             if (exists) return value;
         }
 
         // Если value является строкой (название)
-        if (typeof value === 'string') {
-            const item = items.find(item => item[nameField] === value);
-            if (item) return item.id;
+        if (typeof value === 'string' && value.trim()) {
+            const item = items.find(item => item?.[nameField] === value);
+            if (item && item.id) return item.id;
         }
 
         // Если value является объектом с id
@@ -99,7 +143,7 @@ export function UserDialog({
         return items[0]?.id || 0;
     }, []);
 
-    // Загружаем данные пользователя в форму при редактировании
+    // ✅ Загружаем данные пользователя в форму при редактировании
     useEffect(() => {
         if (editingUser && open && !isInitializedRef.current) {
             isInitializedRef.current = true;
@@ -180,13 +224,14 @@ export function UserDialog({
         onOpenChange(false);
     };
 
-    // Функция валидации email
+    // ✅ Функция валидации email
     const validateEmail = useCallback((email: string): boolean => {
+        if (!email) return false;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     }, []);
 
-    // Валидация всей формы
+    // ✅ Валидация всей формы
     const validateForm = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
@@ -208,7 +253,7 @@ export function UserDialog({
         return Object.keys(newErrors).length === 0;
     }, [userForm.email, userForm.first_name, userForm.last_name, validateEmail]);
 
-    // Преобразование role string в number
+    // ✅ Преобразование role string в number
     const mapRoleToNumber = useCallback((role: string): number => {
         switch (role) {
             case 'admin': return 1;
@@ -260,7 +305,7 @@ export function UserDialog({
         }
     }, [validateForm, userForm, editingUser, editUser, getUsers, handleClose, onSave, sendUser, mapRoleToNumber]);
 
-    // Обработчик изменения email с валидацией
+    // ✅ Обработчик изменения email с валидацией
     const handleEmailChange = useCallback((value: string) => {
         setUserForm({ ...userForm, email: value });
 
@@ -271,9 +316,49 @@ export function UserDialog({
                 return newErrors;
             });
         }
-    }, [userForm, errors.email]);
+    }, [userForm, setUserForm, errors.email]);
+
+    // ✅ Обработчик изменения текстовых полей
+    const handleTextChange = useCallback((field: keyof UserFormData, value: string) => {
+        setUserForm({ ...userForm, [field]: value });
+
+        if (errors[field]) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
+    }, [userForm, setUserForm, errors]);
 
     const isLoading = isCreating || isEditing;
+
+    // ✅ Безопасная функция рендера опций Select
+    const renderSelectOptions = useCallback((items: any[], valueKey: string = 'id', labelKey: string = 'name') => {
+        if (!Array.isArray(items) || items.length === 0) {
+            return <SelectItem value="0" disabled>No options available</SelectItem>;
+        }
+
+        return items.map((item, index) => {
+            // ✅ Критическая проверка: item может быть null
+            if (!item || item === null || typeof item !== 'object') {
+                return null;
+            }
+
+            const value = item[valueKey];
+            const label = item[labelKey];
+
+            if (value === undefined || value === null) {
+                return null;
+            }
+
+            return (
+                <SelectItem key={`${valueKey}-${value}-${index}`} value={safeToString(value)}>
+                    {label || 'Unknown'}
+                </SelectItem>
+            );
+        }).filter(Boolean);
+    }, [safeToString]);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -292,7 +377,7 @@ export function UserDialog({
                             <Input
                                 id="first_name"
                                 value={userForm.first_name || ''}
-                                onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })}
+                                onChange={(e) => handleTextChange('first_name', e.target.value)}
                                 placeholder="Enter first name"
                                 className={errors.first_name ? 'border-red-500' : ''}
                                 disabled={isLoading}
@@ -306,7 +391,7 @@ export function UserDialog({
                             <Input
                                 id="last_name"
                                 value={userForm.last_name || ''}
-                                onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })}
+                                onChange={(e) => handleTextChange('last_name', e.target.value)}
                                 placeholder="Enter last name"
                                 className={errors.last_name ? 'border-red-500' : ''}
                                 disabled={isLoading}
@@ -341,17 +426,13 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, grade_id: parseInt(value) })
                                 }
-                                disabled={isLoading}
+                                disabled={isLoading || user_grades.length === 0}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select grade" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {user_grades.map(grade => (
-                                        <SelectItem key={grade.id} value={safeToString(grade.id)}>
-                                            {grade.name}
-                                        </SelectItem>
-                                    ))}
+                                    {renderSelectOptions(user_grades)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -366,17 +447,13 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, position_id: parseInt(value) })
                                 }
-                                disabled={isLoading}
+                                disabled={isLoading || store_positions.length === 0}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select position" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {store_positions.map(position => (
-                                        <SelectItem key={position.id} value={safeToString(position.id)}>
-                                            {position.name}
-                                        </SelectItem>
-                                    ))}
+                                    {renderSelectOptions(store_positions)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -387,17 +464,13 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, department_id: parseInt(value) })
                                 }
-                                disabled={isLoading}
+                                disabled={isLoading || store_departments.length === 0}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select department" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {store_departments.map(department => (
-                                        <SelectItem key={department.id} value={safeToString(department.id)}>
-                                            {department.name}
-                                        </SelectItem>
-                                    ))}
+                                    {renderSelectOptions(store_departments)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -412,17 +485,13 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, department_role_id: parseInt(value) })
                                 }
-                                disabled={isLoading}
+                                disabled={isLoading || department_roles.length === 0}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {department_roles.map(role => (
-                                        <SelectItem key={role.id} value={safeToString(role.id)}>
-                                            {role.name}
-                                        </SelectItem>
-                                    ))}
+                                    {renderSelectOptions(department_roles)}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -433,18 +502,24 @@ export function UserDialog({
                                 onValueChange={(value: string) =>
                                     setUserForm({ ...userForm, country_id: parseInt(value) })
                                 }
-                                disabled={isLoading}
+                                disabled={isLoading || countries.length === 0}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select country" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {countries.length > 0 ? (
-                                        countries.map((country: Country) => (
-                                            <SelectItem key={country.id} value={safeToString(country.id)}>
-                                                {country.name} {country.code ? `(${country.code})` : ''}
-                                            </SelectItem>
-                                        ))
+                                        countries.map((country: Country, index: number) => {
+                                            // ✅ Критическая проверка: country может быть null
+                                            if (!country || country === null || typeof country !== 'object') {
+                                                return null;
+                                            }
+                                            return (
+                                                <SelectItem key={country.id || index} value={safeToString(country.id)}>
+                                                    {country.name} {country.code ? `(${country.code})` : ''}
+                                                </SelectItem>
+                                            );
+                                        }).filter(Boolean)
                                     ) : (
                                         <SelectItem value="1" disabled>
                                             No countries available
@@ -476,14 +551,16 @@ export function UserDialog({
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2 flex items-center gap-2 pt-6">
-                            <div className="flex items-center space-x-2">
-                                <div
-                                    className={`w-3 h-3 rounded-full ${userForm.is_active ? 'bg-green-500' : 'bg-red-500'}`}
-                                />
-                                <Label className="text-sm font-medium">
-                                    {userForm.is_active ? 'Active' : 'Inactive'}
-                                </Label>
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 pt-6">
+                                <div className="flex items-center space-x-2">
+                                    <div
+                                        className={`w-3 h-3 rounded-full ${userForm.is_active ? 'bg-green-500' : 'bg-red-500'}`}
+                                    />
+                                    <Label className="text-sm font-medium">
+                                        {userForm.is_active ? 'Active' : 'Inactive'}
+                                    </Label>
+                                </div>
                             </div>
                         </div>
                     </div>

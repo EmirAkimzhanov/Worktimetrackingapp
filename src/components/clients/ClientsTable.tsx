@@ -134,6 +134,14 @@ export function ClientsTable({
   const clientsPagination = useUserStore((state) => state.clientsPagination);
   const store_sectors = useUserStore((state) => state.sectors);
 
+  // ✅ Безопасное преобразование sectors в массив с фильтрацией null
+  const sectorsArray = React.useMemo(() => {
+    if (!store_sectors) return [];
+    if (Array.isArray(store_sectors)) return store_sectors.filter(s => s && s !== null);
+    if (typeof store_sectors === 'object') return Object.values(store_sectors).filter(s => s && s !== null);
+    return [];
+  }, [store_sectors]);
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<{
     id: number;
@@ -446,6 +454,7 @@ export function ClientsTable({
             />
           </div>
 
+          {/* ✅ Исправленный Select для секторов */}
           <Select
             value={localFilters.sector_name || "all"}
             onValueChange={(value) => handleFilterChange('sector_name', value === "all" ? "" : value)}
@@ -455,11 +464,14 @@ export function ClientsTable({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Sectors</SelectItem>
-              {store_sectors?.map((sector: any) => (
-                <SelectItem key={sector.id} value={sector.name}>
-                  {sector.name}
-                </SelectItem>
-              ))}
+              {sectorsArray.map((sector: any, idx: number) => {
+                if (!sector || sector === null) return null;
+                return (
+                  <SelectItem key={sector.id || idx} value={sector.name || String(sector.id)}>
+                    {sector.name || 'Unknown'}
+                  </SelectItem>
+                );
+              }).filter(Boolean)}
             </SelectContent>
           </Select>
 

@@ -48,13 +48,17 @@ const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function CalendarView() {
   const { filters } = useTimeTracker();
-  const time_entries = useUserStore((state) => state.time_entries) as TimeEntry[];
-  const calendar_holidays = useUserStore((state) => state.calendar_holidays) as CalendarHoliday[] | null;
+  const time_entries = useUserStore((state) => state.time_entries);
+  const calendar_holidays = useUserStore((state) => state.calendar_holidays);
   const currentMonth = useUserStore((state) => state.currentMonth);
   const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
   const me = useUserStore((state) => state.me);
 
-  console.log(calendar_holidays)
+  // ✅ Главное исправление: проверяем, что time_entries - это массив
+  const safeTimeEntries = Array.isArray(time_entries) ? time_entries : [];
+  const safeCalendarHolidays = Array.isArray(calendar_holidays) ? calendar_holidays : [];
+
+  console.log('Calendar holidays:', safeCalendarHolidays);
 
   // ✅ Стабильный countryId
   const countryId = useMemo(() => {
@@ -89,8 +93,8 @@ export function CalendarView() {
 
   // Получаем все записи времени из хранилища
   const allEntries = useMemo(() => {
-    return time_entries || [];
-  }, [time_entries]);
+    return safeTimeEntries;
+  }, [safeTimeEntries]);
 
   // ✅ Рабочие дни с fallback
   const workingDays = useMemo(() => {
@@ -109,7 +113,7 @@ export function CalendarView() {
 
   // Функция для проверки, является ли дата праздником
   const getHolidayForDate = (dateStr: string): CalendarHoliday | null => {
-    if (!calendar_holidays || calendar_holidays.length === 0) {
+    if (safeCalendarHolidays.length === 0) {
       return null;
     }
 
@@ -121,7 +125,7 @@ export function CalendarView() {
     const monthDay = `${month}-${day}`;
 
     // Ищем праздник по полной дате или по month-day для recurring
-    const holiday = calendar_holidays.find(h => {
+    const holiday = safeCalendarHolidays.find(h => {
       // Если праздник ежегодный (is_recurring), сравниваем по month-day
       if (h.is_recurring) {
         return h.date === monthDay;
@@ -354,17 +358,6 @@ export function CalendarView() {
                 <CalendarIcon className="w-5 h-5" />
                 Calendar View
               </CardTitle>
-              {/* <CardDescription>
-                {allEntries.length > 0
-                  ? `Click on a day to see task details (${allEntries.length} total entries)`
-                  : 'No time entries yet'}
-                {globSet && globSet.working_days && (
-                  <span className="ml-2 text-xs">
-                    • Working days: {getWorkingDaysDisplay()}
-                  </span>
-                )}
-                {isLoadingSettings && <span className="ml-2 text-xs text-gray-400">• Loading settings...</span>}
-              </CardDescription> */}
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -509,7 +502,7 @@ export function CalendarView() {
         </CardContent>
       </Card>
 
-      {/* Модальное окно с деталями дня (без изменений) */}
+      {/* Модальное окно с деталями дня */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="w-[90vw] h-[90vh] flex flex-col p-0">
           <DialogHeader className="p-3 border-b shrink-0">

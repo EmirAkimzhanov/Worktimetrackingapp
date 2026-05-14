@@ -65,7 +65,9 @@ export function ClientDialog({
     const getCountriesArray = useMemo(() => {
         if (!store_countries) return [];
         if (Array.isArray(store_countries)) return store_countries;
-        if (typeof store_countries === 'object') return Object.values(store_countries);
+        if (typeof store_countries === 'object') {
+            return Object.values(store_countries).filter(item => item !== null);
+        }
         return [];
     }, [store_countries]);
 
@@ -73,43 +75,61 @@ export function ClientDialog({
     const getSectorsArray = useMemo(() => {
         if (!store_sectors) return [];
         if (Array.isArray(store_sectors)) return store_sectors;
-        if (typeof store_sectors === 'object') return Object.values(store_sectors);
+        if (typeof store_sectors === 'object') {
+            return Object.values(store_sectors).filter(item => item !== null);
+        }
         return [];
     }, [store_sectors]);
 
-    // Функции для поиска ID
+    // ✅ Безопасное преобразование значения в число
+    const safeToNumber = useCallback((value: any, defaultValue: number = 0): number => {
+        if (value === null || value === undefined) return defaultValue;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+            const parsed = parseInt(value);
+            return isNaN(parsed) ? defaultValue : parsed;
+        }
+        if (typeof value === 'object' && value.id) return value.id;
+        return defaultValue;
+    }, []);
+
+    // ✅ Функции для поиска ID с проверками
     const getSectorId = useCallback((sectorName: string) => {
         if (!sectorName) return 0;
         const sectorsArray = getSectorsArray;
-        const sector = sectorsArray.find(s => s.name === sectorName);
+        if (!Array.isArray(sectorsArray) || sectorsArray.length === 0) return 0;
+        const sector = sectorsArray.find(s => s && (s.name === sectorName || s.id === sectorName));
         return sector?.id || 0;
     }, [getSectorsArray]);
 
     const getCountryId = useCallback((countryCode: string) => {
         if (!countryCode) return 0;
         const countriesArray = getCountriesArray;
-        const country = countriesArray.find(c => c.code === countryCode || c.name === countryCode);
+        if (!Array.isArray(countriesArray) || countriesArray.length === 0) return 0;
+        const country = countriesArray.find(c => c && (c.code === countryCode || c.name === countryCode || c.id === countryCode));
         return country?.id || 0;
     }, [getCountriesArray]);
 
     const getPieId = useCallback((pieValue: any) => {
         if (!pieValue) return 0;
+        if (!pieOptions || !Array.isArray(pieOptions)) return 0;
+
         if (typeof pieValue === 'object' && pieValue.id) return pieValue.id;
         if (typeof pieValue === 'number') return pieValue;
         if (typeof pieValue === 'string') {
-            const pie = pieOptions?.find((p: any) => p.name === pieValue || p.title === pieValue);
+            const pie = pieOptions.find((p: any) => p && (p.name === pieValue || p.title === pieValue));
             return pie?.id || 0;
         }
         return 0;
     }, [pieOptions]);
 
-    // Заполнение формы при редактировании
+    // ✅ Заполнение формы при редактировании
     useEffect(() => {
         if (editingClient && open && !isInitializedRef.current) {
             isInitializedRef.current = true;
 
             setClientForm({
-                manager: editingClient.manager || editingClient.manager_id || 0,
+                manager: safeToNumber(editingClient.manager || editingClient.manager_id, 0),
                 sector: getSectorId(editingClient.sector),
                 name: editingClient.name || '',
                 group: editingClient.group || '',
@@ -123,9 +143,10 @@ export function ClientDialog({
             isInitializedRef.current = false;
             resetForm();
         }
-    }, [editingClient, open, setClientForm, getSectorId, getCountryId, getPieId]);
+    }, [editingClient, open, setClientForm, getSectorId, getCountryId, getPieId, safeToNumber]);
 
-    const getFormValue = (key: keyof ClientFormData) => {
+    // ✅ Безопасное получение значения формы
+    const getFormValue = useCallback((key: keyof ClientFormData) => {
         const value = clientForm?.[key];
 
         if (value === undefined || value === null) {
@@ -134,7 +155,7 @@ export function ClientDialog({
         }
 
         return value;
-    };
+    }, [clientForm]);
 
     const resetForm = () => {
         setClientForm({
@@ -180,70 +201,81 @@ export function ClientDialog({
     };
 
     const handleSave = () => {
-        if (validateForm()) {
-            if (editingClient && editingClient.id) {
-                const clientData = {
-                    name: getFormValue('name'),
-                    personal_number: getFormValue('personal_number'),
-                    group: getFormValue('group'),
-                    manager: getFormValue('manager') || 0,
-                    sector: getFormValue('sector') || 0,
-                    client_code: getFormValue('client_code'),
-                    bvd: getFormValue('bvd'),
-                    pie: getFormValue('pie'),
-                    country_id: getFormValue('country') === 0 ? null : getFormValue('country'),
-                };
+        if (!validateForm()) return;
 
-                editClient(
-                    { body: clientData, client_id: editingClient.id },
-                    {
-                        onSuccess: () => {
-                            getClients();
-                            resetForm();
-                            onOpenChange(false);
-                        },
-                        onError: (error) => {
-                            console.error('Error editing client:', error);
-                        }
-                    }
-                );
-            } else {
-                const clientData = {
-                    name: getFormValue('name'),
-                    personal_number: getFormValue('personal_number'),
-                    group: getFormValue('group'),
-                    sector: getFormValue('sector') || 0,
-                    client_code: getFormValue('client_code'),
-                    bvd: getFormValue('bvd'),
-                    pie: getFormValue('pie'),
-                    country: getFormValue('country') === 0 ? null : getFormValue('country'),
-                };
+        if (editingClient && editingClient.id) {
+            const clientData = {
+                name: getFormValue('name'),
+                personal_number: getFormValue('personal_number'),
+                group: getFormValue('group'),
+                manager: getFormValue('manager') || 0,
+                sector: getFormValue('sector') || 0,
+                client_code: getFormValue('client_code'),
+                bvd: getFormValue('bvd'),
+                pie: getFormValue('pie'),
+                country_id: getFormValue('country') === 0 ? null : getFormValue('country'),
+            };
 
-                createClient(clientData, {
+            editClient(
+                { body: clientData, client_id: editingClient.id },
+                {
                     onSuccess: () => {
                         getClients();
                         resetForm();
                         onOpenChange(false);
+                        if (onSave) onSave();
                     },
                     onError: (error) => {
-                        console.error('Error creating client:', error);
+                        console.error('Error editing client:', error);
                     }
-                });
-            }
+                }
+            );
+        } else {
+            const clientData = {
+                name: getFormValue('name'),
+                personal_number: getFormValue('personal_number'),
+                group: getFormValue('group'),
+                sector: getFormValue('sector') || 0,
+                client_code: getFormValue('client_code'),
+                bvd: getFormValue('bvd'),
+                pie: getFormValue('pie'),
+                country: getFormValue('country') === 0 ? null : getFormValue('country'),
+            };
+
+            createClient(clientData, {
+                onSuccess: () => {
+                    getClients();
+                    resetForm();
+                    onOpenChange(false);
+                    if (onSave) onSave();
+                },
+                onError: (error) => {
+                    console.error('Error creating client:', error);
+                }
+            });
         }
     };
 
-    const handleInputChange = (field: keyof ClientFormData, value: string | number) => {
-        setClientForm({
-            ...clientForm,
+    const handleInputChange = useCallback((field: keyof ClientFormData, value: string | number) => {
+        setClientForm(prev => ({
+            ...prev,
             [field]: value
-        });
-    };
+        }));
+
+        // Очищаем ошибку для этого поля
+        if (errors[field]) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
+    }, [setClientForm, errors]);
 
     const getSectorOptions = useCallback(() => {
         const sectorsArray = getSectorsArray;
 
-        if (!sectorsArray || sectorsArray.length === 0) {
+        if (!Array.isArray(sectorsArray) || sectorsArray.length === 0) {
             return [
                 { value: 0, label: 'Not selected' },
                 { value: 1, label: 'Technology' },
@@ -254,10 +286,12 @@ export function ClientDialog({
             ];
         }
 
-        const sectorOptions = sectorsArray.map((sector) => ({
-            value: sector.id,
-            label: sector.name
-        }));
+        const sectorOptions = sectorsArray
+            .filter(sector => sector && sector.id && sector.name)
+            .map((sector) => ({
+                value: sector.id,
+                label: sector.name
+            }));
 
         return [{ value: 0, label: 'Not selected' }, ...sectorOptions];
     }, [getSectorsArray]);
@@ -265,7 +299,7 @@ export function ClientDialog({
     const getCountryOptions = useCallback(() => {
         const countriesArray = getCountriesArray;
 
-        if (!countriesArray || countriesArray.length === 0) {
+        if (!Array.isArray(countriesArray) || countriesArray.length === 0) {
             return [
                 { value: 0, label: 'Select country' },
                 { value: 1, label: 'Kazakhstan' },
@@ -276,24 +310,28 @@ export function ClientDialog({
             ];
         }
 
-        const countryOptions = countriesArray.map((country) => ({
-            value: country.id,
-            label: country.name
-        }));
+        const countryOptions = countriesArray
+            .filter(country => country && country.id && country.name)
+            .map((country) => ({
+                value: country.id,
+                label: country.name
+            }));
 
         return [{ value: 0, label: 'Select country' }, ...countryOptions];
     }, [getCountriesArray]);
 
     const getPieOptions = useCallback(() => {
-        if (!pieOptions || pieOptions.length === 0) {
+        if (!pieOptions || !Array.isArray(pieOptions) || pieOptions.length === 0) {
             return [{ value: 0, label: 'No PIE available' }];
         }
         return [
             { value: 0, label: 'Select PIE' },
-            ...pieOptions.map((item: any) => ({
-                value: item.id,
-                label: item.name || item.title || `PIE ${item.id}`
-            }))
+            ...pieOptions
+                .filter(item => item && (item.id || item.value))
+                .map((item: any) => ({
+                    value: item.id || item.value,
+                    label: item.name || item.title || `PIE ${item.id || item.value}`
+                }))
         ];
     }, [pieOptions]);
 
@@ -321,6 +359,7 @@ export function ClientDialog({
                                 onChange={(e) => handleInputChange('name', e.target.value)}
                                 placeholder="Enter client name"
                                 className={errors.name ? 'border-red-500' : ''}
+                                disabled={isLoading}
                             />
                             {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
                         </div>
@@ -333,6 +372,7 @@ export function ClientDialog({
                                 onChange={(e) => handleInputChange('personal_number', e.target.value)}
                                 placeholder="Enter personal number"
                                 className={errors.personal_number ? 'border-red-500' : ''}
+                                disabled={isLoading}
                             />
                             {errors.personal_number && <p className="text-sm text-red-500">{errors.personal_number}</p>}
                         </div>
@@ -347,6 +387,7 @@ export function ClientDialog({
                                 onChange={(e) => handleInputChange('client_code', e.target.value)}
                                 placeholder="Enter client code"
                                 className={errors.client_code ? 'border-red-500' : ''}
+                                disabled={isLoading}
                             />
                             {errors.client_code && <p className="text-sm text-red-500">{errors.client_code}</p>}
                         </div>
@@ -358,6 +399,7 @@ export function ClientDialog({
                                 value={getFormValue('bvd')}
                                 onChange={(e) => handleInputChange('bvd', e.target.value)}
                                 placeholder="Enter BVD"
+                                disabled={isLoading}
                             />
                         </div>
                     </div>
@@ -370,27 +412,29 @@ export function ClientDialog({
                                 value={getFormValue('group')}
                                 onChange={(e) => handleInputChange('group', e.target.value)}
                                 placeholder="Enter group name"
+                                disabled={isLoading}
                             />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="sector">Sector</Label>
                             <Select
-                                value={getFormValue('sector')?.toString() || "0"}
+                                value={String(getFormValue('sector') ?? 0)}
                                 onValueChange={(value: string) =>
                                     handleInputChange('sector', parseInt(value) || 0)
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger id="sector" className="w-full">
                                     <SelectValue placeholder="Select sector" />
                                 </SelectTrigger>
                                 <SelectContent className="w-full">
-                                    {sectorOptions.map((sector) => {
-                                        if (sector?.value === undefined || sector?.value === null) return null;
+                                    {sectorOptions.map((sector, index) => {
+                                        if (!sector || sector.value === undefined || sector.value === null) return null;
 
                                         return (
                                             <SelectItem
-                                                key={`sector-${sector.value}`}
+                                                key={`sector-${sector.value}-${index}`}
                                                 value={String(sector.value)}
                                             >
                                                 {sector.label}
@@ -410,13 +454,14 @@ export function ClientDialog({
                                 onValueChange={(value: string) =>
                                     handleInputChange('pie', parseInt(value) || 0)
                                 }
+                                disabled={isLoading || !pieSelectOptions.length}
                             >
                                 <SelectTrigger id="pie" className="w-full">
                                     <SelectValue placeholder="Select PIE" />
                                 </SelectTrigger>
                                 <SelectContent className="w-full">
                                     {pieSelectOptions.map((option, index) => {
-                                        if (option?.value === undefined || option?.value === null) return null;
+                                        if (!option || option.value === undefined || option.value === null) return null;
 
                                         return (
                                             <SelectItem
@@ -435,21 +480,22 @@ export function ClientDialog({
                         <div className="space-y-2">
                             <Label htmlFor="country">Country *</Label>
                             <Select
-                                value={getFormValue('country')?.toString() || "0"}
+                                value={String(getFormValue('country') ?? 0)}
                                 onValueChange={(value: string) =>
                                     handleInputChange('country', parseInt(value) || 0)
                                 }
+                                disabled={isLoading}
                             >
                                 <SelectTrigger id="country" className="w-full">
                                     <SelectValue placeholder="Select country" />
                                 </SelectTrigger>
                                 <SelectContent className="w-full">
-                                    {countryOptions.map((country) => {
-                                        if (country?.value === undefined || country?.value === null) return null;
+                                    {countryOptions.map((country, index) => {
+                                        if (!country || country.value === undefined || country.value === null) return null;
 
                                         return (
                                             <SelectItem
-                                                key={`country-${country.value}`}
+                                                key={`country-${country.value}-${index}`}
                                                 value={String(country.value)}
                                             >
                                                 {country.label}
@@ -462,8 +508,8 @@ export function ClientDialog({
                         </div>
                     </div>
                 </div>
-                <DialogFooter>
-                    <Button style={{ marginRight: '50%' }} variant="outline" onClick={handleClose}>
+                <DialogFooter className="flex justify-between">
+                    <Button variant="outline" onClick={handleClose} disabled={isLoading}>
                         Cancel
                     </Button>
                     <Button

@@ -1,4 +1,3 @@
-// src/components/admin/CalendarHolidaysTab.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import { Button } from "../../ui/button";
 import {
@@ -82,69 +81,89 @@ export function CalendarHolidaysTab({
         type: "holiday" | "workWeekend";
     } | null>(null);
 
+    // ✅ Безопасное преобразование countries в массив
+    const countriesArray = useMemo(() => {
+        if (!countries) return [];
+        if (Array.isArray(countries)) return countries.filter(c => c && c !== null);
+        if (typeof countries === 'object') return Object.values(countries).filter(c => c && c !== null);
+        return [];
+    }, [countries]);
+
+    // ✅ Безопасное преобразование calendar в массив
+    const calendarArray = useMemo(() => {
+        if (!calendar) return [];
+        if (Array.isArray(calendar)) return calendar.filter(c => c && c !== null);
+        if (typeof calendar === 'object') return Object.values(calendar).filter(c => c && c !== null);
+        return [];
+    }, [calendar]);
+
     const correctCountryId = useMemo(() => {
-        if (!countries || !countries.length) {
+        if (!countriesArray || countriesArray.length === 0) {
             return config.id;
         }
 
         // Находим страну по названию или коду из config
-        const country = countries.find(
+        const country = countriesArray.find(
             (c) =>
-                c.name.toLowerCase() === config.country?.toLowerCase() ||
+                c.name?.toLowerCase() === config.country?.toLowerCase() ||
                 c.code === config.countryCode ||
                 c.id === config.id,
         );
 
         return country?.id || config.id;
-    }, [config, countries]);
+    }, [config, countriesArray]);
 
     useEffect(() => {
         getCalendar();
         // Загружаем time entries при монтировании
     }, [correctCountryId]);
 
+    // ✅ Исправлено: используем calendarArray вместо calendar
     const holidays = useMemo(() => {
-        if (!calendar) return [];
+        if (!calendarArray || calendarArray.length === 0) return [];
 
-        return calendar
+        return calendarArray
             .filter(
                 (item) =>
-                    item.day_type === "holiday" && item.country === correctCountryId,
+                    item && item.day_type === "holiday" && item.country === correctCountryId,
             )
             .map((item) => ({
                 id: item.id,
-                date: item.date.includes("-")
+                date: item.date && item.date.includes("-")
                     ? item.date
-                    : `${new Date().getFullYear()}-${item.date.padStart(5, "0")}`,
+                    : `${new Date().getFullYear()}-${item.date?.padStart(5, "0") || ""}`,
                 name: item.holiday_name || "Holiday",
                 description: item.description,
-                is_recurring: item.is_recurring,
+                is_recurring: item.is_recurring || false,
                 is_halfday: false,
                 country_id: item.country,
             }));
-    }, [calendar, correctCountryId]);
+    }, [calendarArray, correctCountryId]);
 
+    // ✅ Исправлено: используем calendarArray вместо calendar
     const workWeekends = useMemo(() => {
-        if (!calendar) return [];
+        if (!calendarArray || calendarArray.length === 0) return [];
 
-        return calendar
+        return calendarArray
             .filter(
                 (item) =>
-                    item.day_type === "working_weekend" &&
+                    item && item.day_type === "working_weekend" &&
                     item.country === correctCountryId,
             )
             .map((item) => ({
                 id: item.id,
-                date: item.date.includes("-")
+                date: item.date && item.date.includes("-")
                     ? item.date
-                    : `${new Date().getFullYear()}-${item.date.padStart(5, "0")}`,
+                    : `${new Date().getFullYear()}-${item.date?.padStart(5, "0") || ""}`,
                 description: item.description || "Working day",
                 country_id: item.country,
             }));
-    }, [calendar, correctCountryId]);
+    }, [calendarArray, correctCountryId]);
 
     // Функция для форматирования даты
     const formatDate = (dateString: string) => {
+        if (!dateString) return "Invalid date";
+
         try {
             let dateToParse = dateString;
             if (!dateString.includes("-")) {
@@ -182,13 +201,12 @@ export function CalendarHolidaysTab({
         });
         getHolidays(true, {
             onSuccess: (data) => {
-                console.log("Time entries refreshed successfully:", data?.length);
+                console.log("Holidays refreshed successfully:", data?.length);
             },
             onError: (error) => {
-                console.error("Failed to refresh time entries:", error);
+                console.error("Failed to refresh holidays:", error);
             }
         });
-
     };
 
     // Функция удаления элемента календаря по day_id
@@ -196,7 +214,7 @@ export function CalendarHolidaysTab({
         deleteCalendar(day_id, {
             onSuccess: () => {
                 toast.success("Item deleted successfully");
-                refreshAllData(); // Обновляем все данные после удаления
+                refreshAllData();
                 setDeleteDialogOpen(false);
                 setItemToDelete(null);
             },
@@ -256,7 +274,7 @@ export function CalendarHolidaysTab({
                             id: editingHoliday.id,
                             country_id: correctCountryId,
                         });
-                        refreshAllData(); // Обновляем все данные после обновления
+                        refreshAllData();
                         toast.success("Holiday updated successfully");
                         setIsHolidayDialogOpen(false);
                         setEditingHoliday(null);
@@ -275,7 +293,7 @@ export function CalendarHolidaysTab({
                         id: Date.now(),
                         country_id: correctCountryId,
                     });
-                    refreshAllData(); // Обновляем все данные после добавления
+                    refreshAllData();
                     toast.success("Holiday added successfully");
                     setIsHolidayDialogOpen(false);
                     setEditingHoliday(null);
@@ -308,7 +326,7 @@ export function CalendarHolidaysTab({
                 },
                 {
                     onSuccess: () => {
-                        refreshAllData(); // Обновляем все данные после обновления
+                        refreshAllData();
                         toast.success("Work weekend updated successfully");
                         setIsWorkWeekendDialogOpen(false);
                         setEditingWorkWeekend(null);
@@ -327,7 +345,7 @@ export function CalendarHolidaysTab({
                         id: Date.now(),
                         country_id: correctCountryId,
                     });
-                    refreshAllData(); // Обновляем все данные после добавления
+                    refreshAllData();
                     toast.success("Work weekend added successfully");
                     setIsWorkWeekendDialogOpen(false);
                     setEditingWorkWeekend(null);
@@ -473,9 +491,9 @@ export function CalendarHolidaysTab({
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => {
-                                                    const calendarItem = calendar?.find(
+                                                    const calendarItem = calendarArray?.find(
                                                         (item) =>
-                                                            item.id === holiday.id &&
+                                                            item && item.id === holiday.id &&
                                                             item.day_type === "holiday",
                                                     );
                                                     if (calendarItem) {
@@ -553,9 +571,9 @@ export function CalendarHolidaysTab({
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => {
-                                                    const calendarItem = calendar?.find(
+                                                    const calendarItem = calendarArray?.find(
                                                         (item) =>
-                                                            item.id === workWeekend.id &&
+                                                            item && item.id === workWeekend.id &&
                                                             item.day_type === "working_weekend",
                                                     );
                                                     if (calendarItem) {
