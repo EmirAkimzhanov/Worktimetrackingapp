@@ -422,7 +422,7 @@ export function ClientsTable({
       <div className="overflow-x-auto">
         <div className="flex items-center gap-2 min-w-max">
           <div className="relative w-[150px]">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+            {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
             <Input
               placeholder="Client name..."
               value={localFilters.name}
@@ -433,7 +433,7 @@ export function ClientsTable({
           </div>
 
           <div className="relative w-[120px]">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+            {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
             <Input
               placeholder="Group..."
               value={localFilters.group}
@@ -444,7 +444,7 @@ export function ClientsTable({
           </div>
 
           <div className="relative w-[130px]">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+            {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
             <Input
               placeholder="Personal number..."
               value={localFilters.personal_number}

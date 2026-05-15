@@ -461,7 +461,7 @@ export function ProjectsTable({
             {/* Filters Row */}
             <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative w-[140px]">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                     <Input
                         placeholder="Code..."
                         value={localFilters.code}
@@ -471,7 +471,7 @@ export function ProjectsTable({
                     />
                 </div>
                 <div className="relative w-[140px]">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                     <Input
                         placeholder="Client..."
                         value={localFilters.client}
@@ -481,7 +481,7 @@ export function ProjectsTable({
                     />
                 </div>
                 <div className="relative w-[140px]">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                    {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                     <Input
                         placeholder="Manager..."
                         value={localFilters.manager}

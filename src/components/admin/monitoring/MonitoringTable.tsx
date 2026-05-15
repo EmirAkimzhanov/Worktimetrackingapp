@@ -679,7 +679,7 @@ Administration`;
                     <div className="flex flex-wrap gap-2 items-center mt-4">
                         {/* Поиск по First Name */}
                         <div className="relative w-[150px]">
-                            <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            {/* <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" /> */}
                             <Input
                                 placeholder="First name..."
                                 value={searchFirstName}
@@ -690,7 +690,7 @@ Administration`;
 
                         {/* Поиск по Last Name */}
                         <div className="relative w-[150px]">
-                            <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            {/* <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" /> */}
                             <Input
                                 placeholder="Last name..."
                                 value={searchLastName}
@@ -701,7 +701,7 @@ Administration`;
 
                         {/* Поиск по email */}
                         <div className="relative w-[180px]">
-                            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            {/* <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" /> */}
                             <Input
                                 placeholder="Email..."
                                 value={searchEmail}

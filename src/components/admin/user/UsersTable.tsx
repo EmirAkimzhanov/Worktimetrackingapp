@@ -236,7 +236,6 @@ export function UsersTable({
         if (debouncedRole && debouncedRole.trim()) params.role_name = debouncedRole;
         if (localFilters.is_active && localFilters.is_active !== 'all') params.is_active = localFilters.is_active;
 
-        console.log(getDeptRoleBadgeVariant(''), 'fdsafdsfdasfdas')
 
         console.log('📦 Loading users with params:', params);
         getUsers(params);
@@ -455,7 +454,7 @@ export function UsersTable({
                 <div className="flex items-center gap-2 min-w-max">
                     {/* Поиск по имени */}
                     <div className="relative w-[100px]">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                         <Input
                             placeholder="First name"
                             value={localFilters.first_name}
@@ -467,7 +466,7 @@ export function UsersTable({
 
                     {/* Поиск по фамилии */}
                     <div className="relative w-[100px]">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                         <Input
                             placeholder="Last name"
                             value={localFilters.last_name}
@@ -479,7 +478,7 @@ export function UsersTable({
 
                     {/* Поиск по email */}
                     <div className="relative w-[150px]">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+                        {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                         <Input
                             placeholder="Email"
                             value={localFilters.email}
