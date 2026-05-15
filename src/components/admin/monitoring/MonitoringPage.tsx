@@ -1,48 +1,21 @@
 // app/monitoring/page.tsx
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 import { MonitoringTable } from '../monitoring/MonitoringTable';
-import { NotificationHistory } from '../monitoring/NotificationHistory';
-import { SettingsPanel } from '../monitoring/SettingsPanel';
-import { Calendar, Bell, Settings, RefreshCw } from 'lucide-react';
-import { TimeSheetMonitoring, TimeSheetNotification } from '../../../types/types';
-import { useGetMonitoring } from '../../../hooks/useMonitoring';
+import { Calendar, RefreshCw } from 'lucide-react';
+import { useGetMonitoring, useGetMonitoringExcel } from '../../../hooks/useMonitoring';
 import { useGetCountries } from '../../../hooks/useCountries';
 import { useUserStore } from '../../../store/UsersStore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { CalendarRange } from 'lucide-react';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useSendReminder } from '../../../hooks/useTimeEntry';
 
-const mockNotifications: TimeSheetNotification[] = [
-    {
-        id: '1',
-        user_id: 4,
-        period_start: '2024-01-01',
-        period_end: '2024-01-07',
-        sent_at: '2024-01-08 09:00:00',
-        status: 'sent',
-        email_subject: 'Reminder: Time Sheet Submission Required',
-        email_body: 'Please submit your time sheet for the period 2024-01-01 to 2024-01-07'
-    },
-    {
-        id: '2',
-        user_id: 3,
-        period_start: '2024-01-01',
-        period_end: '2024-01-07',
-        sent_at: '2024-01-07 18:30:00',
-        status: 'sent',
-        email_subject: 'Time Sheet Partially Filled',
-        email_body: 'Your time sheet is only 50% complete for the period 2024-01-01 to 2024-01-07'
-    }
-];
-
 export default function MonitoringPage() {
+    // Основные фильтры (обязательные)
     const [selectedCountry, setSelectedCountry] = useState<string>('');
     const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -50,26 +23,60 @@ export default function MonitoringPage() {
     // Состояния для пагинации
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(25);
+
+    // Дополнительные фильтры (передаются в MonitoringTable)
+    const [filters, setFilters] = useState<{
+        first_name?: string;
+        last_name?: string;
+        user_email?: string;
+        completion?: string;
+        updated_after?: string;
+        updated_before?: string;
+    }>({});
+
     // Флаг, что данные были загружены хотя бы раз
     const [isDataLoaded, setIsDataLoaded] = useState(false);
+    // Флаг, нужно ли загружать данные (включено только после нажатия кнопки)
+    const [shouldLoad, setShouldLoad] = useState(false);
 
-    const { mutate: getMonitoring, isPending: isMonitoringLoading } = useGetMonitoring();
+    // Формируем параметры для запроса (только если shouldLoad = true)
+    const queryParams = shouldLoad ? {
+        start_date: startDate,
+        end_date: endDate,
+        country_id: selectedCountry ? parseInt(selectedCountry) : undefined,
+        first_name: filters.first_name,
+        last_name: filters.last_name,
+        user_email: filters.user_email,
+        completion: filters.completion as any,
+        updated_after: filters.updated_after,
+        updated_before: filters.updated_before,
+        page: currentPage,
+        page_size: pageSize,
+    } : undefined;
+
+    // ХУК - запрос выполняется только когда enabled = true
+    const {
+        data: monitoringData,
+        isLoading: isMonitoringLoading,
+        refetch
+    } = useGetMonitoring(queryParams, { enabled: shouldLoad });
+
+    const { mutate: exportExcel, isPending: isExporting } = useGetMonitoringExcel();
     const { mutate: getCountries } = useGetCountries();
     const { mutate: sendReminder } = useSendReminder();
     const countries = useUserStore((state) => state.countries);
-    const monitoringData = useUserStore((state) => state.monitoring);
 
-    // Данные с пагинацией от API
-    const [paginatedData, setPaginatedData] = useState<{
-        results: TimeSheetMonitoring[];
-        count: number;
-        next: string | null;
-        previous: string | null;
-    } | null>(null);
-
+    // Загружаем страны при монтировании
     useEffect(() => {
         getCountries();
     }, [getCountries]);
+
+    // Обновляем флаг загрузки данных
+    useEffect(() => {
+        if (monitoringData && monitoringData.results && monitoringData.results.length > 0) {
+            setIsDataLoaded(true);
+        }
+    }, [monitoringData]);
 
     const handleLoadMonitoring = () => {
         if (!selectedCountry) {
@@ -90,53 +97,28 @@ export default function MonitoringPage() {
             return;
         }
 
-        // Сбрасываем на первую страницу при новом запросе
         setCurrentPage(1);
-        setIsDataLoaded(true);
-
-        getMonitoring({
-            start_date: startDate,
-            end_date: endDate,
-            country_id: parseInt(selectedCountry),
-            page: 1,
-            page_size: pageSize
-        }, {
-            onSuccess: (data) => {
-                setPaginatedData(data);
-                console.log('Monitoring data loaded:', data);
-            },
-            onError: (error) => {
-                toast.error(`Failed to load monitoring data: ${error.message}`);
-            }
-        });
+        setShouldLoad(true); // Включаем загрузку данных
     };
 
-    // Обновляем данные только если данные уже были загружены (при смене страницы)
-    useEffect(() => {
-        if (isDataLoaded && selectedCountry && startDate && endDate) {
-            getMonitoring({
-                start_date: startDate,
-                end_date: endDate,
-                country_id: parseInt(selectedCountry),
-                page: currentPage,
-                page_size: pageSize
-            }, {
-                onSuccess: (data) => {
-                    setPaginatedData(data);
-                },
-                onError: (error) => {
-                    console.error('Failed to load monitoring data:', error);
-                }
-            });
+    // Обработчик изменения фильтров из MonitoringTable
+    const handleFilterChange = (newFilters: typeof filters) => {
+        setFilters(newFilters);
+        if (shouldLoad) {
+            setCurrentPage(1); // Сбрасываем на первую страницу при изменении фильтров, если данные уже загружены
         }
-    }, [currentPage, pageSize]);
+    };
 
-    // Безопасное получение данных
-    const safeMonitoringData = Array.isArray(monitoringData) ? monitoringData : [];
+    // Обновляем данные при изменении пагинации или фильтров (только если данные уже загружены)
+    useEffect(() => {
+        if (shouldLoad) {
+            refetch();
+        }
+    }, [currentPage, pageSize, filters, shouldLoad, refetch]);
 
-    // Используем данные с пагинацией или все данные из store
-    const displayData = paginatedData?.results || safeMonitoringData;
-    const totalCount = paginatedData?.count || safeMonitoringData.length;
+    // Данные для отображения
+    const displayData = monitoringData?.results || [];
+    const totalCount = monitoringData?.count || 0;
 
     const getDisplayPeriod = () => {
         if (startDate && endDate) {
@@ -148,36 +130,6 @@ export default function MonitoringPage() {
         return 'Select date range';
     };
 
-    // Статистика на основе всех данных
-    const stats = useMemo(() => {
-        const allData = safeMonitoringData;
-
-        if (allData.length === 0) {
-            return {
-                totalUsers: 0,
-                averageCompletion: 0,
-                completed: 0,
-                partial: 0,
-                missing: 0
-            };
-        }
-
-        const totalCompletion = allData.reduce((sum, item) => sum + (item?.completion || 0), 0);
-        const averageCompletion = totalCompletion / allData.length;
-
-        const completed = allData.filter(item => (item?.completion || 0) >= 100).length;
-        const partial = allData.filter(item => (item?.completion || 0) > 0 && (item?.completion || 0) < 100).length;
-        const missing = allData.filter(item => (item?.completion || 0) === 0).length;
-
-        return {
-            totalUsers: allData.length,
-            averageCompletion: Math.round(averageCompletion * 10) / 10,
-            completed,
-            partial,
-            missing
-        };
-    }, [safeMonitoringData]);
-
     const handleSendReminder = (userIds: number[], period: { start: string; end: string }) => {
         sendReminder({
             emails: userIds.map(id => id.toString()),
@@ -187,7 +139,7 @@ export default function MonitoringPage() {
             onSuccess: () => {
                 toast.success(`Reminders sent to ${userIds.length} user(s)`);
                 // Обновляем данные после отправки
-                handleLoadMonitoring();
+                refetch();
             },
             onError: (error) => {
                 toast.error(`Failed to send reminders: ${error.message}`);
@@ -199,6 +151,25 @@ export default function MonitoringPage() {
         console.log('View details for user:', userId);
     };
 
+    const handleExportExcel = () => {
+        if (!shouldLoad || !isDataLoaded) {
+            toast.error('Please load data first');
+            return;
+        }
+
+        exportExcel({
+            start_date: startDate,
+            end_date: endDate,
+            country_id: selectedCountry ? parseInt(selectedCountry) : undefined,
+            first_name: filters.first_name,
+            last_name: filters.last_name,
+            user_email: filters.user_email,
+            completion: filters.completion as any,
+            updated_after: filters.updated_after,
+            updated_before: filters.updated_before,
+        });
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -208,9 +179,22 @@ export default function MonitoringPage() {
                         Track and manage time sheet completion across your team
                     </p>
                 </div>
+                <Button
+                    variant="outline"
+                    onClick={handleExportExcel}
+                    disabled={!isDataLoaded || displayData.length === 0 || isExporting}
+                    className="gap-2"
+                >
+                    {isExporting ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <Calendar className="w-4 h-4" />
+                    )}
+                    Export Excel
+                </Button>
             </div>
 
-            {/* Фильтры мониторинга */}
+            {/* Фильтры мониторинга - только основные (страна и даты) */}
             <Card className="shadow-md hover:shadow-lg transition-shadow border-t-4" style={{ borderTopColor: '#1F4E78' }}>
                 <CardHeader style={{ backgroundColor: '#F1F5F9' }} className="border-b">
                     <CardTitle className="flex items-center gap-2" style={{ color: '#1F4E78' }}>
@@ -222,15 +206,11 @@ export default function MonitoringPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
-                    <div className="space-y-4">
-                        {/* Выбор страны */}
-                        <div className="space-y-2">
-                            <Label htmlFor="country">Country *</Label>
-                            <Select
-                                value={selectedCountry}
-                                onValueChange={setSelectedCountry}
-                            >
-                                <SelectTrigger id="country" className="w-full md:w-[300px]">
+                    <div className="flex flex-wrap gap-3 items-end">
+                        <div className="flex-1 min-w-[150px]">
+                            <Label htmlFor="country" className="text-sm mb-1 block">Country *</Label>
+                            <Select value={selectedCountry} onValueChange={setSelectedCountry}>
+                                <SelectTrigger id="country" className="h-9">
                                     <SelectValue placeholder="Select country" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -243,53 +223,36 @@ export default function MonitoringPage() {
                             </Select>
                         </div>
 
-                        {/* Выбор диапазона дат */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2">
-                                <CalendarRange className="w-4 h-4 text-gray-500" />
-                                <span className="text-sm font-medium">Date Range</span>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="startDate">Start Date *</Label>
-                                    <Input
-                                        id="startDate"
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        required
-                                        className="w-full"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="endDate">End Date *</Label>
-                                    <Input
-                                        id="endDate"
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        required
-                                        className="w-full"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Отображение выбранного периода */}
-                            {startDate && endDate && (
-                                <div className="text-sm text-gray-600 bg-blue-50 p-2 rounded-md">
-                                    <span className="font-medium">Selected period: </span>
-                                    {getDisplayPeriod()}
-                                </div>
-                            )}
+                        <div className="flex-1 min-w-[150px]">
+                            <Label htmlFor="startDate" className="text-sm mb-1 block">Start Date *</Label>
+                            <Input
+                                id="startDate"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                required
+                                className="h-9"
+                            />
                         </div>
 
-                        {/* Кнопка загрузки */}
-                        <div className="flex items-center justify-end pt-4">
+                        <div className="flex-1 min-w-[150px]">
+                            <Label htmlFor="endDate" className="text-sm mb-1 block">End Date *</Label>
+                            <Input
+                                id="endDate"
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                required
+                                className="h-9"
+                            />
+                        </div>
+
+                        <div>
+                            <Label className="text-sm mb-1 block invisible">Action</Label>
                             <Button
                                 onClick={handleLoadMonitoring}
                                 disabled={!selectedCountry || !startDate || !endDate || isMonitoringLoading}
-                                className="gap-2 px-6"
+                                className="gap-2 h-9 px-4 whitespace-nowrap"
                                 style={{ backgroundColor: '#1F4E78' }}
                             >
                                 {isMonitoringLoading ? (
@@ -300,104 +263,38 @@ export default function MonitoringPage() {
                                 ) : (
                                     <>
                                         <Calendar className="w-4 h-4" />
-                                        Load Monitoring Data
+                                        Load Data
                                     </>
                                 )}
                             </Button>
                         </div>
                     </div>
+
+                    {/* Отображение выбранного периода */}
+                    {startDate && endDate && (
+                        <div className="text-sm text-gray-600 bg-blue-50 p-2 rounded-md mt-4">
+                            <span className="font-medium">Selected period: </span>
+                            {getDisplayPeriod()}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
-            {/* Dashboard Stats - показываем только если данные загружены */}
-            {isDataLoaded && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                Total Users
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{stats.totalUsers}</div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Active team members
-                            </p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                Completion Rate
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">
-                                {stats.averageCompletion}%
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Average completion rate
-                            </p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                Completed
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-green-600">
-                                {stats.completed}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Fully completed
-                            </p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                Missing
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-red-600">
-                                {stats.missing}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                No entries
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* Main Content Tabs */}
-            <Tabs defaultValue="monitoring" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="monitoring" className="gap-2">
-                        <Calendar className="w-4 h-4" />
-                        Monitoring
-                    </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="monitoring" className="space-y-4">
-                    <MonitoringTable
-                        data={displayData}
-                        totalCount={totalCount}
-                        currentPage={currentPage}
-                        pageSize={pageSize}
-                        onPageChange={setCurrentPage}
-                        onPageSizeChange={setPageSize}
-                        onSendReminder={handleSendReminder}
-                        onViewDetails={handleViewDetails}
-                        periodStart={startDate}
-                        periodEnd={endDate}
-                        isLoading={isMonitoringLoading}
-                    />
-                </TabsContent>
-            </Tabs>
+            {/* Monitoring Table - здесь находятся все дополнительные фильтры */}
+            <MonitoringTable
+                data={displayData}
+                totalCount={totalCount}
+                currentPage={currentPage}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                onSendReminder={handleSendReminder}
+                onViewDetails={handleViewDetails}
+                periodStart={startDate}
+                periodEnd={endDate}
+                isLoading={isMonitoringLoading}
+                onFilterChange={handleFilterChange}
+            />
         </div>
     );
 }

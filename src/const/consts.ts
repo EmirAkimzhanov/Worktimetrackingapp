@@ -72,3 +72,11 @@ export const getRoleBadgeVariant = (role: string) => {
         default: return 'outline';
     }
 };
+
+export const getDeptRoleBadgeVariant = (role: string) => {
+    switch (role) {
+        case 'Manager': return 'destructive';  // красный
+        case 'Member': return 'secondary';      // серый/обычный
+        default: return 'outline';
+    }
+};

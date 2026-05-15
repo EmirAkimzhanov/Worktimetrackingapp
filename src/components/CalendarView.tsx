@@ -402,6 +402,7 @@ export function CalendarView() {
               const isDayOffDay = isDayOff(dateStr);
               const dayEntries = getEntriesForDate(day);
               const totalHours = getTotalHoursForDate(day);
+              const totalEntriesCount = dayEntries.filter(e => !isHolidayEntry(e)).length;
               const isHoliday = holiday !== null;
 
               // Определяем стиль для дня
@@ -462,36 +463,19 @@ export function CalendarView() {
                       </div>
                     )}
 
-                    {!isHoliday && !isDayOffDay && dayEntries.filter(e => !isHolidayEntry(e)).length > 0 && (
+                    {!isHoliday && !isDayOffDay && totalEntriesCount > 0 && (
                       <div className="flex-1 space-y-1 overflow-hidden mt-1">
-                        {dayEntries.filter(e => !isHolidayEntry(e)).slice(0, 2).map(entry => {
-                          const projectColor = getProjectColor(entry);
-                          const projectCode = getProjectCode(entry);
+                        {/* Показываем количество записей вместо кодов проектов */}
+                        <div className="text-xs text-center font-medium text-blue-600 bg-blue-50 rounded-md py-1 px-1">
+                          {totalEntriesCount} {totalEntriesCount === 1 ? 'entry' : 'entries'}
+                        </div>
 
-                          return (
-                            <div
-                              key={entry.id}
-                              className="text-xs px-1 py-0.5 rounded truncate"
-                              style={{
-                                backgroundColor: projectColor + '20',
-                                color: projectColor
-                              }}
-                            >
-                              {projectCode}
-                            </div>
-                          );
-                        })}
-                        {dayEntries.filter(e => !isHolidayEntry(e)).length > 2 && (
-                          <div className="text-xs text-slate-500 px-1">
-                            +{dayEntries.filter(e => !isHolidayEntry(e)).length - 2} more
-                          </div>
-                        )}
-                        {totalHours > 0 && (
-                          <div className="flex items-center gap-1 text-xs px-1 mt-1">
+                        {/* {totalHours > 0 && (
+                          <div className="flex items-center justify-center gap-1 text-xs px-1 mt-1">
                             <Clock className="w-3 h-3" style={{ color: '#0066CC' }} />
                             <span style={{ color: '#0066CC', fontWeight: 600 }}>{totalHours.toFixed(1)}h</span>
                           </div>
-                        )}
+                        )} */}
                       </div>
                     )}
                   </div>
@@ -504,169 +488,153 @@ export function CalendarView() {
 
       {/* Модальное окно с деталями дня */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="w-[90vw] h-[90vh] flex flex-col p-0">
-          <DialogHeader className="p-3 border-b shrink-0">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <DialogTitle className="flex items-center gap-2 text-xl">
-                <CalendarDays className="w-5 h-5 flex-shrink-0" />
-                <span>{selectedDate && formatDate(selectedDate)}</span>
-              </DialogTitle>
-            </div>
-
+        <DialogContent className="max-w-5xl w-[90vw] max-h-[85vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-6 pb-4 shrink-0 bg-white border-b border-gray-100">
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <CalendarDays className="w-5 h-5 text-blue-600" />
+              <span className="font-semibold">{selectedDate && formatDate(selectedDate)}</span>
+            </DialogTitle>
             {selectedDateEntries.length > 0 && (
-              <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                <span>Total: {selectedDateEntries.reduce((sum, e) => sum + (e.hours || 0), 0).toFixed(1)}h</span>
-                <span>•</span>
-                <span>{selectedDateEntries.length} entries</span>
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
+                <span className="text-sm text-gray-600">
+                  Total hours: <span className="font-bold text-blue-600">
+                    {selectedDateEntries.reduce((sum, e) => sum + (e.hours || 0), 0).toFixed(1)}h
+                  </span>
+                </span>
+                <div className="w-px h-4 bg-gray-200" />
+                <span className="text-sm text-gray-600">
+                  {selectedDateEntries.length} {selectedDateEntries.length === 1 ? 'entry' : 'entries'}
+                </span>
               </div>
             )}
           </DialogHeader>
 
-          <div className="flex-1 flex flex-col p-3 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             {selectedDateEntries.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-gray-500">
+              <div className="flex items-center justify-center min-h-[300px]">
                 <div className="text-center">
-                  <CalendarIcon className="w-16 h-16 mx-auto mb-4 opacity-30" />
-                  <p className="text-lg">No time entries for this day</p>
+                  <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="text-gray-500">No time entries for this day</p>
                 </div>
               </div>
             ) : (
-              currentEntry && (
-                <div className="flex-1 flex flex-col h-full">
-                  <div style={{ marginBottom: '15px', padding: '10px' }} className={`p-5 rounded-xl mb-6 ${isHolidayEntry(currentEntry) ? 'bg-red-50 border border-red-100' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100'}`}>
-                    <div className="flex gap-4">
-                      <div className="flex items-start gap-4 flex-1">
-                        <div
-                          className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-                          style={{ backgroundColor: getProjectColor(currentEntry) + '20', border: `1px solid ${getProjectColor(currentEntry)}30` }}
-                        >
-                          {isHolidayEntry(currentEntry) ? (
-                            <Gift className="w-7 h-7" style={{ color: getProjectColor(currentEntry) }} />
-                          ) : (
-                            <FolderKanban className="w-7 h-7" style={{ color: getProjectColor(currentEntry) }} />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h2 className="text-xl font-bold text-gray-800">
-                              {getProjectName(currentEntry)}
-                            </h2>
-                            <span
-                              className="px-2 py-0.5 rounded-md text-xs font-mono"
-                              style={{
-                                backgroundColor: getProjectColor(currentEntry) + '15',
-                                color: getProjectColor(currentEntry),
-                                border: `1px solid ${getProjectColor(currentEntry)}30`
-                              }}
-                            >
-                              {getProjectCode(currentEntry)}
-                            </span>
-                          </div>
-                        </div>
+              <div className="space-y-4">
+                {/* Карточка текущей записи */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                  <div className="p-5 bg-gray-50">
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: getProjectColor(currentEntry) + '15' }}
+                      >
+                        {isHolidayEntry(currentEntry) ? (
+                          <Gift className="w-5 h-5" style={{ color: getProjectColor(currentEntry) }} />
+                        ) : (
+                          <FolderKanban className="w-5 h-5" style={{ color: getProjectColor(currentEntry) }} />
+                        )}
                       </div>
-
-                      <div className="flex-1">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Task Type</div>
-                            <div className="flex items-center gap-1.5 text-sm text-gray-700">
-                              <FileText className="w-3.5 h-3.5" />
-                              <span>{getTaskType(currentEntry)}</span>
-                            </div>
-                          </div>
-
-                          {!isHolidayEntry(currentEntry) && currentEntry.client && (
-                            <div>
-                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Client</div>
-                              <div className="flex items-center gap-1.5 text-sm text-gray-700">
-                                <User className="w-3.5 h-3.5" />
-                                <span>{getClient(currentEntry)}</span>
-                              </div>
-                            </div>
-                          )}
-
-                          {!isHolidayEntry(currentEntry) && currentEntry.hours > 0 && (
-                            <div>
-                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Hours</div>
-                              <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-700">
-                                <Clock className="w-3.5 h-3.5" />
-                                <span>{currentEntry.hours?.toFixed(1)} hours</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-semibold text-gray-900">
+                          {getProjectName(currentEntry)}
+                        </h3>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
-                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Date</div>
-                      <div className="text-gray-900">
-                        {new Date(currentEntry.date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          month: 'long',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
+                  <div className="p-5 space-y-4">
+                    <div className="flex items-center gap-6 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">
+                          <span className="text-gray-400 mr-1">Type:</span>
+                          {getTaskType(currentEntry)}
+                        </span>
                       </div>
+
+                      {!isHolidayEntry(currentEntry) && (
+                        <>
+                          <div className="w-px h-5 bg-gray-200" />
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-gray-600">
+                              <span className="text-gray-400 mr-1">Client:</span>
+                              {getClient(currentEntry)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+
+                      {!isHolidayEntry(currentEntry) && currentEntry.hours > 0 && (
+                        <>
+                          <div className="w-px h-5 bg-gray-200" />
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4" style={{ color: getProjectColor(currentEntry) }} />
+                            <span className="text-sm font-semibold" style={{ color: getProjectColor(currentEntry) }}>
+                              {currentEntry.hours?.toFixed(1)} hours
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
-                    {!isHolidayEntry(currentEntry) && currentEntry.user && (
-                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">User</div>
-                        <div className="text-gray-900">
-                          {currentEntry.user}
-                        </div>
-                      </div>
-                    )}
-
                     {currentEntry.task && (
-                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                          {isHolidayEntry(currentEntry) ? 'Holiday Name' : 'Task'}
-                        </div>
-                        <div className="text-gray-900">
+                      <div className="flex items-start gap-2 pt-2">
+                        <span className="text-xs text-gray-400 mt-0.5">Task:</span>
+                        <span className="text-sm text-gray-700 flex-1">
                           {getTaskName(currentEntry)}
-                        </div>
+                        </span>
                       </div>
                     )}
 
                     {currentEntry.description && (
-                      <div className="md:col-span-2 bg-gray-50 rounded-lg p-4 border border-gray-200">
-                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Description</div>
-                        <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      <div className="flex items-start gap-2 pt-2">
+                        <span className="text-xs text-gray-400 mt-0.5">Description:</span>
+                        <span className="text-sm text-gray-600 flex-1 leading-relaxed">
                           {currentEntry.description}
-                        </div>
+                        </span>
                       </div>
                     )}
                   </div>
+                </div>
 
-                  <div className="flex items-center justify-between pt-6 mt-6 border-t border-gray-200">
+                {selectedDateEntries.length > 1 && (
+                  <div className="flex items-center justify-center gap-1.5 py-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                  </div>
+                )}
+
+                {selectedDateEntries.length > 1 && (
+                  <div className="flex items-center justify-between gap-3 pt-2">
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={handlePreviousEntry}
                       disabled={currentEntryIndex === 0}
-                      className="gap-2"
+                      className="gap-1.5 px-4 rounded-lg text-sm"
                     >
-                      <ChevronLeft className="w-4 h-4" />
-                      Previous Task
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      Previous
                     </Button>
-                    <span className="text-sm text-gray-500">
-                      Task {currentEntryIndex + 1} of {selectedDateEntries.length}
-                    </span>
+                    <div className="bg-gray-100 rounded-full px-3 py-1">
+                      <span className="text-xs font-medium text-gray-600">
+                        {currentEntryIndex + 1} / {selectedDateEntries.length}
+                      </span>
+                    </div>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={handleNextEntry}
                       disabled={currentEntryIndex === selectedDateEntries.length - 1}
-                      className="gap-2"
+                      className="gap-1.5 px-4 rounded-lg text-sm"
                     >
-                      Next Task
-                      <ChevronRight className="w-4 h-4" />
+                      Next
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </Button>
                   </div>
-                </div>
-              )
+                )}
+              </div>
             )}
           </div>
         </DialogContent>

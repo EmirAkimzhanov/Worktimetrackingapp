@@ -1009,25 +1009,27 @@ export function TimeEntryForm() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
-                  <Switch
-                    id="weekends"
-                    checked={includeWeekends}
-                    onCheckedChange={setIncludeWeekends}
-                  />
-                  <Label htmlFor="weekends" className="cursor-pointer">
-                    Include weekends
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
-                  <Switch
-                    id="holidays"
-                    checked={includeHolidays}
-                    onCheckedChange={setIncludeHolidays}
-                  />
-                  <Label htmlFor="holidays" className="cursor-pointer">
-                    Include holidays
-                  </Label>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '48%' }}>
+                    <Switch
+                      id="weekends"
+                      checked={includeWeekends}
+                      onCheckedChange={setIncludeWeekends}
+                    />
+                    <Label htmlFor="weekends" className="cursor-pointer">
+                      Include weekends
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '48%' }}>
+                    <Switch
+                      id="holidays"
+                      checked={includeHolidays}
+                      onCheckedChange={setIncludeHolidays}
+                    />
+                    <Label htmlFor="holidays" className="cursor-pointer">
+                      Include holidays
+                    </Label>
+                  </div>
                 </div>
               </>
             )}

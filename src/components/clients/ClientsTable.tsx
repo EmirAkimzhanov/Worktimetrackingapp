@@ -582,23 +582,7 @@ export function ClientsTable({
                                 {client.personal_number}
                               </span>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() =>
-                                copyToClipboard(
-                                  client.personal_number!,
-                                  "Personal number",
-                                )
-                              }
-                            >
-                              {copiedText === client.personal_number ? (
-                                <Check className="w-3 h-3 text-green-600" />
-                              ) : (
-                                <Copy className="w-3 h-3 text-gray-400 hover:text-gray-600" />
-                              )}
-                            </Button>
+                            {/*  */}
                           </>
                         ) : (
                           <span className="text-gray-400 italic text-sm">
@@ -654,91 +638,95 @@ export function ClientsTable({
       </div>
 
       {/* Улучшенная пагинация */}
-      {totalPages > 0 && (
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
-          <div className="text-xs text-muted-foreground">
-            Showing {displayClients.length} of {totalCount} clients
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap justify-center">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrevPage}
-              disabled={!hasPrev || isLoadingClients}
-              className="h-7 text-xs"
-            >
-              <ChevronLeft size={12} className="mr-1" />
-              Previous
-            </Button>
-
-            <div className="hidden md:flex gap-1">
-              {renderPageNumbers()}
+      {
+        totalPages > 0 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
+            <div className="text-xs text-muted-foreground">
+              Showing {displayClients.length} of {totalCount} clients
             </div>
 
-            <div className="flex md:hidden items-center gap-2">
-              <Select
-                value={currentPage.toString()}
-                onValueChange={(value) => handleGoToPage(parseInt(value))}
-                disabled={isLoadingClients}
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrevPage}
+                disabled={!hasPrev || isLoadingClients}
+                className="h-7 text-xs"
               >
-                <SelectTrigger className="w-[100px] h-7 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <SelectItem key={page} value={page.toString()}>
-                      Page {page} of {totalPages}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <ChevronLeft size={12} className="mr-1" />
+                Previous
+              </Button>
+
+              <div className="hidden md:flex gap-1">
+                {renderPageNumbers()}
+              </div>
+
+              <div className="flex md:hidden items-center gap-2">
+                <Select
+                  value={currentPage.toString()}
+                  onValueChange={(value) => handleGoToPage(parseInt(value))}
+                  disabled={isLoadingClients}
+                >
+                  <SelectTrigger className="w-[100px] h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <SelectItem key={page} value={page.toString()}>
+                        Page {page} of {totalPages}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="hidden sm:flex md:hidden items-center gap-2 text-xs">
+                <span className="font-medium">{currentPage}</span>
+                <span className="text-muted-foreground">of {totalPages}</span>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={!hasNext || isLoadingClients}
+                className="h-7 text-xs"
+              >
+                Next
+                <ChevronRight size={12} className="ml-1" />
+              </Button>
             </div>
 
-            <div className="hidden sm:flex md:hidden items-center gap-2 text-xs">
-              <span className="font-medium">{currentPage}</span>
-              <span className="text-muted-foreground">of {totalPages}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                Go to:
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={currentPage}
+                onChange={(e) => {
+                  const page = parseInt(e.target.value);
+                  if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                    handleGoToPage(page);
+                  }
+                }}
+                className="w-14 h-7 px-2 text-xs border rounded-md"
+                disabled={isLoadingClients}
+              />
             </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleNextPage}
-              disabled={!hasNext || isLoadingClients}
-              className="h-7 text-xs"
-            >
-              Next
-              <ChevronRight size={12} className="ml-1" />
-            </Button>
           </div>
+        )
+      }
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Go to:
-            </span>
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              value={currentPage}
-              onChange={(e) => {
-                const page = parseInt(e.target.value);
-                if (!isNaN(page) && page >= 1 && page <= totalPages) {
-                  handleGoToPage(page);
-                }
-              }}
-              className="w-14 h-7 px-2 text-xs border rounded-md"
-              disabled={isLoadingClients}
-            />
+      {
+        totalPages > 0 && (
+          <div className="text-center text-xs text-muted-foreground pt-2">
+            Page {currentPage} of {totalPages} • Total {totalCount} clients
           </div>
-        </div>
-      )}
-
-      {totalPages > 0 && (
-        <div className="text-center text-xs text-muted-foreground pt-2">
-          Page {currentPage} of {totalPages} • Total {totalCount} clients
-        </div>
-      )}
+        )
+      }
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -776,6 +764,6 @@ export function ClientsTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 }

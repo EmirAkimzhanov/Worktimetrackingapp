@@ -19,7 +19,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '../../ui/dropdown-menu';
-import { Search, MoreHorizontal, Mail, Eye, Calendar, AlertCircle, PenSquare, CheckSquare, Square, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, MoreHorizontal, Mail, Eye, Calendar, AlertCircle, PenSquare, CheckSquare, Square, X, ChevronLeft, ChevronRight, Filter, User } from 'lucide-react';
 import { TimeSheetMonitoring } from '../../../types/types';
 import { format } from 'date-fns';
 import { useSendLetter, useSendReminder } from '../../../hooks/useTimeEntry';
@@ -64,9 +64,17 @@ interface MonitoringTableProps {
     periodStart?: string;
     periodEnd?: string;
     isLoading?: boolean;
+    onFilterChange?: (filters: {
+        user_email?: string;
+        first_name?: string;
+        last_name?: string;
+        completion?: string;
+        updated_after?: string;
+        updated_before?: string;
+    }) => void;
 }
 
-// Компонент для отображения детальной информации о пользователе (компактная версия)
+// Компонент для отображения детальной информации о пользователе
 function UserDetailsDialog({
     user,
     periodStart,
@@ -104,7 +112,7 @@ function UserDetailsDialog({
             <DialogContent className="sm:max-w-[90vw] md:max-w-[85vw] lg:max-w-[80vw] xl:max-w-[75vw] max-h-[40vh] overflow-y-auto">
                 <DialogHeader className="pb-2">
                     <DialogTitle className="text-xl font-bold flex items-center justify-between">
-                        <span>Time Sheet Details - {user.user_email}</span>
+                        <span>Time Sheet Details - {user.first_name} {user.last_name}</span>
                         <Badge className={`${statusConfig.color} border-0`}>
                             <StatusIcon className="w-3 h-3 mr-1" />
                             {statusConfig.label}
@@ -117,6 +125,14 @@ function UserDetailsDialog({
                         <div>
                             <label className="text-xs text-gray-500">User ID</label>
                             <p className="font-semibold">{user.user_id}</p>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Name</label>
+                            <p className="font-semibold">{user.first_name} {user.last_name}</p>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500">Email</label>
+                            <p className="font-semibold text-xs">{user.user_email}</p>
                         </div>
                         <div>
                             <label className="text-xs text-gray-500">Completion</label>
@@ -254,10 +270,17 @@ export function MonitoringTable({
     onViewDetails,
     periodStart,
     periodEnd,
-    isLoading = false
+    isLoading = false,
+    onFilterChange
 }: MonitoringTableProps) {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string>('all');
+    // Состояния для фильтров
+    const [searchFirstName, setSearchFirstName] = useState('');
+    const [searchLastName, setSearchLastName] = useState('');
+    const [searchEmail, setSearchEmail] = useState('');
+    const [completionFilter, setCompletionFilter] = useState<string>('all');
+    const [updatedAfter, setUpdatedAfter] = useState('');
+    const [updatedBefore, setUpdatedBefore] = useState('');
+
     const { mutate: sendReminder, isPending: isSending } = useSendReminder();
     const { mutate: sendLetter, isPending: isSendingLetter } = useSendLetter();
 
@@ -285,6 +308,43 @@ export function MonitoringTable({
         subject: '',
         body: ''
     });
+
+    // Применение фильтров
+    const applyFilters = () => {
+        if (onFilterChange) {
+            onFilterChange({
+                first_name: searchFirstName || undefined,
+                last_name: searchLastName || undefined,
+                user_email: searchEmail || undefined,
+                completion: completionFilter !== 'all' ? completionFilter : undefined,
+                updated_after: updatedAfter || undefined,
+                updated_before: updatedBefore || undefined,
+            });
+        }
+    };
+
+    // Сброс фильтров
+    const resetFilters = () => {
+        setSearchFirstName('');
+        setSearchLastName('');
+        setSearchEmail('');
+        setCompletionFilter('all');
+        setUpdatedAfter('');
+        setUpdatedBefore('');
+
+        if (onFilterChange) {
+            onFilterChange({});
+        }
+    };
+
+    // Автоматическое применение фильтров при изменении
+    React.useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            applyFilters();
+        }, 500);
+
+        return () => clearTimeout(timeoutId);
+    }, [searchFirstName, searchLastName, searchEmail, completionFilter, updatedAfter, updatedBefore]);
 
     const getStatus = (completion: number) => {
         if (completion >= 100) return 'completed';
@@ -327,26 +387,30 @@ export function MonitoringTable({
         return data.filter(item => item.completion < 100);
     }, [data]);
 
-    const getIncompleteEmails = useMemo(() => {
-        return getIncompleteUsers.map(user => user.user_email);
-    }, [getIncompleteUsers]);
-
-    // Фильтрация данных (только по поиску и статусу, пагинация на сервере)
+    // Фильтрация данных на клиенте (поиск по имени, фамилии, email)
     const filteredData = useMemo(() => {
         let result = data;
 
-        if (searchTerm) {
+        if (searchFirstName) {
             result = result.filter(item =>
-                item.user_email.toLowerCase().includes(searchTerm.toLowerCase())
+                (item.first_name || '').toLowerCase().includes(searchFirstName.toLowerCase())
             );
         }
 
-        if (statusFilter !== 'all') {
-            result = result.filter(item => getStatus(item.completion) === statusFilter);
+        if (searchLastName) {
+            result = result.filter(item =>
+                (item.last_name || '').toLowerCase().includes(searchLastName.toLowerCase())
+            );
+        }
+
+        if (searchEmail) {
+            result = result.filter(item =>
+                item.user_email.toLowerCase().includes(searchEmail.toLowerCase())
+            );
         }
 
         return result;
-    }, [data, searchTerm, statusFilter]);
+    }, [data, searchFirstName, searchLastName, searchEmail]);
 
     const toggleEmailSelection = (email: string) => {
         const newSelection = new Set(selectedEmails);
@@ -519,7 +583,6 @@ Administration`;
 
     const totalPages = Math.ceil(totalCount / pageSize);
 
-    // Функция для отображения номеров страниц
     const renderPageNumbers = () => {
         const pages = [];
         const maxVisiblePages = 5;
@@ -592,29 +655,7 @@ Administration`;
         return pages;
     };
 
-    if (isLoading && data.length === 0) {
-        return (
-            <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-4"></div>
-                    <p className="text-gray-500">Loading monitoring data...</p>
-                </CardContent>
-            </Card>
-        );
-    }
-
-    if (!data || data.length === 0) {
-        return (
-            <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                    <Calendar className="w-12 h-12 text-gray-400 mb-4" />
-                    <p className="text-gray-500 text-lg">No monitoring data available</p>
-                    <p className="text-gray-400 text-sm">Select country and date range to load data</p>
-                </CardContent>
-            </Card>
-        );
-    }
-
+    // Всегда показываем карточку с фильтрами, даже если нет данных
     return (
         <>
             <Card>
@@ -633,20 +674,46 @@ Administration`;
                             </Badge>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4 mt-4 flex-wrap">
-                        <div className="relative flex-1 min-w-[200px]">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+
+                    {/* Фильтры - всегда показываем */}
+                    <div className="flex flex-wrap gap-2 items-center mt-4">
+                        {/* Поиск по First Name */}
+                        <div className="relative w-[150px]">
+                            <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                             <Input
-                                placeholder="Search by email..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10"
+                                placeholder="First name..."
+                                value={searchFirstName}
+                                onChange={(e) => setSearchFirstName(e.target.value)}
+                                className="pl-8 h-8 text-sm"
                             />
                         </div>
 
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-[130px]">
-                                <SelectValue placeholder="All Status" />
+                        {/* Поиск по Last Name */}
+                        <div className="relative w-[150px]">
+                            <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            <Input
+                                placeholder="Last name..."
+                                value={searchLastName}
+                                onChange={(e) => setSearchLastName(e.target.value)}
+                                className="pl-8 h-8 text-sm"
+                            />
+                        </div>
+
+                        {/* Поиск по email */}
+                        <div className="relative w-[180px]">
+                            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            <Input
+                                placeholder="Email..."
+                                value={searchEmail}
+                                onChange={(e) => setSearchEmail(e.target.value)}
+                                className="pl-8 h-8 text-sm"
+                            />
+                        </div>
+
+                        {/* Фильтр по статусу */}
+                        <Select value={completionFilter} onValueChange={setCompletionFilter}>
+                            <SelectTrigger className="w-[110px] h-8 text-sm">
+                                <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Status</SelectItem>
@@ -656,263 +723,317 @@ Administration`;
                             </SelectContent>
                         </Select>
 
-                        <div className="flex gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsSelectMode(!isSelectMode)}
-                                className="text-sm"
-                            >
-                                {isSelectMode ? 'Cancel Selection' : 'Select Users'}
-                            </Button>
-
-                            {isSelectMode && (
-                                <>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={selectAllIncomplete}
-                                        className="text-sm"
-                                    >
-                                        Select All Incomplete
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={clearSelection}
-                                        className="text-sm"
-                                    >
-                                        Clear
-                                    </Button>
-                                    <Button
-                                        onClick={handleBulkSendReminder}
-                                        disabled={selectedEmails.size === 0 || isSending}
-                                        className="bg-black hover:bg-gray-800 text-white text-sm"
-                                        style={{ backgroundColor: "black" }}
-                                        size="sm"
-                                    >
-                                        <Mail className="w-4 h-4 mr-2" />
-                                        Send to {selectedEmails.size} user(s)
-                                    </Button>
-                                </>
-                            )}
+                        {/* Дата обновления после */}
+                        <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-500 whitespace-nowrap">After:</span>
+                            <Input
+                                type="date"
+                                value={updatedAfter}
+                                onChange={(e) => setUpdatedAfter(e.target.value)}
+                                className="w-[120px] h-8 text-sm"
+                            />
                         </div>
+
+                        {/* Дата обновления до */}
+                        <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-500 whitespace-nowrap">Before:</span>
+                            <Input
+                                type="date"
+                                value={updatedBefore}
+                                onChange={(e) => setUpdatedBefore(e.target.value)}
+                                className="w-[120px] h-8 text-sm"
+                            />
+                        </div>
+
+                        {/* Кнопка сброса */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={resetFilters}
+                            className="h-8 px-2 text-sm"
+                        >
+                            <X className="w-3.5 h-3.5 mr-1" />
+                            Reset
+                        </Button>
+
+                        {/* Разделитель */}
+                        <div className="w-px h-6 bg-gray-300 mx-1" />
+
+                        {/* Кнопки выбора и действий */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsSelectMode(!isSelectMode)}
+                            className="h-8 text-sm"
+                        >
+                            <Filter className="w-3.5 h-3.5 mr-1" />
+                            {isSelectMode ? 'Cancel' : 'Select'}
+                        </Button>
+
+                        {isSelectMode && (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={selectAllIncomplete}
+                                    className="h-8 text-sm"
+                                >
+                                    All Incomplete
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={clearSelection}
+                                    className="h-8 text-sm"
+                                >
+                                    Clear
+                                </Button>
+                                <Button
+                                    onClick={handleBulkSendReminder}
+                                    disabled={selectedEmails.size === 0 || isSending}
+                                    className="bg-black hover:bg-gray-800 text-white h-8 text-sm px-3"
+                                    style={{ backgroundColor: "black" }}
+                                    size="sm"
+                                >
+                                    <Mail className="w-3.5 h-3.5 mr-1" />
+                                    Send ({selectedEmails.size})
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="rounded-md border overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    {isSelectMode && (
-                                        <TableHead className="w-[50px]">Select</TableHead>
-                                    )}
-                                    <TableHead>User</TableHead>
-                                    <TableHead>Required Hours</TableHead>
-                                    <TableHead>Logged Hours</TableHead>
-                                    <TableHead>Completion</TableHead>
-                                    <TableHead>Missing Days</TableHead>
-                                    <TableHead>Last Updated</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="w-[130px]">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredData.map((item) => {
-                                    const status = getStatus(item.completion);
-                                    const statusColor = getStatusColor(status);
-                                    const statusText = getStatusText(status);
-                                    const isIncomplete = item.completion < 100;
-
-                                    return (
-                                        <TableRow key={item.user_id}>
-                                            {isSelectMode && (
-                                                <TableCell>
-                                                    <Checkbox
-                                                        checked={selectedEmails.has(item.user_email)}
-                                                        onCheckedChange={() => toggleEmailSelection(item.user_email)}
-                                                        disabled={!isIncomplete}
-                                                        className={!isIncomplete ? 'opacity-50' : ''}
-                                                    />
-                                                </TableCell>
-                                            )}
-                                            <TableCell>
-                                                <div>
-                                                    <div className="font-medium">{item.user_email}</div>
-                                                    <div className="text-sm text-gray-500">
-                                                        ID: {item.user_id}
-                                                    </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>{item.required_hours}h</TableCell>
-                                            <TableCell>{item.total_hours}h</TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-16 bg-gray-200 rounded-full h-2">
-                                                        <div
-                                                            className="bg-blue-600 h-2 rounded-full"
-                                                            style={{ width: `${Math.min(item.completion, 100)}%` }}
-                                                        />
-                                                    </div>
-                                                    <span className="text-sm">{item.completion.toFixed(1)}%</span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {item.missing_days_count > 0 ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <AlertCircle className="w-4 h-4 text-red-500" />
-                                                        <span className="text-sm font-medium text-red-600">
-                                                            {item.missing_days_count} days
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-sm text-green-600">None</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {item.last_updated ? format(new Date(item.last_updated), 'dd.MM.yyyy HH:mm') : '-'}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge className={statusColor}>
-                                                    {statusText}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreHorizontal className="w-4 h-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleViewDetails(item)}>
-                                                            <Eye className="w-4 h-4 mr-2" />
-                                                            View Details
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={() => handleSendReminder(item.user_id, item.user_email)}
-                                                            disabled={item.completion >= 100 || isSending}
-                                                        >
-                                                            <Mail className="w-4 h-4 mr-2" />
-                                                            Send Reminder
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={() => handleSendLetter(item.user_email)}
-                                                            disabled={isSendingLetter}
-                                                        >
-                                                            <PenSquare className="w-4 h-4 mr-2" />
-                                                            Send Letter
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </div>
-
-                    {/* Пагинация */}
-                    {totalPages > 1 && (
-                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">
-                                    Rows per page:
-                                </span>
-                                <Select
-                                    value={pageSize.toString()}
-                                    onValueChange={(value) => onPageSizeChange?.(parseInt(value))}
-                                    disabled={isLoading}
-                                >
-                                    <SelectTrigger className="w-[70px] h-8">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="10">10</SelectItem>
-                                        <SelectItem value="25">25</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="text-sm text-muted-foreground">
-                                Showing {filteredData.length} of {totalCount} records
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap justify-center">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => onPageChange?.(Math.max(currentPage - 1, 1))}
-                                    disabled={currentPage === 1 || isLoading}
-                                    className="h-8"
-                                >
-                                    <ChevronLeft className="w-4 h-4 mr-1" />
-                                    Previous
-                                </Button>
-
-                                <div className="hidden md:flex gap-1">
-                                    {renderPageNumbers()}
-                                </div>
-
-                                <div className="flex md:hidden items-center gap-2">
-                                    <Select
-                                        value={currentPage.toString()}
-                                        onValueChange={(value) => onPageChange?.(parseInt(value))}
-                                        disabled={isLoading}
-                                    >
-                                        <SelectTrigger className="w-[100px] h-8">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                                <SelectItem key={page} value={page.toString()}>
-                                                    Page {page} of {totalPages}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="hidden sm:flex md:hidden items-center gap-2 text-sm">
-                                    <span className="font-medium">{currentPage}</span>
-                                    <span className="text-muted-foreground">of {totalPages}</span>
-                                </div>
-
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => onPageChange?.(Math.min(currentPage + 1, totalPages))}
-                                    disabled={currentPage === totalPages || isLoading}
-                                    className="h-8"
-                                >
-                                    Next
-                                    <ChevronRight className="w-4 h-4 ml-1" />
-                                </Button>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    Go to page:
-                                </span>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    max={totalPages}
-                                    value={currentPage}
-                                    onChange={(e) => {
-                                        const page = parseInt(e.target.value);
-                                        if (!isNaN(page) && page >= 1 && page <= totalPages) {
-                                            onPageChange?.(page);
-                                        }
-                                    }}
-                                    className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    disabled={isLoading}
-                                />
-                            </div>
+                    {isLoading && data.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-4"></div>
+                            <p className="text-gray-500">Loading monitoring data...</p>
                         </div>
+                    ) : !data || data.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12">
+                            <Calendar className="w-12 h-12 text-gray-400 mb-4" />
+                            <p className="text-gray-500 text-lg">No monitoring data available</p>
+                            <p className="text-gray-400 text-sm">Try adjusting your filters or date range</p>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="rounded-md border overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            {isSelectMode && (
+                                                <TableHead className="w-[50px]">Select</TableHead>
+                                            )}
+                                            <TableHead>First Name</TableHead>
+                                            <TableHead>Last Name</TableHead>
+                                            <TableHead>Email</TableHead>
+                                            <TableHead>Required Hours</TableHead>
+                                            <TableHead>Logged Hours</TableHead>
+                                            <TableHead>Completion</TableHead>
+                                            <TableHead>Missing Days</TableHead>
+                                            <TableHead>Last Updated</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="w-[130px]">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredData.map((item) => {
+                                            const status = getStatus(item.completion);
+                                            const statusColor = getStatusColor(status);
+                                            const statusText = getStatusText(status);
+                                            const isIncomplete = item.completion < 100;
+
+                                            return (
+                                                <TableRow key={item.user_id}>
+                                                    {isSelectMode && (
+                                                        <TableCell>
+                                                            <Checkbox
+                                                                checked={selectedEmails.has(item.user_email)}
+                                                                onCheckedChange={() => toggleEmailSelection(item.user_email)}
+                                                                disabled={!isIncomplete}
+                                                                className={!isIncomplete ? 'opacity-50' : ''}
+                                                            />
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell className="font-medium">
+                                                        {item.first_name || '-'}
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">
+                                                        {item.last_name || '-'}
+                                                    </TableCell>
+                                                    <TableCell className="text-sm">
+                                                        {item.user_email}
+                                                    </TableCell>
+                                                    <TableCell>{item.required_hours}h</TableCell>
+                                                    <TableCell>{item.total_hours}h</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-16 bg-gray-200 rounded-full h-2">
+                                                                <div
+                                                                    className="bg-blue-600 h-2 rounded-full"
+                                                                    style={{ width: `${Math.min(item.completion, 100)}%` }}
+                                                                />
+                                                            </div>
+                                                            <span className="text-sm">{item.completion.toFixed(1)}%</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {item.missing_days_count > 0 ? (
+                                                            <div className="flex items-center gap-1">
+                                                                <AlertCircle className="w-4 h-4 text-red-500" />
+                                                                <span className="text-sm font-medium text-red-600">
+                                                                    {item.missing_days_count} days
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-sm text-green-600">None</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {item.last_updated ? format(new Date(item.last_updated), 'dd.MM.yyyy HH:mm') : '-'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge className={statusColor}>
+                                                            {statusText}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon">
+                                                                    <MoreHorizontal className="w-4 h-4" />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuItem onClick={() => handleViewDetails(item)}>
+                                                                    <Eye className="w-4 h-4 mr-2" />
+                                                                    View Details
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleSendReminder(item.user_id, item.user_email)}
+                                                                    disabled={item.completion >= 100 || isSending}
+                                                                >
+                                                                    <Mail className="w-4 h-4 mr-2" />
+                                                                    Send Reminder
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleSendLetter(item.user_email)}
+                                                                    disabled={isSendingLetter}
+                                                                >
+                                                                    <PenSquare className="w-4 h-4 mr-2" />
+                                                                    Send Letter
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            {/* Пагинация */}
+                            {totalPages > 1 && (
+                                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">
+                                            Rows per page:
+                                        </span>
+                                        <Select
+                                            value={pageSize.toString()}
+                                            onValueChange={(value) => onPageSizeChange?.(parseInt(value))}
+                                            disabled={isLoading}
+                                        >
+                                            <SelectTrigger className="w-[70px] h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="10">10</SelectItem>
+                                                <SelectItem value="25">25</SelectItem>
+                                                <SelectItem value="50">50</SelectItem>
+                                                <SelectItem value="100">100</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="text-sm text-muted-foreground">
+                                        Showing {filteredData.length} of {totalCount} records
+                                    </div>
+
+                                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => onPageChange?.(Math.max(currentPage - 1, 1))}
+                                            disabled={currentPage === 1 || isLoading}
+                                            className="h-8"
+                                        >
+                                            <ChevronLeft className="w-4 h-4 mr-1" />
+                                            Previous
+                                        </Button>
+
+                                        <div className="hidden md:flex gap-1">
+                                            {renderPageNumbers()}
+                                        </div>
+
+                                        <div className="flex md:hidden items-center gap-2">
+                                            <Select
+                                                value={currentPage.toString()}
+                                                onValueChange={(value) => onPageChange?.(parseInt(value))}
+                                                disabled={isLoading}
+                                            >
+                                                <SelectTrigger className="w-[100px] h-8">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                                        <SelectItem key={page} value={page.toString()}>
+                                                            Page {page} of {totalPages}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="hidden sm:flex md:hidden items-center gap-2 text-sm">
+                                            <span className="font-medium">{currentPage}</span>
+                                            <span className="text-muted-foreground">of {totalPages}</span>
+                                        </div>
+
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => onPageChange?.(Math.min(currentPage + 1, totalPages))}
+                                            disabled={currentPage === totalPages || isLoading}
+                                            className="h-8"
+                                        >
+                                            Next
+                                            <ChevronRight className="w-4 h-4 ml-1" />
+                                        </Button>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                            Go to page:
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={totalPages}
+                                            value={currentPage}
+                                            onChange={(e) => {
+                                                const page = parseInt(e.target.value);
+                                                if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                                                    onPageChange?.(page);
+                                                }
+                                            }}
+                                            className="w-16 h-8 px-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </CardContent>
             </Card>

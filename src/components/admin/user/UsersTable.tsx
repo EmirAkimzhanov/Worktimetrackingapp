@@ -4,7 +4,7 @@ import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
-import { getRoleBadgeVariant } from '../../../const/consts';
+import { getDeptRoleBadgeVariant, getRoleBadgeVariant } from '../../../const/consts';
 import { User as UserType, Position, Department } from '../../../types/types';
 import { useDeleteUsers, useGetUserGrades, useGetUsers } from '../../../hooks/useUsers';
 import { useUserStore } from '../../../store/UsersStore';
@@ -235,6 +235,8 @@ export function UsersTable({
         if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
         if (debouncedRole && debouncedRole.trim()) params.role_name = debouncedRole;
         if (localFilters.is_active && localFilters.is_active !== 'all') params.is_active = localFilters.is_active;
+
+        console.log(getDeptRoleBadgeVariant(''), 'fdsafdsfdasfdas')
 
         console.log('📦 Loading users with params:', params);
         getUsers(params);
@@ -725,8 +727,11 @@ export function UsersTable({
                                         </span>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className="text-xs truncate max-w-[110px]">
-                                            {user.department_role_name || user.department_role || '-'}
+                                        <Badge
+                                            variant={getDeptRoleBadgeVariant(user.department_role)}
+                                            className="text-xs truncate max-w-[110px]"
+                                        >
+                                            {user.department_role === 'manager' ? 'Manager' : user.department_role === 'member' ? 'Member' : user.department_role || '-'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>

@@ -22,6 +22,26 @@ import { useEditProject, useGetProjects, useSendProject } from '../../../hooks/u
 import { toast } from 'sonner';
 import { useGetManagers } from '../../../hooks/useManagers';
 import { useGetServiceType } from '../../../hooks/useRefBooks';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'; // Add this import if you have it, or create a simple wrapper
+
+// Simple VisuallyHidden component if you don't have @radix-ui/react-visually-hidden
+const VisuallyHidden = ({ children }: { children: React.ReactNode }) => {
+    return (
+        <div style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            padding: '0',
+            margin: '-1px',
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            borderWidth: '0',
+        }}>
+            {children}
+        </div>
+    );
+};
 
 interface ProjectDialogProps {
     open: boolean;
@@ -63,9 +83,6 @@ export function ProjectDialog({
     const { mutate: editProject } = useEditProject();
     const { data: serviceType } = useGetServiceType();
     const { data: project_managers, isLoading: isLoadingManagers, error: managersError } = useGetManagers();
-
-
-
 
     // Загружаем департаменты при открытии
     useEffect(() => {
@@ -314,13 +331,11 @@ export function ProjectDialog({
     const getActiveStoreCountries = () => {
         if (!store_countries || !Array.isArray(store_countries)) return [];
         return store_countries.filter(country => country.is_active !== false);
-
     };
 
     const getActiveManagers = () => {
-        // if (!project_managers || !Array.isArray(project_managers)) return [];
-        // return project_managers.filter(manager => manager.is_active !== false);
-        return project_managers
+        if (!project_managers || !Array.isArray(project_managers)) return [];
+        return project_managers;
     };
 
     const getActiveStoreClients = () => {
@@ -356,10 +371,19 @@ export function ProjectDialog({
 
     const renderManagers = () => {
         const activeManagers = getActiveManagers();
-        if (isLoadingManagers) return <SelectItem value="none" disabled>Loading managers...</SelectItem>;
-        if (activeManagers.length === 0) return <SelectItem value="none" disabled>No managers available</SelectItem>;
+
+        if (isLoadingManagers) {
+            return <SelectItem value="none" disabled>Loading managers...</SelectItem>;
+        }
+
+        if (!activeManagers || !Array.isArray(activeManagers) || activeManagers.length === 0) {
+            return <SelectItem value="none" disabled>No managers available</SelectItem>;
+        }
+
         return activeManagers.map(manager => (
-            <SelectItem key={manager.id} value={manager.id.toString()}>{manager.first_name} {manager.last_name}</SelectItem>
+            <SelectItem key={manager.id} value={manager.id.toString()}>
+                {manager.first_name} {manager.last_name}
+            </SelectItem>
         ));
     };
 
@@ -413,6 +437,10 @@ export function ProjectDialog({
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent>
+                    {/* FIX: Add hidden DialogTitle for accessibility */}
+                    <VisuallyHidden>
+                        <DialogTitle>Loading Project Data</DialogTitle>
+                    </VisuallyHidden>
                     <div className="flex justify-center items-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                         <span className="ml-2">Loading project data...</span>
@@ -438,7 +466,7 @@ export function ProjectDialog({
                             <Label htmlFor="project-name">IC *</Label>
                             <Input
                                 id="project-name"
-                                value={projectForm.ic}
+                                value={projectForm.ic || ''} // FIX: Ensure value is never undefined
                                 onChange={(e) => {
                                     setProjectForm({ ...projectForm, ic: e.target.value });
                                     if (errors.ic) setErrors(prev => ({ ...prev, ic: '' }));
@@ -471,7 +499,7 @@ export function ProjectDialog({
                             <Label htmlFor="project-description">Project Description *</Label>
                             <Textarea
                                 id="project-description"
-                                value={projectForm.description}
+                                value={projectForm.description || ''} // FIX: Ensure value is never undefined
                                 onChange={(e) => {
                                     setProjectForm({ ...projectForm, description: e.target.value });
                                     if (errors.description) setErrors(prev => ({ ...prev, description: '' }));
@@ -550,7 +578,7 @@ export function ProjectDialog({
                             <div className="flex items-center space-x-2 h-10">
                                 <Checkbox
                                     id="project-chargeable"
-                                    checked={projectForm.is_chargeable}
+                                    checked={projectForm.is_chargeable || false}
                                     onCheckedChange={(checked) =>
                                         setProjectForm({ ...projectForm, is_chargeable: checked === true })
                                     }
