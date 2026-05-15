@@ -520,8 +520,8 @@ export function CalendarView() {
             ) : (
               <div className="space-y-4">
                 {/* Карточка текущей записи */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                  <div className="p-5 bg-gray-50">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm" style={{ padding: '30px' }}>
+                  <div className="p-5 bg-gray-50" >
                     <div className="flex items-center gap-4">
                       <div
                         className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -577,23 +577,25 @@ export function CalendarView() {
                       )}
                     </div>
 
-                    {currentEntry.task && (
-                      <div className="flex items-start gap-2 pt-2">
-                        <span className="text-xs text-gray-400 mt-0.5">Task:</span>
-                        <span className="text-sm text-gray-700 flex-1">
-                          {getTaskName(currentEntry)}
-                        </span>
-                      </div>
-                    )}
+                    <div>
+                      {currentEntry.task && (
+                        <div className="flex items-start gap-2 pt-2">
+                          <span className="text-xs text-gray-400 mt-0.5">Task:</span>
+                          <span className="text-sm text-gray-700 flex-1">
+                            {getTaskName(currentEntry)}
+                          </span>
+                        </div>
+                      )}
 
-                    {currentEntry.description && (
-                      <div className="flex items-start gap-2 pt-2">
-                        <span className="text-xs text-gray-400 mt-0.5">Description:</span>
-                        <span className="text-sm text-gray-600 flex-1 leading-relaxed">
-                          {currentEntry.description}
-                        </span>
-                      </div>
-                    )}
+                      {currentEntry.description && (
+                        <div className="flex items-start gap-2 pt-2">
+                          <span className="text-xs text-gray-400 mt-0.5">Description:</span>
+                          <span className="text-sm text-gray-600 flex-1 leading-relaxed">
+                            {currentEntry.description}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
