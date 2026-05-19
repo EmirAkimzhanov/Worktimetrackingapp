@@ -20,7 +20,18 @@ import {
     SelectValue,
 } from '../../ui/select';
 
-// ... (остальные импорты)
+interface CalendarManagementProps {
+    configs: CountryCalendarConfig[];
+    onUpdateConfig: (config: CountryCalendarConfig) => void;
+    onAddConfig: (config: CountryCalendarConfig) => void;
+    onDeleteConfig: (id: number) => void;
+    onAddHoliday: (holiday: Omit<Holiday, 'id'>) => void;
+    onUpdateHoliday: (holiday: Holiday) => void;
+    onDeleteHoliday: (id: number) => void;
+    onAddWorkWeekend: (workWeekend: Omit<WorkWeekend, 'id'>) => void;
+    onDeleteWorkWeekend: (id: number) => void;
+    onUpdateWeeklySchedule: (schedule: WeeklySchedule) => void;
+}
 
 export function CalendarManagement({
     configs,
@@ -43,78 +54,110 @@ export function CalendarManagement({
     const [countryToEdit, setCountryToEdit] = useState<{ id: number; name: string; code: string } | null>(null);
 
     const store_countries = useUserStore((state) => state.countries);
+    const calendars = useUserStore((state) => state.calendar); // Массив с праздниками
     const { mutate: addCountry } = useAddCountry();
     const { mutate: deleteCountry } = useDeleteCountry();
     const { mutate: getCountries } = useGetCountries();
 
     const countriesFromStore = store_countries || [];
 
-    const correctedConfigs = useMemo(() => {
-        return configs.map(config => {
-            const matchingCountry = countriesFromStore.find(c =>
-                c.code === config.countryCode ||
-                c.name.toLowerCase() === config.country?.toLowerCase() ||
-                c.id === config.id
-            );
-            if (matchingCountry && config.id !== matchingCountry.id) {
-                return {
-                    ...config,
-                    id: matchingCountry.id,
-                    country: matchingCountry.name,
-                    countryCode: matchingCountry.code
-                };
-            }
-            return config;
-        });
-    }, [configs, countriesFromStore]);
+    // Функция для проверки наличия праздников у страны из calendars
+    const hasHolidaysForCountry = (countryId: number): boolean => {
+        if (!calendars || calendars.length === 0) return false;
+        const hasHolidays = calendars.some(calendar => calendar.country === countryId);
+        console.log(`Country ${countryId} has holidays in calendars: ${hasHolidays}, calendars length: ${calendars.length}`);
+        return hasHolidays;
+    };
 
+    // Функция для получения праздников страны из calendars
+    const getHolidaysForCountry = (countryId: number): Holiday[] => {
+        if (!calendars || calendars.length === 0) return [];
+        const holidays = calendars.filter(calendar => calendar.country === countryId);
+        console.log(`Getting holidays for country ${countryId}: ${holidays.length} holidays`);
+        return holidays;
+    };
+
+    // Формируем список стран для отображения с правильным статусом hasConfig
     const displayedCountries = useMemo(() => {
         if (!countriesFromStore.length) return [];
 
+        console.log('Building displayedCountries with calendars:', calendars);
+        console.log('Countries from store:', countriesFromStore);
+
         const countriesList = countriesFromStore.map(storeCountry => {
-            const existingConfig = correctedConfigs.find(config => config.id === storeCountry.id);
+            // Проверяем наличие конфигурации в configs
+            const existingConfig = configs.find(config => config.id === storeCountry.id);
+
+            // Проверяем наличие праздников напрямую из calendars
+            const hasHolidays = hasHolidaysForCountry(storeCountry.id);
+
+            // Проверяем рабочие выходные
+            const hasWorkWeekends = existingConfig?.workWeekends && existingConfig.workWeekends.length > 0;
+
+            // Проверяем недельное расписание
+            const hasWeeklySchedule = existingConfig?.weeklySchedule &&
+                Object.values(existingConfig.weeklySchedule).some(day => day !== undefined);
+
+            // Страна считается сконфигурированной, если:
+            // 1. Есть конфиг в системе ИЛИ
+            // 2. Есть праздники в calendars ИЛИ
+            // 3. Есть рабочие выходные ИЛИ
+            // 4. Есть недельное расписание
+            const hasConfig = !!existingConfig || hasHolidays || hasWorkWeekends || hasWeeklySchedule;
+
+            console.log(`Country: ${storeCountry.name} (ID: ${storeCountry.id})`, {
+                existingConfig: !!existingConfig,
+                hasHolidays,
+                hasWorkWeekends,
+                hasWeeklySchedule,
+                hasConfig
+            });
+
             return {
                 storeId: storeCountry.id,
                 name: storeCountry.name,
                 code: storeCountry.code,
-                hasConfig: !!existingConfig,
-                config: existingConfig
+                hasConfig: hasConfig,
+                config: existingConfig || null
             };
         });
 
-        return countriesList.sort((a, b) => {
+        // Сортируем: сначала страны с конфигурацией, потом без
+        const sorted = countriesList.sort((a, b) => {
             if (a.hasConfig && !b.hasConfig) return -1;
             if (!a.hasConfig && b.hasConfig) return 1;
             return a.name.localeCompare(b.name);
         });
-    }, [correctedConfigs, countriesFromStore]);
 
-    useEffect(() => {
-        if (displayedCountries.length > 0 && selectedCountryId === null) {
-            setSelectedCountryId(displayedCountries[0].storeId);
-        }
-    }, [displayedCountries, selectedCountryId]);
+        console.log('Final displayedCountries:', sorted.map(c => ({ name: c.name, hasConfig: c.hasConfig })));
 
+        return sorted;
+    }, [configs, countriesFromStore, calendars]);
+
+    // Текущая конфигурация для выбранной страны
     const currentConfig = useMemo(() => {
         if (!selectedCountryId) return null;
 
         const displayedCountry = displayedCountries.find(c => c.storeId === selectedCountryId);
         if (!displayedCountry) return null;
 
-        if (displayedCountry.config) {
+        // Получаем существующую конфигурацию или создаем новую
+        const existingConfig = configs.find(c => c.id === selectedCountryId);
+        const countryHolidays = getHolidaysForCountry(selectedCountryId);
+
+        if (existingConfig) {
             return {
-                ...displayedCountry.config,
-                id: displayedCountry.storeId,
-                country: displayedCountry.name,
-                countryCode: displayedCountry.code
+                ...existingConfig,
+                holidays: countryHolidays, // Всегда используем актуальные праздники из calendars
             };
         }
 
+        // Создаем новую конфигурацию если нет существующей
         return {
             id: selectedCountryId,
             country: displayedCountry.name,
             countryCode: displayedCountry.code,
-            holidays: [],
+            holidays: countryHolidays,
             workWeekends: [],
             weeklySchedule: {
                 monday: { isWorkingDay: true, startTime: '09:00', endTime: '18:00' },
@@ -126,7 +169,27 @@ export function CalendarManagement({
                 sunday: { isWorkingDay: false, startTime: '09:00', endTime: '18:00' }
             }
         } as CountryCalendarConfig;
-    }, [selectedCountryId, displayedCountries]);
+    }, [selectedCountryId, displayedCountries, configs, calendars]);
+
+    useEffect(() => {
+        if (displayedCountries.length > 0 && selectedCountryId === null) {
+            // Выбираем первую страну с конфигурацией, если есть, иначе первую в списке
+            const firstConfigured = displayedCountries.find(c => c.hasConfig);
+            setSelectedCountryId(firstConfigured?.storeId || displayedCountries[0].storeId);
+        }
+    }, [displayedCountries, selectedCountryId]);
+
+    // Отладочный эффект для проверки данных
+    useEffect(() => {
+        console.log('=== CalendarManagement Debug ===');
+        console.log('calendars (holidays):', calendars);
+        console.log('configs:', configs);
+        console.log('countriesFromStore:', countriesFromStore);
+        console.log('displayedCountries:', displayedCountries);
+        console.log('selectedCountryId:', selectedCountryId);
+        console.log('currentConfig:', currentConfig);
+        console.log('================================');
+    }, [calendars, configs, countriesFromStore, displayedCountries, selectedCountryId, currentConfig]);
 
     const allAvailableCountries = useMemo(() => {
         return countriesFromStore.map(country => ({
@@ -137,7 +200,7 @@ export function CalendarManagement({
     }, [countriesFromStore]);
 
     const availableCountriesForAdding = useMemo(() => {
-        const existingCountryIds = new Set(correctedConfigs.map(c => c.id));
+        const existingCountryIds = new Set(configs.map(c => c.id));
         return countriesFromStore
             .filter(country => !existingCountryIds.has(country.id))
             .map(country => ({
@@ -145,7 +208,7 @@ export function CalendarManagement({
                 name: country.name,
                 code: country.code
             }));
-    }, [correctedConfigs, countriesFromStore]);
+    }, [configs, countriesFromStore]);
 
     const handleCountrySelect = (storeId: number) => {
         setSelectedCountryId(storeId);
@@ -158,7 +221,8 @@ export function CalendarManagement({
                 ...config,
                 id: country.id,
                 country: country.name,
-                countryCode: country.code
+                countryCode: country.code,
+                holidays: getHolidaysForCountry(country.id)
             } : config;
             onAddConfig(correctedConfig);
             setSelectedCountryId(correctedConfig.id);
@@ -239,7 +303,6 @@ export function CalendarManagement({
         );
     }
 
-    // Текущая выбранная страна для отображения в кнопках
     const currentSelectedCountry = selectedCountryId ? displayedCountries.find(c => c.storeId === selectedCountryId) : null;
 
     return (
@@ -252,7 +315,7 @@ export function CalendarManagement({
                     </div>
                 </div>
 
-                {/* SELECTOR для стран с использованием Radix UI Select */}
+                {/* SELECTOR для стран */}
                 <div className="flex items-center gap-4">
                     <div className="w-80">
                         <Select
@@ -286,7 +349,6 @@ export function CalendarManagement({
                             </SelectContent>
                         </Select>
                     </div>
-
                 </div>
 
                 {/* Main Content */}
@@ -300,7 +362,8 @@ export function CalendarManagement({
                                     </h3>
                                     {selectedCountryId && currentConfig && (
                                         <p className="text-sm text-muted-foreground">
-                                            Country Code: {currentConfig.countryCode}
+                                            Country Code: {currentConfig.countryCode} |
+                                            Holidays: {currentConfig.holidays?.length || 0}
                                         </p>
                                     )}
                                 </div>
@@ -394,7 +457,7 @@ export function CalendarManagement({
                 <CalendarSettingsDialog
                     open={isSettingsOpen}
                     onOpenChange={setIsSettingsOpen}
-                    configs={correctedConfigs}
+                    configs={configs}
                     onAddConfig={onAddConfig ? handleAddConfig : undefined}
                     onUpdateConfig={onUpdateConfig}
                     onDeleteConfig={onDeleteConfig ? handleDeleteConfig : undefined}

@@ -1,7 +1,9 @@
+// hooks/useClients.ts
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
-import { createClient, deleteClient, editClient, getClientProjects, getClients, getCountryClients, GetClientsParams } from '../services/clients';
+import { createClient, deleteClient, editClient, getClientProjects, getClients, getCountryClients, GetClientsParams, getClientsExcel, GetClientsExcelParams } from '../services/clients';
 import { OnlyClient } from '../types/client';
+import { toast } from 'sonner';
 
 // ========== ТИПЫ ==========
 
@@ -277,6 +279,40 @@ export const useDeleteClients = () => {
         },
         onError: (error: Error) => {
             console.error("Delete client error:", error.message);
+        },
+    });
+};
+
+// ========== ХУК ДЛЯ ЭКСПОРТА В EXCEL ==========
+
+export const useExportClientsExcel = () => {
+    return useMutation({
+        mutationFn: async (params?: GetClientsExcelParams) => {
+            const blob = await getClientsExcel(params);
+            return { blob, params };
+        },
+        onSuccess: ({ blob, params }) => {
+            // Формируем имя файла с текущей датой
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+            const filename = `clients_export_${dateStr}.xlsx`;
+
+            // Создаем URL для скачивания
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+            console.log(`Clients exported successfully with params:`, params);
+            toast.success('Клиенты успешно экспортированы в Excel');
+        },
+        onError: (error: Error) => {
+            console.error("Export clients to Excel error:", error.message);
+            toast.error('Ошибка при экспорте клиентов');
         },
     });
 };

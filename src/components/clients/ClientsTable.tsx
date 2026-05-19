@@ -24,10 +24,11 @@ import {
   ChevronRight,
   Search,
   X,
+  Download,
 } from "lucide-react";
 import { Client } from "../../types/types";
 import { toast } from "sonner";
-import { useDeleteClients, useGetClients } from "../../hooks/useClients";
+import { useDeleteClients, useGetClients, useExportClientsExcel } from "../../hooks/useClients";
 import { useUserStore } from "../../store/UsersStore";
 import { useGetSectors } from "../../hooks/useSectors";
 import {
@@ -129,6 +130,7 @@ export function ClientsTable({
   const { mutate: getClients, isPending: isLoadingClients } = useGetClients();
   const { mutate: getSectors } = useGetSectors();
   const { mutate: deleteClient } = useDeleteClients();
+  const { mutate: exportClients, isPending: isExporting } = useExportClientsExcel();
 
   const store_clients = useUserStore((state) => state.clients);
   const clientsPagination = useUserStore((state) => state.clientsPagination);
@@ -196,6 +198,26 @@ export function ClientsTable({
       loadClients(1);
     }
   }, [debouncedName, debouncedGroup, debouncedPersonalNumber, debouncedSector, ordering]);
+
+  // Функция для получения текущих параметров фильтрации для экспорта
+  const getCurrentFilterParams = useCallback(() => {
+    const params: any = {};
+
+    if (debouncedName && debouncedName.trim()) params.name = debouncedName;
+    if (debouncedGroup && debouncedGroup.trim()) params.group = debouncedGroup;
+    if (debouncedPersonalNumber && debouncedPersonalNumber.trim()) params.personal_number = debouncedPersonalNumber;
+    if (debouncedSector && debouncedSector.trim()) params.sector_name = debouncedSector;
+    if (ordering) params.ordering = ordering;
+
+    return params;
+  }, [debouncedName, debouncedGroup, debouncedPersonalNumber, debouncedSector, ordering]);
+
+  // Функция для экспорта в Excel
+  const handleExportExcel = () => {
+    const filterParams = getCurrentFilterParams();
+    console.log('📊 Exporting clients with params:', filterParams);
+    exportClients(filterParams);
+  };
 
   const handleFilterChange = (key: keyof Filters, value: string) => {
     setLocalFilters(prev => ({ ...prev, [key]: value }));
@@ -388,10 +410,12 @@ export function ClientsTable({
             <h2 className="text-2xl font-bold tracking-tight">Clients</h2>
             <p className="text-muted-foreground">Loading clients...</p>
           </div>
-          <Button onClick={onAdd} size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Client
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={onAdd} size="sm">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Client
+            </Button>
+          </div>
         </div>
         <div className="rounded-md border p-8 text-center text-slate-500">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
@@ -412,17 +436,27 @@ export function ClientsTable({
             {totalCount > 0 ? `Total: ${totalCount} clients` : `${displayClients.length} client${displayClients.length !== 1 ? "s" : ""} found`}
           </p>
         </div>
-        <Button onClick={onAdd} size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Client
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleExportExcel}
+            size="sm"
+            variant="outline"
+            disabled={isExporting || isLoadingClients}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {isExporting ? 'Exporting...' : 'Export to Excel'}
+          </Button>
+          <Button onClick={onAdd} size="sm">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Client
+          </Button>
+        </div>
       </div>
 
       {/* Filters Row */}
       <div className="overflow-x-auto">
         <div className="flex items-center gap-2 min-w-max">
           <div className="relative w-[150px]">
-            {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
             <Input
               placeholder="Client name..."
               value={localFilters.name}
@@ -433,7 +467,6 @@ export function ClientsTable({
           </div>
 
           <div className="relative w-[120px]">
-            {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
             <Input
               placeholder="Group..."
               value={localFilters.group}
@@ -444,7 +477,6 @@ export function ClientsTable({
           </div>
 
           <div className="relative w-[130px]">
-            {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
             <Input
               placeholder="Personal number..."
               value={localFilters.personal_number}
@@ -582,7 +614,6 @@ export function ClientsTable({
                                 {client.personal_number}
                               </span>
                             </div>
-                            {/*  */}
                           </>
                         ) : (
                           <span className="text-gray-400 italic text-sm">

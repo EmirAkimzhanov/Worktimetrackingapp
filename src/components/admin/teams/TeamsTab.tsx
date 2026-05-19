@@ -307,8 +307,8 @@ const AddMemberModal = ({
                     <div
                       key={employee.id}
                       className={`p-3 cursor-pointer transition-colors ${selectedEmployeeId === employee.id.toString()
-                          ? "bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500"
-                          : "hover:bg-gray-50 dark:hover:bg-gray-900/50"
+                        ? "bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-900/50"
                         }`}
                       onClick={() =>
                         setSelectedEmployeeId(employee.id.toString())
@@ -1429,7 +1429,7 @@ export function TeamsTab() {
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">
-            <div className="text-xl font-bold">Business Unit (EU)</div>
+            {/* <div className="text-xl font-bold">Business Unit (EU)</div> */}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1578,8 +1578,8 @@ export function TeamsTab() {
                                       {renderReadOnlyCell(member.email || "")}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="py-2">
-                                    <div className="text-sm">
+                                  <TableCell className="py-2 text-center">
+                                    <div className="text-center">
                                       {renderEditableDepartmentRoleCell(
                                         member.department_role || "",
                                         "member",
@@ -1592,19 +1592,17 @@ export function TeamsTab() {
                                   <TableCell className="py-2 text-center">
                                     <div className="text-center">
                                       {isEmployeeManager(department, member) ? (
-                                        <div className="flex items-center justify-center">
-                                          <Badge
-                                            variant="outline"
-                                            className="flex items-center gap-1 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300"
-                                          >
-                                            <Crown className="h-3 w-3" />
-                                            Manager
-                                          </Badge>
-                                        </div>
+                                        <Badge
+                                          variant="outline"
+                                          className="flex items-center justify-center gap-1 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300"
+                                        >
+                                          <Crown className="h-3 w-3" />
+                                          Manager
+                                        </Badge>
                                       ) : (
                                         <Badge
                                           variant="outline"
-                                          className="flex items-center gap-1"
+                                          className="flex items-center justify-center gap-1"
                                         >
                                           {member.department_role || "Member"}
                                         </Badge>

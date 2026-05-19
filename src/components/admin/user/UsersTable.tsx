@@ -3,10 +3,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
-import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { Edit, Trash2, Plus, User, ChevronLeft, ChevronRight, Search, X, Download } from 'lucide-react';
 import { getDeptRoleBadgeVariant, getRoleBadgeVariant } from '../../../const/consts';
 import { User as UserType, Position, Department } from '../../../types/types';
-import { useDeleteUsers, useGetUserGrades, useGetUsers } from '../../../hooks/useUsers';
+import { useDeleteUsers, useGetUserGrades, useGetUsers, useExportUsersExcel } from '../../../hooks/useUsers';
 import { useUserStore } from '../../../store/UsersStore';
 import { useGetDepartmentRoles, useGetDepartments } from '../../../hooks/useDepartments';
 import { useGetCountries } from '../../../hooks/useCountries';
@@ -109,6 +109,7 @@ export function UsersTable({
     const { mutate: getDepartments } = useGetDepartments();
     const { mutate: getPositions } = useGetPositions();
     const { mutate: deleteUser } = useDeleteUsers();
+    const { mutate: exportUsers, isPending: isExporting } = useExportUsersExcel();
 
     const store_users = useUserStore((state) => state.users);
     const usersPagination = useUserStore((state) => state.usersPagination);
@@ -236,7 +237,6 @@ export function UsersTable({
         if (debouncedRole && debouncedRole.trim()) params.role_name = debouncedRole;
         if (localFilters.is_active && localFilters.is_active !== 'all') params.is_active = localFilters.is_active;
 
-
         console.log('📦 Loading users with params:', params);
         getUsers(params);
         setCurrentPage(page);
@@ -250,6 +250,32 @@ export function UsersTable({
             loadUsers(1);
         }
     }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.is_active, ordering]);
+
+    // Функция для получения текущих параметров фильтрации для экспорта
+    const getCurrentFilterParams = useCallback(() => {
+        const params: any = {};
+
+        if (debouncedFirstName && debouncedFirstName.trim()) params.first_name = debouncedFirstName;
+        if (debouncedLastName && debouncedLastName.trim()) params.last_name = debouncedLastName;
+        if (debouncedEmail && debouncedEmail.trim()) params.email = debouncedEmail;
+        if (debouncedPosition && debouncedPosition.trim()) params.position_name = debouncedPosition;
+        if (debouncedDepartment && debouncedDepartment.trim()) params.department_name = debouncedDepartment;
+        if (debouncedDepartmentRole && debouncedDepartmentRole.trim()) params.department_role_name = debouncedDepartmentRole;
+        if (debouncedGrade && debouncedGrade.trim()) params.grade_name = debouncedGrade;
+        if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
+        if (debouncedRole && debouncedRole.trim()) params.role_name = debouncedRole;
+        if (localFilters.is_active && localFilters.is_active !== 'all') params.is_active = localFilters.is_active;
+        if (ordering) params.ordering = ordering;
+
+        return params;
+    }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.is_active, ordering]);
+
+    // Функция для экспорта в Excel
+    const handleExportExcel = () => {
+        const filterParams = getCurrentFilterParams();
+        console.log('📊 Exporting users with params:', filterParams);
+        exportUsers(filterParams);
+    };
 
     const handleFilterChange = (key: keyof Filters, value: string) => {
         setLocalFilters(prev => ({ ...prev, [key]: value }));
@@ -443,10 +469,21 @@ export function UsersTable({
                         {totalCount > 0 && ` • Total: ${totalCount} users`}
                     </p>
                 </div>
-                <Button onClick={onAdd} size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add User
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={handleExportExcel}
+                        size="sm"
+                        variant="outline"
+                        disabled={isExporting || isLoadingUsers}
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        {isExporting ? 'Exporting...' : 'Export to Excel'}
+                    </Button>
+                    <Button onClick={onAdd} size="sm">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add User
+                    </Button>
+                </div>
             </div>
 
             {/* Filters Row */}
@@ -454,7 +491,6 @@ export function UsersTable({
                 <div className="flex items-center gap-2 min-w-max">
                     {/* Поиск по имени */}
                     <div className="relative w-[100px]">
-                        {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                         <Input
                             placeholder="First name"
                             value={localFilters.first_name}
@@ -466,7 +502,6 @@ export function UsersTable({
 
                     {/* Поиск по фамилии */}
                     <div className="relative w-[100px]">
-                        {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                         <Input
                             placeholder="Last name"
                             value={localFilters.last_name}
@@ -478,7 +513,6 @@ export function UsersTable({
 
                     {/* Поиск по email */}
                     <div className="relative w-[150px]">
-                        {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                         <Input
                             placeholder="Email"
                             value={localFilters.email}

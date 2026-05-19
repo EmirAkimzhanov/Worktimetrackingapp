@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
-import { deleteUser, editUser, getUserGrades, getUsers, sendUsers } from '../services/users';
+import { deleteUser, editUser, getUserGrades, getUsers, getUsersExcel, GetUsersExcelParams, sendUsers } from '../services/users';
 import { UserBody } from '../types/user';
 
 // ========== ТИПЫ ==========
@@ -445,4 +445,36 @@ export const usersCacheUtils = {
             cacheDurationMinutes: CACHE_DURATION / 60000
         };
     }
+};
+
+export const useExportUsersExcel = () => {
+    return useMutation({
+        mutationFn: async (params?: GetUsersExcelParams) => {
+            const blob = await getUsersExcel(params);
+            return { blob, params };
+        },
+        onSuccess: ({ blob, params }) => {
+            // Формируем имя файла с текущей датой
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+            const filename = `users_export_${dateStr}.xlsx`;
+
+            // Создаем URL для скачивания
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+            console.log(`Users exported successfully with params:`, params);
+            toast.success('Пользователи успешно экспортированы в Excel');
+        },
+        onError: (error: Error) => {
+            console.error("Export users to Excel error:", error.message);
+            toast.error('Ошибка при экспорте пользователей');
+        },
+    });
 };

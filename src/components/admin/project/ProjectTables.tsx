@@ -5,7 +5,7 @@ import { Badge } from '../../ui/badge';
 import { Input } from '../../ui/input';
 import {
     Edit, Trash2, FolderKanban, Plus, ChevronDown, ChevronUp,
-    ChevronLeft, ChevronRight, Search, X
+    ChevronLeft, ChevronRight, Search, X, Download
 } from 'lucide-react';
 import { Project } from '../../TimeTrackerContext';
 import { Client, Department, Position, User } from '../../../types/types';
@@ -15,7 +15,7 @@ import { useGetCountries } from '../../../hooks/useCountries';
 import { useGetClients } from '../../../hooks/useClients';
 import { useGetServiceLines } from '../../../hooks/useServiceLines';
 import { useGetTaskTypes } from '../../../hooks/useTasks';
-import { useDeleteProject, useGetProjects } from '../../../hooks/useProject';
+import { useDeleteProject, useGetProjects, useExportProjectsExcelMutation } from '../../../hooks/useProject';
 import { useUserStore } from '../../../store/UsersStore';
 import {
     AlertDialog,
@@ -107,6 +107,7 @@ export function ProjectsTable({
     const { mutate: getTaskTypes } = useGetTaskTypes();
     const { mutate: getProjects, isPending: isLoadingProjects } = useGetProjects();
     const { mutate: deleteProject } = useDeleteProject();
+    const { mutate: exportProjects, isPending: isExporting } = useExportProjectsExcelMutation();
 
     const store_projects = useUserStore((state) => state.projects);
     const store_departments = useUserStore((state) => state.departments);
@@ -178,6 +179,32 @@ export function ProjectsTable({
             loadProjects(1);
         }
     }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering]);
+
+    // Функция для получения текущих параметров фильтрации
+    const getCurrentFilterParams = useCallback(() => {
+        const params: any = {};
+
+        if (debouncedCode && debouncedCode.trim()) params.code = debouncedCode;
+        if (debouncedClient && debouncedClient.trim()) params.client_name = debouncedClient;
+        if (debouncedManager && debouncedManager.trim()) params.manager_email = debouncedManager;
+        if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
+        if (debouncedDepartment && debouncedDepartment.trim()) params.department_name = debouncedDepartment;
+        if (debouncedStatus && debouncedStatus.trim()) params.status_name = debouncedStatus;
+        if (ordering) params.ordering = ordering;
+
+        // Добавляем пагинацию для экспорта (можно экспортировать все страницы или текущую)
+        // params.page = currentPage;
+        // params.page_size = pageSize;
+
+        return params;
+    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering]);
+
+    // Функция для экспорта в Excel
+    const handleExportExcel = () => {
+        const filterParams = getCurrentFilterParams();
+        console.log('📊 Exporting Excel with params:', filterParams);
+        exportProjects(filterParams);
+    };
 
     const handleFilterChange = (key: keyof Filters, value: string) => {
         console.log('CHANGE:', key, value);
@@ -426,10 +453,12 @@ export function ProjectsTable({
                     <div>
                         <h2 className="text-xl font-bold">Projects</h2>
                     </div>
-                    <Button onClick={onAdd} size="sm">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Project
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button onClick={onAdd} size="sm">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Project
+                        </Button>
+                    </div>
                 </div>
                 <div className="rounded-md border p-8 text-center text-slate-500">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
@@ -452,16 +481,26 @@ export function ProjectsTable({
                         Total: {totalCount} projects
                     </p>
                 </div>
-                <Button onClick={onAdd} size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Project
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        onClick={handleExportExcel}
+                        size="sm"
+                        variant="outline"
+                        disabled={isExporting || isLoadingProjects}
+                    >
+                        <Download className="w-4 h-4 mr-2" />
+                        {isExporting ? 'Exporting...' : 'Export to Excel'}
+                    </Button>
+                    <Button onClick={onAdd} size="sm">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Project
+                    </Button>
+                </div>
             </div>
 
             {/* Filters Row */}
             <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative w-[140px]">
-                    {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                     <Input
                         placeholder="Code..."
                         value={localFilters.code}
@@ -471,7 +510,6 @@ export function ProjectsTable({
                     />
                 </div>
                 <div className="relative w-[140px]">
-                    {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                     <Input
                         placeholder="Client..."
                         value={localFilters.client}
@@ -481,7 +519,6 @@ export function ProjectsTable({
                     />
                 </div>
                 <div className="relative w-[140px]">
-                    {/* <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" /> */}
                     <Input
                         placeholder="Manager..."
                         value={localFilters.manager}
@@ -491,7 +528,7 @@ export function ProjectsTable({
                     />
                 </div>
 
-                {/* ✅ Исправленный Select для стран с проверкой на null */}
+                {/* Select для стран */}
                 <Select
                     value={localFilters.country || "all"}
                     onValueChange={(value) => handleFilterChange('country', value === "all" ? "" : value)}
@@ -512,7 +549,7 @@ export function ProjectsTable({
                     </SelectContent>
                 </Select>
 
-                {/* ✅ Исправленный Select для департаментов с проверкой на null */}
+                {/* Select для департаментов */}
                 <Select
                     value={localFilters.department || "all"}
                     onValueChange={(value) => handleFilterChange('department', value === "all" ? "" : value)}
@@ -533,7 +570,7 @@ export function ProjectsTable({
                     </SelectContent>
                 </Select>
 
-                {/* ✅ Исправленный Select для статусов с проверкой на null */}
+                {/* Select для статусов */}
                 <Select
                     value={localFilters.status || "all"}
                     onValueChange={(value) => handleFilterChange('status', value === "all" ? "" : value)}
@@ -608,7 +645,6 @@ export function ProjectsTable({
                             </TableRow>
                         ) : (
                             uniqueProjects.map((project: any, index: number) => {
-                                // ✅ Безопасная проверка codes
                                 const codes = Array.isArray(project?.codes) ? project.codes : [];
                                 const lastCode = getLastCode(codes);
                                 const isExpanded = expandedCodeDrawers[project.id];

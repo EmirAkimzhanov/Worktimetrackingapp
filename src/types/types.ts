@@ -93,6 +93,7 @@ export interface CountryCalendarConfig {
     countryCode: string;
     weeklySchedule: WeeklySchedule;
     holidays: Holiday[];
+
     workWeekends: WorkWeekend[];
     statistics: CalendarStatistics;
 }
@@ -118,6 +119,7 @@ export interface Holiday {
     is_halfday: boolean;
     is_recurring: boolean;
 }
+
 
 export interface WorkWeekend {
     id: number;

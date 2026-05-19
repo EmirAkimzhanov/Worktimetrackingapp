@@ -33,7 +33,6 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
         { id: 'projects', label: 'Projects' },
         { id: 'users', label: 'Users' },
         { id: 'clients', label: 'Clients' },
-        { id: 'calendar', label: 'Calendar' },
         { id: 'reports', label: 'Reports' },
         { id: 'monitoring', label: 'Monitoring' },
         { id: 'settings', label: 'Settings' },

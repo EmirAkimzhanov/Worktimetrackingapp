@@ -206,13 +206,16 @@ export function CalendarWeeklyScheduleTab({
             </div>
 
             <Card>
-                <CardContent className="space-y-4 pt-4">
-                    <Input
-                        type="number"
-                        value={hoursPerDay}
-                        onChange={(e) => handleHoursChange(e.target.value)}
-                    />
-
+                <CardContent className="space-y-4 pt-4" style={{ padding: '2%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <Input
+                            type="number"
+                            value={hoursPerDay}
+                            onChange={(e) => handleHoursChange(e.target.value)}
+                            style={{ width: '10%', marginRight: '1%' }}
+                        />
+                        <p>:hours pers day</p>
+                    </div>
                     {Object.entries(schedule).map(([key, value]) => (
                         <div key={key} className="flex justify-between">
                             <span>{key}</span>

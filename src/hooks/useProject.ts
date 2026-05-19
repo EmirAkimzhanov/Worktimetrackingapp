@@ -1,8 +1,9 @@
 // hooks/useProjects.ts
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
-import { deleteProject, editProject, getProjects, getProjectTasks, sendProject } from '../services/project';
+import { deleteProject, editProject, getProjects, getProjectsExcel, GetProjectsExcelParams, getProjectTasks, sendProject } from '../services/project';
 import { ProjectBody } from '../types/project';
+import { toast } from 'sonner';
 
 // ========== ТИПЫ ==========
 
@@ -393,4 +394,39 @@ export const projectsCacheUtils = {
     getCurrentCacheParams: () => {
         return projectsCache?.params || null;
     }
+};
+
+
+export const useExportProjectsExcelMutation = () => {
+    return useMutation({
+        mutationFn: async (params?: GetProjectsExcelParams) => {
+            const blob = await getProjectsExcel(params);
+
+            // Сохраняем blob в объекте для возможности скачивания
+            return { blob, params };
+        },
+        onSuccess: ({ blob, params }) => {
+            // Формируем имя файла с текущей датой
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+            const filename = `projects_export_${dateStr}.xlsx`;
+
+            // Создаем URL для скачивания
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+            console.log(`Projects exported successfully with params:`, params);
+            toast.success('Excel downloaded');
+        },
+        onError: (error: Error) => {
+            console.error("Export projects to Excel error:", error.message);
+            toast.error('export error');
+        },
+    });
 };
