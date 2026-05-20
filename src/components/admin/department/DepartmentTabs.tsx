@@ -283,7 +283,7 @@ const SimpleDepartmentsTables = () => {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto" >
           <div className="relative flex-1 sm:flex-initial">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
@@ -316,8 +316,8 @@ const SimpleDepartmentsTables = () => {
       </div>
 
       {/* Диалог добавления/редактирования типа задачи */}
-      <Dialog open={taskTypeDialogOpen} onOpenChange={setTaskTypeDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+      <Dialog open={taskTypeDialogOpen} onOpenChange={setTaskTypeDialogOpen} >
+        <DialogContent className="sm:max-w-[800px]" style={{ width: '300px' }}>
           <DialogHeader>
             <DialogTitle>
               {editingTaskType ? "Edit Task Type" : "Create New Task Type"}
@@ -335,7 +335,7 @@ const SimpleDepartmentsTables = () => {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter style={{ display: "flex", justifyContent: 'space-between' }}>
             <Button variant="outline" onClick={() => setTaskTypeDialogOpen(false)}>
               Cancel
             </Button>
@@ -425,11 +425,11 @@ const SimpleDepartmentsTables = () => {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Button variant="outline" onClick={() => setNewTaskDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddTask} disabled={!newTask.name?.trim() || !selectedTaskType}>
+            <Button onClick={handleAddTask} disabled={!newTask.name?.trim() || !selectedTaskType} >
               Add Task
             </Button>
           </DialogFooter>
@@ -482,7 +482,7 @@ const SimpleDepartmentsTables = () => {
 
       {/* Диалог редактирования задачи */}
       <Dialog open={editTaskDialogOpen} onOpenChange={setEditTaskDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px]" style={{ width: '300px' }}>
           <DialogHeader>
             <DialogTitle>Edit Task</DialogTitle>
           </DialogHeader>
@@ -524,7 +524,7 @@ const SimpleDepartmentsTables = () => {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter style={{ display: "flex", justifyContent: 'space-between' }}>
             <Button
               variant="outline"
               onClick={() => {

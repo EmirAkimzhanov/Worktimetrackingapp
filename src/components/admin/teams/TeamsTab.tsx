@@ -399,19 +399,20 @@ const AddDepartmentModal = ({
   onAdd: (department: DepartmentGroup) => void;
 }) => {
   const [departmentName, setDepartmentName] = useState("");
+  const [departmentCode, setDepartmentCode] = useState("");
   const { mutate: createDepartment } = useCreateDepartment();
 
   const handleAdd = () => {
-    if (!departmentName.trim()) return;
+    if (!departmentName.trim() || !departmentCode.trim()) return;
 
     createDepartment(
-      { name: departmentName },
+      { name: departmentName, code: departmentCode },
       {
         onSuccess: (data) => {
           const newDepartment: DepartmentGroup = {
             id: data.id || Date.now(),
             name: departmentName,
-            code: departmentName.substring(0, 3).toUpperCase(),
+            code: departmentCode,
             managers: [],
             managerIds: [],
             members: [],
@@ -451,6 +452,15 @@ const AddDepartmentModal = ({
               placeholder="e.g., Engineering"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="department-code">Department Code *</Label>
+            <Input
+              id="department-code"
+              value={departmentCode}
+              onChange={(e) => setDepartmentCode(e.target.value.toUpperCase())}
+              placeholder="e.g., ENG"
+            />
+          </div>
         </div>
         <DialogFooter
           style={{ display: "flex", justifyContent: "space-between" }}
@@ -458,7 +468,7 @@ const AddDepartmentModal = ({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleAdd} disabled={!departmentName.trim()}>
+          <Button onClick={handleAdd} disabled={!departmentName.trim() || !departmentCode.trim()}>
             <Plus className="w-4 h-4 mr-2" />
             Create Department
           </Button>

@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { UserFormData, UserBody } from '../../../types/types';
 import { useUserStore } from '../../../store/UsersStore';
 import { useEditUsers, useGetUsers, useSendUsers } from '../../../hooks/useUsers';
+import { useGetRoles } from '../../../hooks/usesRole';
 
 interface UserDialogProps {
     open: boolean;
@@ -28,6 +29,11 @@ interface Country {
     id: number;
     name: string;
     code: string;
+}
+
+interface Role {
+    id: number;
+    name: string;
 }
 
 export function UserDialog({
@@ -94,6 +100,8 @@ export function UserDialog({
     const { mutate: sendUser, isLoading: isCreating } = useSendUsers();
     const { mutate: getUsers } = useGetUsers();
     const { mutate: editUser, isLoading: isEditing } = useEditUsers();
+    const { mutate: getRoles } = useGetRoles();
+    const roles = useUserStore((state) => state.roles) as Role[];
 
     // ✅ Преобразуем countries в массив, если это объект
     const countries = useMemo(() => {
@@ -123,19 +131,16 @@ export function UserDialog({
     ): number => {
         if (!items || items.length === 0) return 0;
 
-        // Если value уже является числом (ID)
         if (typeof value === 'number') {
             const exists = items.find(item => item?.id === value);
             if (exists) return value;
         }
 
-        // Если value является строкой (название)
         if (typeof value === 'string' && value.trim()) {
             const item = items.find(item => item?.[nameField] === value);
             if (item && item.id) return item.id;
         }
 
-        // Если value является объектом с id
         if (value && typeof value === 'object' && value.id) {
             return value.id;
         }
@@ -143,12 +148,43 @@ export function UserDialog({
         return items[0]?.id || 0;
     }, []);
 
-    // ✅ Загружаем данные пользователя в форму при редактировании
+    // ✅ Функция для получения ID роли из editingUser (без хардкода!)
+    const getRoleIdFromEditingUser = useCallback(() => {
+        if (!editingUser) return null;
+
+        // Если есть прямой role_id
+        if (editingUser.role_id) {
+            return editingUser.role_id;
+        }
+
+        // Если есть role как строка ("admin", "manager", "user")
+        if (editingUser.role && typeof editingUser.role === 'string' && roles && roles.length > 0) {
+            // Ищем в массиве roles роль с таким name (регистронезависимо)
+            const foundRole = roles.find(
+                (role: Role) => role.name?.toLowerCase() === editingUser.role.toLowerCase()
+            );
+            if (foundRole) {
+                console.log('Found role by name:', editingUser.role, '-> ID:', foundRole.id);
+                return foundRole.id;
+            }
+        }
+
+        // Если ничего не нашли, возвращаем первый ID роли из стора или null
+        return roles && roles.length > 0 ? roles[0].id : null;
+    }, [editingUser, roles]);
+
+    // ✅ Загружаем роли при открытии
+    useEffect(() => {
+        if (open) {
+            getRoles();
+        }
+    }, [open, getRoles]);
+
+    // ✅ Инициализация формы при редактировании
     useEffect(() => {
         if (editingUser && open && !isInitializedRef.current) {
             isInitializedRef.current = true;
 
-            // Функции для получения ID с проверкой на существование
             const getPositionId = () => {
                 if (editingUser.position_id) return editingUser.position_id;
                 if (editingUser.position) return findId(store_positions, editingUser.position);
@@ -179,6 +215,9 @@ export function UserDialog({
                 return countries[0]?.id || 1;
             };
 
+            const roleId = getRoleIdFromEditingUser();
+            console.log('Setting initial role_id to:', roleId);
+
             setUserForm({
                 email: editingUser.email || '',
                 first_name: editingUser.first_name || '',
@@ -189,7 +228,7 @@ export function UserDialog({
                 is_active: editingUser.is_active ?? true,
                 position_id: getPositionId(),
                 department_id: getDepartmentId(),
-                role: editingUser.role || 'user',
+                role_id: roleId || (roles && roles.length > 0 ? roles[0].id : 1),
                 department_role_id: getDepartmentRoleId(),
                 grade_id: getGradeId(),
                 country_id: getCountryId()
@@ -198,7 +237,18 @@ export function UserDialog({
             isInitializedRef.current = false;
             resetForm();
         }
-    }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, setUserForm, findId]);
+    }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, roles, setUserForm, findId, getRoleIdFromEditingUser]);
+
+    // ✅ Эффект для обновления role_id когда roles загрузятся
+    useEffect(() => {
+        if (editingUser && open && roles && roles.length > 0 && userForm.role_id) {
+            const expectedRoleId = getRoleIdFromEditingUser();
+            if (expectedRoleId && expectedRoleId !== userForm.role_id) {
+                console.log('Updating role_id from', userForm.role_id, 'to', expectedRoleId);
+                setUserForm(prev => ({ ...prev, role_id: expectedRoleId }));
+            }
+        }
+    }, [editingUser, open, roles, userForm.role_id, getRoleIdFromEditingUser, setUserForm]);
 
     const resetForm = () => {
         setUserForm({
@@ -211,7 +261,7 @@ export function UserDialog({
             is_active: true,
             position_id: store_positions.length > 0 ? store_positions[0].id : 1,
             department_id: store_departments.length > 0 ? store_departments[0].id : 1,
-            role: 'user',
+            role_id: roles && roles.length > 0 ? roles[0].id : 1,
             department_role_id: department_roles.length > 0 ? department_roles[0].id : 1,
             grade_id: user_grades.length > 0 ? user_grades[0].id : 10,
             country_id: countries.length > 0 ? countries[0].id : 1
@@ -224,14 +274,12 @@ export function UserDialog({
         onOpenChange(false);
     };
 
-    // ✅ Функция валидации email
     const validateEmail = useCallback((email: string): boolean => {
         if (!email) return false;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     }, []);
 
-    // ✅ Валидация всей формы
     const validateForm = useCallback((): boolean => {
         const newErrors: Record<string, string> = {};
 
@@ -253,16 +301,6 @@ export function UserDialog({
         return Object.keys(newErrors).length === 0;
     }, [userForm.email, userForm.first_name, userForm.last_name, validateEmail]);
 
-    // ✅ Преобразование role string в number
-    const mapRoleToNumber = useCallback((role: string): number => {
-        switch (role) {
-            case 'admin': return 1;
-            case 'manager': return 2;
-            case 'user': return 3;
-            default: return 3;
-        }
-    }, []);
-
     const handleSaveUser = useCallback(() => {
         if (!validateForm()) {
             return;
@@ -276,7 +314,7 @@ export function UserDialog({
             position: userForm.position_id,
             department: userForm.department_id,
             department_role: userForm.department_role_id,
-            role: mapRoleToNumber(userForm.role),
+            role: userForm.role_id,
             country: userForm.country_id
         };
 
@@ -303,9 +341,8 @@ export function UserDialog({
                 }
             });
         }
-    }, [validateForm, userForm, editingUser, editUser, getUsers, handleClose, onSave, sendUser, mapRoleToNumber]);
+    }, [validateForm, userForm, editingUser, editUser, getUsers, handleClose, onSave, sendUser]);
 
-    // ✅ Обработчик изменения email с валидацией
     const handleEmailChange = useCallback((value: string) => {
         setUserForm({ ...userForm, email: value });
 
@@ -318,7 +355,6 @@ export function UserDialog({
         }
     }, [userForm, setUserForm, errors.email]);
 
-    // ✅ Обработчик изменения текстовых полей
     const handleTextChange = useCallback((field: keyof UserFormData, value: string) => {
         setUserForm({ ...userForm, [field]: value });
 
@@ -333,14 +369,12 @@ export function UserDialog({
 
     const isLoading = isCreating || isEditing;
 
-    // ✅ Безопасная функция рендера опций Select
     const renderSelectOptions = useCallback((items: any[], valueKey: string = 'id', labelKey: string = 'name') => {
-        if (!Array.isArray(items) || items.length === 0) {
+        if (!items || !Array.isArray(items) || items.length === 0) {
             return <SelectItem value="0" disabled>No options available</SelectItem>;
         }
 
         return items.map((item, index) => {
-            // ✅ Критическая проверка: item может быть null
             if (!item || item === null || typeof item !== 'object') {
                 return null;
             }
@@ -359,6 +393,13 @@ export function UserDialog({
             );
         }).filter(Boolean);
     }, [safeToString]);
+
+    // Для отладки
+    console.log('=== Debug Info ===');
+    console.log('userForm.role_id:', userForm.role_id);
+    console.log('roles from store:', roles);
+    console.log('editingUser?.role_id:', editingUser?.role_id);
+    console.log('editingUser?.role:', editingUser?.role);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -510,7 +551,6 @@ export function UserDialog({
                                 <SelectContent>
                                     {countries.length > 0 ? (
                                         countries.map((country: Country, index: number) => {
-                                            // ✅ Критическая проверка: country может быть null
                                             if (!country || country === null || typeof country !== 'object') {
                                                 return null;
                                             }
@@ -535,19 +575,21 @@ export function UserDialog({
                         <div className="space-y-2">
                             <Label htmlFor="role">System Role *</Label>
                             <Select
-                                value={userForm.role || 'user'}
-                                onValueChange={(value: 'admin' | 'user' | 'manager') =>
-                                    setUserForm({ ...userForm, role: value })
-                                }
-                                disabled={isLoading}
+                                key={`role-select-${userForm.role_id}`}
+                                value={userForm.role_id ? safeToString(userForm.role_id) : undefined}
+                                onValueChange={(value: string) => {
+                                    const parsedValue = parseInt(value);
+                                    if (!isNaN(parsedValue) && parsedValue > 0) {
+                                        setUserForm({ ...userForm, role_id: parsedValue });
+                                    }
+                                }}
+                                disabled={isLoading || !roles || roles.length === 0}
                             >
                                 <SelectTrigger>
-                                    <SelectValue />
+                                    <SelectValue placeholder="Select system role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="user">User</SelectItem>
-                                    <SelectItem value="manager">Manager</SelectItem>
-                                    <SelectItem value="admin">Admin</SelectItem>
+                                    {renderSelectOptions(roles || [])}
                                 </SelectContent>
                             </Select>
                         </div>
