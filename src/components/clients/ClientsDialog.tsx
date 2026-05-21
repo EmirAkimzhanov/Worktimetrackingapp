@@ -35,6 +35,9 @@ interface ClientDialogProps {
     setClientForm: (form: ClientFormData) => void;
     onSave: () => void;
     managers?: Array<{ value: number; label: string }>;
+    // НОВЫЕ ПРОПЫ для сохранения фильтров и пагинации
+    currentFilters?: Record<string, any>;
+    currentPage?: number;
 }
 
 export function ClientDialog({
@@ -50,6 +53,8 @@ export function ClientDialog({
         { value: 2, label: 'Sarah Johnson' },
         { value: 3, label: 'Michael Brown' },
     ],
+    currentFilters = {},
+    currentPage = 1,
 }: ClientDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const isInitializedRef = useRef(false);
@@ -60,6 +65,17 @@ export function ClientDialog({
     const { mutate: getClients } = useGetClients();
     const { mutate: editClient, isLoading: isEditing } = useEditClients();
     const { data: pieOptions } = useGetPIE();
+
+    // Функция для перезагрузки клиентов с сохранением фильтров и пагинации
+    const reloadClientsWithFilters = useCallback(() => {
+        const params = {
+            ...currentFilters,
+            page: currentPage,
+            page_size: 30,
+        };
+        console.log('🔄 Reloading clients with params:', params);
+        getClients(params);
+    }, [currentFilters, currentPage, getClients]);
 
     // ✅ Функция для преобразования store_countries в массив
     const getCountriesArray = useMemo(() => {
@@ -220,7 +236,8 @@ export function ClientDialog({
                 { body: clientData, client_id: editingClient.id },
                 {
                     onSuccess: () => {
-                        getClients();
+                        // Перезагружаем клиентов с сохранением фильтров и пагинации
+                        reloadClientsWithFilters();
                         resetForm();
                         onOpenChange(false);
                         if (onSave) onSave();
@@ -244,7 +261,8 @@ export function ClientDialog({
 
             createClient(clientData, {
                 onSuccess: () => {
-                    getClients();
+                    // Перезагружаем клиентов с сохранением фильтров и пагинации
+                    reloadClientsWithFilters();
                     resetForm();
                     onOpenChange(false);
                     if (onSave) onSave();

@@ -23,6 +23,9 @@ interface UserDialogProps {
     userForm: UserFormData;
     setUserForm: (form: UserFormData) => void;
     onSave: () => void;
+    // НОВЫЕ ПРОПЫ для сохранения фильтров и пагинации
+    currentFilters?: Record<string, any>;
+    currentPage?: number;
 }
 
 interface Country {
@@ -43,6 +46,8 @@ export function UserDialog({
     userForm,
     setUserForm,
     onSave,
+    currentFilters = {},
+    currentPage = 1,
 }: UserDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const isInitializedRef = useRef(false);
@@ -103,6 +108,17 @@ export function UserDialog({
     const { mutate: getRoles } = useGetRoles();
     const roles = useUserStore((state) => state.roles) as Role[];
 
+    // Функция для перезагрузки пользователей с сохранением фильтров и пагинации
+    const reloadUsersWithFilters = useCallback(() => {
+        const params = {
+            ...currentFilters,
+            page: currentPage,
+            page_size: 30,
+        };
+        console.log('🔄 Reloading users with params:', params);
+        getUsers(params);
+    }, [currentFilters, currentPage, getUsers]);
+
     // ✅ Преобразуем countries в массив, если это объект
     const countries = useMemo(() => {
         if (!countriesData) return [];
@@ -148,18 +164,15 @@ export function UserDialog({
         return items[0]?.id || 0;
     }, []);
 
-    // ✅ Функция для получения ID роли из editingUser (без хардкода!)
+    // ✅ Функция для получения ID роли из editingUser
     const getRoleIdFromEditingUser = useCallback(() => {
         if (!editingUser) return null;
 
-        // Если есть прямой role_id
         if (editingUser.role_id) {
             return editingUser.role_id;
         }
 
-        // Если есть role как строка ("admin", "manager", "user")
         if (editingUser.role && typeof editingUser.role === 'string' && roles && roles.length > 0) {
-            // Ищем в массиве roles роль с таким name (регистронезависимо)
             const foundRole = roles.find(
                 (role: Role) => role.name?.toLowerCase() === editingUser.role.toLowerCase()
             );
@@ -169,7 +182,6 @@ export function UserDialog({
             }
         }
 
-        // Если ничего не нашли, возвращаем первый ID роли из стора или null
         return roles && roles.length > 0 ? roles[0].id : null;
     }, [editingUser, roles]);
 
@@ -321,7 +333,8 @@ export function UserDialog({
         if (editingUser) {
             editUser({ body: userBody, user_id: editingUser.id }, {
                 onSuccess: () => {
-                    getUsers();
+                    // Перезагружаем пользователей с сохранением фильтров и пагинации
+                    reloadUsersWithFilters();
                     handleClose();
                     if (onSave) onSave();
                 },
@@ -332,7 +345,8 @@ export function UserDialog({
         } else {
             sendUser(userBody, {
                 onSuccess: () => {
-                    getUsers();
+                    // Перезагружаем пользователей с сохранением фильтров и пагинации
+                    reloadUsersWithFilters();
                     handleClose();
                     if (onSave) onSave();
                 },
@@ -341,7 +355,7 @@ export function UserDialog({
                 }
             });
         }
-    }, [validateForm, userForm, editingUser, editUser, getUsers, handleClose, onSave, sendUser]);
+    }, [validateForm, userForm, editingUser, editUser, reloadUsersWithFilters, handleClose, onSave, sendUser]);
 
     const handleEmailChange = useCallback((value: string) => {
         setUserForm({ ...userForm, email: value });

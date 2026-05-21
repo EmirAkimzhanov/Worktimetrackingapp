@@ -22,9 +22,8 @@ import { useEditProject, useGetProjects, useSendProject } from '../../../hooks/u
 import { toast } from 'sonner';
 import { useGetManagers } from '../../../hooks/useManagers';
 import { useGetServiceType } from '../../../hooks/useRefBooks';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden'; // Add this import if you have it, or create a simple wrapper
 
-// Simple VisuallyHidden component if you don't have @radix-ui/react-visually-hidden
+// Simple VisuallyHidden component
 const VisuallyHidden = ({ children }: { children: React.ReactNode }) => {
     return (
         <div style={{
@@ -53,6 +52,9 @@ interface ProjectDialogProps {
     managers?: { id: number; first_name: string; last_name: string; email: string; is_active: boolean }[];
     predefinedColors: { name: string; value: string }[];
     onSave: () => void;
+    // НОВЫЕ ПРОПЫ для сохранения фильтров и пагинации
+    currentFilters?: Record<string, any>;
+    currentPage?: number;
 }
 
 export function ProjectDialog({
@@ -65,6 +67,8 @@ export function ProjectDialog({
     managers = [],
     predefinedColors = [],
     onSave,
+    currentFilters = {},
+    currentPage = 1,
 }: ProjectDialogProps) {
     const [customColor, setCustomColor] = useState(projectForm.project_color || '#1F4E78');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,13 +105,23 @@ export function ProjectDialog({
         return item?.id;
     };
 
+    // Функция для перезагрузки проектов с сохранением фильтров и пагинации
+    const reloadProjectsWithFilters = () => {
+        const params = {
+            ...currentFilters,
+            page: currentPage,
+            page_size: 30,
+        };
+        console.log('🔄 Reloading projects with params:', params);
+        getProjects(params);
+    };
+
     // Заполнение формы при редактировании с преобразованием названий в ID
     useEffect(() => {
         if (open && editingProject) {
             // Проверяем, что все необходимые справочники загружены
             const allDataLoaded = () => {
                 if (!editingProject) return true;
-                // Если есть поля с названиями, проверяем соответствующие списки
                 if (editingProject.status && !store_statuses?.length) return false;
                 if (editingProject.country && !store_countries?.length) return false;
                 if (editingProject.manager && !project_managers?.length) return false;
@@ -120,26 +134,22 @@ export function ProjectDialog({
             };
 
             if (!allDataLoaded()) {
-                // Если данные ещё загружаются, ждём
                 setIsDataReady(false);
                 return;
             }
 
             setIsDataReady(true);
 
-            // Преобразуем названия в ID
             const statusId = editingProject.status
                 ? findIdByValue(store_statuses, editingProject.status, 'name')
                 : editingProject.status_id;
 
-            // Для страны: может быть код (CH) или название. Пробуем найти по коду, потом по названию
             let countryId = editingProject.country_id;
             if (editingProject.country && !countryId) {
                 countryId = findIdByValue(store_countries, editingProject.country, 'code');
                 if (!countryId) countryId = findIdByValue(store_countries, editingProject.country, 'name');
             }
 
-            // Для менеджера: ищем по email или по имени
             let managerId = editingProject.manager_id;
             if (editingProject.manager && !managerId) {
                 const manager = project_managers?.find(m =>
@@ -294,7 +304,8 @@ export function ProjectDialog({
                 {
                     onSuccess: () => {
                         toast.success('Project updated successfully');
-                        getProjects();
+                        // Перезагружаем проекты с сохранением фильтров и пагинации
+                        reloadProjectsWithFilters();
                         onOpenChange(false);
                         resetForm();
                         setIsSubmitting(false);
@@ -309,7 +320,8 @@ export function ProjectDialog({
             sendProject(projectData, {
                 onSuccess: () => {
                     toast.success('Project created successfully');
-                    getProjects();
+                    // Перезагружаем проекты с сохранением фильтров и пагинации
+                    reloadProjectsWithFilters();
                     onOpenChange(false);
                     resetForm();
                     setIsSubmitting(false);
@@ -430,14 +442,13 @@ export function ProjectDialog({
         ));
     };
 
-    const isLoading = isSubmitting;
+    const isLoading = isSubmitting || isSending;
 
     // Если данные ещё не загружены, показываем индикатор загрузки
     if (open && editingProject && !isDataReady) {
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent>
-                    {/* FIX: Add hidden DialogTitle for accessibility */}
                     <VisuallyHidden>
                         <DialogTitle>Loading Project Data</DialogTitle>
                     </VisuallyHidden>
@@ -466,7 +477,7 @@ export function ProjectDialog({
                             <Label htmlFor="project-name">IC *</Label>
                             <Input
                                 id="project-name"
-                                value={projectForm.ic || ''} // FIX: Ensure value is never undefined
+                                value={projectForm.ic || ''}
                                 onChange={(e) => {
                                     setProjectForm({ ...projectForm, ic: e.target.value });
                                     if (errors.ic) setErrors(prev => ({ ...prev, ic: '' }));
@@ -499,7 +510,7 @@ export function ProjectDialog({
                             <Label htmlFor="project-description">Project Description *</Label>
                             <Textarea
                                 id="project-description"
-                                value={projectForm.description || ''} // FIX: Ensure value is never undefined
+                                value={projectForm.description || ''}
                                 onChange={(e) => {
                                     setProjectForm({ ...projectForm, description: e.target.value });
                                     if (errors.description) setErrors(prev => ({ ...prev, description: '' }));
