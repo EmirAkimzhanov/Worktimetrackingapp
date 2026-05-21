@@ -51,8 +51,9 @@ export function ReportsTab() {
         end: new Date().toISOString().split('T')[0]
     });
 
-    // Фильтры (select) - значения из store
-    const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+    // Фильтры (select) - изменено: вместо department теперь user_department и project_department
+    const [selectedUserDepartment, setSelectedUserDepartment] = useState<string>('all');
+    const [selectedProjectDepartment, setSelectedProjectDepartment] = useState<string>('all');
     const [selectedCountryCode, setSelectedCountryCode] = useState<string>('all');
     const [selectedDetailedGrade, setSelectedDetailedGrade] = useState<string>('all');
 
@@ -97,14 +98,13 @@ export function ReportsTab() {
     const [apiFilters, setApiFilters] = useState<{
         start_date?: string;
         end_date?: string;
-        department?: string;
+        user_department?: string;
+        project_department?: string;
         country_code?: string;
         detailed_grade?: string;
         user_email?: string;
         client_name?: string;
         code?: string;
-        user_department?: string;
-        project_department?: string;
         position?: string;
         project_service_line?: string;
         description?: string;
@@ -214,9 +214,12 @@ export function ReportsTab() {
             end_date,
         };
 
-        // Фильтры из select (точное совпадение)
-        if (selectedDepartment !== 'all') {
-            newFilters.department = selectedDepartment;
+        // Фильтры из select (точное совпадение) - заменено на user_department и project_department
+        if (selectedUserDepartment !== 'all') {
+            newFilters.user_department = selectedUserDepartment;
+        }
+        if (selectedProjectDepartment !== 'all') {
+            newFilters.project_department = selectedProjectDepartment;
         }
         if (selectedCountryCode !== 'all') {
             newFilters.country_code = selectedCountryCode;
@@ -240,7 +243,7 @@ export function ReportsTab() {
         setCurrentPage(1);
     }, [
         getDateRangeForAPI,
-        selectedDepartment, selectedCountryCode, selectedDetailedGrade,
+        selectedUserDepartment, selectedProjectDepartment, selectedCountryCode, selectedDetailedGrade,
         searchUserEmail, searchClientName, searchCode,
         searchUserDepartment, searchProjectDepartment, searchPosition,
         searchProjectServiceLine, searchDescription, searchTaskName
@@ -253,7 +256,8 @@ export function ReportsTab() {
             start: new Date().toISOString().split('T')[0],
             end: new Date().toISOString().split('T')[0]
         });
-        setSelectedDepartment('all');
+        setSelectedUserDepartment('all');
+        setSelectedProjectDepartment('all');
         setSelectedCountryCode('all');
         setSelectedDetailedGrade('all');
         setSearchUserEmail('');
@@ -279,7 +283,8 @@ export function ReportsTab() {
             end_date,
         };
 
-        if (selectedDepartment !== 'all') exportParams.department = selectedDepartment;
+        if (selectedUserDepartment !== 'all') exportParams.user_department = selectedUserDepartment;
+        if (selectedProjectDepartment !== 'all') exportParams.project_department = selectedProjectDepartment;
         if (selectedCountryCode !== 'all') exportParams.country_code = selectedCountryCode;
         if (selectedDetailedGrade !== 'all') exportParams.detailed_grade = selectedDetailedGrade;
         if (searchUserEmail) exportParams.user_email = searchUserEmail;
@@ -306,7 +311,7 @@ export function ReportsTab() {
 
         return () => clearTimeout(timeoutId);
     }, [
-        selectedDepartment, selectedCountryCode, selectedDetailedGrade,
+        selectedUserDepartment, selectedProjectDepartment, selectedCountryCode, selectedDetailedGrade,
         searchUserEmail, searchClientName, searchCode,
         searchUserDepartment, searchProjectDepartment, searchPosition,
         searchProjectServiceLine, searchDescription, searchTaskName,
@@ -381,14 +386,31 @@ export function ReportsTab() {
                 <CardContent>
                     {/* Сетка 5 колонок */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-4">
-                        {/* Department Filter */}
+                        {/* User Department Filter - НОВЫЙ ФИЛЬТР */}
                         <div>
-                            <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                            <Select value={selectedUserDepartment} onValueChange={setSelectedUserDepartment}>
                                 <SelectTrigger className="h-9 text-sm">
-                                    <SelectValue placeholder="Department" />
+                                    <SelectValue placeholder="User Department" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Departments</SelectItem>
+                                    <SelectItem value="all">All User Depts</SelectItem>
+                                    {(Array.isArray(store_departments) ? store_departments : Object.values(store_departments || {})).map((dept: any) => (
+                                        <SelectItem key={dept.id} value={dept.name}>
+                                            {dept.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Project Department Filter - НОВЫЙ ФИЛЬТР */}
+                        <div>
+                            <Select value={selectedProjectDepartment} onValueChange={setSelectedProjectDepartment}>
+                                <SelectTrigger className="h-9 text-sm">
+                                    <SelectValue placeholder="Project Department" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Project Depts</SelectItem>
                                     {(Array.isArray(store_departments) ? store_departments : Object.values(store_departments || {})).map((dept: any) => (
                                         <SelectItem key={dept.id} value={dept.name}>
                                             {dept.name}
@@ -484,7 +506,7 @@ export function ReportsTab() {
                         <div>
                             <Input
                                 className="h-9 text-sm"
-                                placeholder="User department search"
+                                placeholder="User dept search"
                                 value={searchUserDepartment}
                                 onChange={(e) => setSearchUserDepartment(e.target.value)}
                             />
@@ -494,7 +516,7 @@ export function ReportsTab() {
                         <div>
                             <Input
                                 className="h-9 text-sm"
-                                placeholder="Project department search"
+                                placeholder="Project dept search"
                                 value={searchProjectDepartment}
                                 onChange={(e) => setSearchProjectDepartment(e.target.value)}
                             />
@@ -560,7 +582,7 @@ export function ReportsTab() {
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-2 pt-2 border-t">
+                    <div className="flex gap-2 pt-2 ">
                         <Button variant="outline" onClick={resetFilters} size="sm" className="h-8" disabled={isExporting}>
                             <X className="w-3 h-3 mr-1" />
                             Reset

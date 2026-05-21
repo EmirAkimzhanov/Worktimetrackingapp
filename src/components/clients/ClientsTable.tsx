@@ -590,8 +590,6 @@ export function ClientsTable({
                         <div>
                           <div>{client.name || "Unnamed"}</div>
                           <div className="text-xs text-gray-500 flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            ID: {client.id || "N/A"}
                           </div>
                         </div>
                       </div>

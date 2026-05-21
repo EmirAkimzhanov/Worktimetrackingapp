@@ -86,9 +86,12 @@ export const useGetReportsExcel = () => {
                     filename = `reports_${date}.xlsx`;
                 }
 
-                // Добавляем информацию о фильтрах в имя файла (опционально)
-                if (params?.department) {
-                    filename = filename.replace('.xlsx', `_dept_${params.department}.xlsx`);
+                // Обновляем информацию о фильтрах в имени файла
+                if (params?.user_department) {
+                    filename = filename.replace('.xlsx', `_user_dept_${params.user_department}.xlsx`);
+                }
+                if (params?.project_department) {
+                    filename = filename.replace('.xlsx', `_project_dept_${params.project_department}.xlsx`);
                 }
                 if (params?.code) {
                     filename = filename.replace('.xlsx', `_code_${params.code}.xlsx`);

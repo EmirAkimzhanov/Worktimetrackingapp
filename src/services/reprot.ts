@@ -12,16 +12,24 @@ export interface GetReportsParams {
     start_date?: string;
     end_date?: string;
 
-    // Фильтры (точное совпадение)
-    department?: string;        // department
-    code?: string;              // code
-    detailed_grade?: string;    // detailed_grade
+    // Фильтры (точное совпадение) - ОБНОВЛЕНО
+    user_department?: string;      // Отдел пользователя (вместо department)
+    project_department?: string;   // Отдел проекта (новый параметр)
+    code?: string;                 // code
+    detailed_grade?: string;       // detailed_grade
+    country_code?: string;         // Код страны
+    position?: string;             // Позиция/должность
 
-    // Поиск (частичное совпадение)
-    search?: string;            // Общий поиск по всем текстовым полям
+    // Поиск (частичное совпадение) - ДОБАВЛЕНЫ НОВЫЕ ПОЛЯ
+    search?: string;               // Общий поиск по всем текстовым полям
+    user_email?: string;           // Поиск по email пользователя
+    client_name?: string;          // Поиск по имени клиента
+    project_service_line?: string; // Поиск по сервисной линии
+    description?: string;          // Поиск по описанию
+    task_name?: string;            // Поиск по названию задачи
 
     // Сортировка
-    ordering?: string;          // Например: "-date", "user_email"
+    ordering?: string;             // Например: "-date", "user_email"
 
     // Другие возможные фильтры
     project_id?: number;
@@ -33,18 +41,18 @@ export interface GetReportsParams {
 export interface ReportItem {
     id?: number;
     date: string;                    // "2024-01-15"
+    hours?: number;                  // Отработанные часы
     user_email: string;
+    country_code: string;
+    user_department: string;         // Отдел пользователя
+    detailed_grade: string;          // Грейд
+    project_department: string;      // Отдел проекта
     client_name: string;
     code: string;                    // Код проекта
-    user_department: string;
-    project_department: string;      // department из фильтров
-    country_code: string;
-    position: string;
-    detailed_grade: string;          // detailed_grade из фильтров
     project_service_line: string;
-    description: string;
     task_name: string;
-    hours?: number;                  // Отработанные часы
+    description: string;
+    position?: string;               // Позиция
     project_id?: number;
     user_id?: number;
     [key: string]: any;              // Для дополнительных полей
@@ -155,8 +163,27 @@ export const downloadExcelReport = async (params?: GetReportsParams, filename?: 
         const link = document.createElement('a');
         link.href = url;
 
-        // Генерируем имя файла с датой
-        const defaultFilename = `report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        // Генерируем имя файла с учетом фильтров
+        let defaultFilename = `report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        // Добавляем информацию о фильтрах в имя файла
+        if (params?.user_department) {
+            defaultFilename = defaultFilename.replace('.xlsx', `_user_dept_${params.user_department}.xlsx`);
+        }
+        if (params?.project_department) {
+            defaultFilename = defaultFilename.replace('.xlsx', `_project_dept_${params.project_department}.xlsx`);
+        }
+        if (params?.start_date && params?.end_date) {
+            defaultFilename = `report_${params.start_date}_to_${params.end_date}${defaultFilename.includes('_user_dept') ? '' : '.xlsx'}`;
+            if (defaultFilename.includes('_user_dept')) {
+                defaultFilename = defaultFilename.replace('report_', `report_${params.start_date}_to_${params.end_date}_`);
+            }
+        } else if (params?.start_date) {
+            defaultFilename = `report_from_${params.start_date}${defaultFilename.includes('_user_dept') ? '' : '.xlsx'}`;
+        } else if (params?.end_date) {
+            defaultFilename = `report_until_${params.end_date}${defaultFilename.includes('_user_dept') ? '' : '.xlsx'}`;
+        }
+
         link.download = filename || defaultFilename;
 
         // Триггерим скачивание
@@ -195,4 +222,68 @@ export const downloadExcelByDateRange = async (
         end_date: dateRange.end_date,
         ...additionalParams
     }, filename);
+}
+
+// НОВАЯ: Вспомогательная функция для фильтрации по отделам
+export const getReportsByDepartments = async (
+    userDepartment?: string,
+    projectDepartment?: string,
+    additionalParams?: Omit<GetReportsParams, 'user_department' | 'project_department'>
+): Promise<ReportsResponse> => {
+    const params: GetReportsParams = { ...additionalParams };
+
+    if (userDepartment) {
+        params.user_department = userDepartment;
+    }
+    if (projectDepartment) {
+        params.project_department = projectDepartment;
+    }
+
+    return getReports(params);
+}
+
+// НОВАЯ: Вспомогательная функция для экспорта по отделам
+export const downloadExcelByDepartments = async (
+    userDepartment?: string,
+    projectDepartment?: string,
+    additionalParams?: Omit<GetReportsParams, 'user_department' | 'project_department'>,
+    filename?: string
+) => {
+    const params: GetReportsParams = { ...additionalParams };
+
+    if (userDepartment) {
+        params.user_department = userDepartment;
+    }
+    if (projectDepartment) {
+        params.project_department = projectDepartment;
+    }
+
+    return downloadExcelReport(params, filename);
+}
+
+// НОВАЯ: Вспомогательная функция для получения уникальных значений полей
+export const getUniqueFieldValues = async (
+    field: 'user_department' | 'project_department' | 'country_code' | 'detailed_grade' | 'client_name'
+): Promise<string[]> => {
+    try {
+        // Получаем все записи без пагинации (максимум 10000)
+        const response = await getReports({
+            page_size: 10000,
+            page: 1
+        });
+
+        // Извлекаем уникальные значения
+        const uniqueValues = new Set<string>();
+        response.results.forEach(item => {
+            const value = item[field];
+            if (value && typeof value === 'string') {
+                uniqueValues.add(value);
+            }
+        });
+
+        return Array.from(uniqueValues).sort();
+    } catch (error) {
+        console.error(`Error fetching unique ${field} values:`, error);
+        return [];
+    }
 }
