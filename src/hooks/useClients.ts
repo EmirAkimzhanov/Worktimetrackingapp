@@ -175,17 +175,20 @@ export const useGetClients = () => {
                 group,
                 personal_number,
                 sector_name,
-                ordering
+                ordering,
+                all = false // Добавляем параметр all
             } = params || {};
 
+            // Формируем query параметры для кэша и запроса
             const queryParams = {
-                page,
-                page_size,
+                ...(page && !all && { page }), // Не включаем page если all=true
+                ...(page_size && !all && { page_size }), // Не включаем page_size если all=true
                 ...(name && { name }),
                 ...(group && { group }),
                 ...(personal_number && { personal_number }),
                 ...(sector_name && { sector_name }),
-                ...(ordering && { ordering })
+                ...(ordering && { ordering }),
+                ...(all && { all }) // Добавляем all в параметры
             };
 
             console.log('🔍 Query params before cache check:', queryParams);
@@ -196,7 +199,9 @@ export const useGetClients = () => {
                 if (cached) {
                     // Сохраняем в store даже из кэша
                     setClients(cached.results || cached);
-                    if (setClientsPagination) {
+
+                    // Если есть пагинация (не all=true), сохраняем и её
+                    if (setClientsPagination && !all && cached.count !== undefined) {
                         setClientsPagination({
                             count: cached.count,
                             next: cached.next,
@@ -204,12 +209,24 @@ export const useGetClients = () => {
                             currentPage: page,
                             pageSize: page_size
                         });
+                    } else if (all && setClientsPagination) {
+                        // Если all=true, сбрасываем пагинацию или устанавливаем специальные значения
+                        setClientsPagination({
+                            count: Array.isArray(cached) ? cached.length : (cached.results?.length || 0),
+                            next: null,
+                            previous: null,
+                            currentPage: 1,
+                            pageSize: (Array.isArray(cached) ? cached.length : (cached.results?.length || 0))
+                        });
                     }
+
                     return cached;
                 }
             }
 
             console.log(forceRefresh ? 'Force refreshing clients' : `Fetching fresh clients with params:`, queryParams);
+
+            // Вызываем сервис с параметрами
             const data = await getClients(queryParams);
 
             // Сохраняем в кэш с параметрами
@@ -222,9 +239,13 @@ export const useGetClients = () => {
             return data;
         },
         onSuccess: (data, params) => {
-            // Сохраняем clients и пагинацию в store
+            const all = params?.all || false;
+
+            // Сохраняем clients в store
             setClients(data.results || data);
-            if (setClientsPagination) {
+
+            // Сохраняем пагинацию только если это не all=true запрос
+            if (setClientsPagination && !all) {
                 setClientsPagination({
                     count: data.count,
                     next: data.next,
@@ -232,8 +253,19 @@ export const useGetClients = () => {
                     currentPage: params?.page || 1,
                     pageSize: params?.page_size || 30
                 });
+            } else if (all && setClientsPagination) {
+                // Для all=true устанавливаем специальные значения пагинации
+                const clientsArray = data.results || data;
+                setClientsPagination({
+                    count: Array.isArray(clientsArray) ? clientsArray.length : 0,
+                    next: null,
+                    previous: null,
+                    currentPage: 1,
+                    pageSize: Array.isArray(clientsArray) ? clientsArray.length : 0
+                });
             }
-            console.log('Clients loaded:', data);
+
+            console.log(all ? 'All clients loaded:' : 'Clients loaded:', data);
         },
         onError: (error: Error) => {
             console.error("Get clients error:", error.message);
@@ -248,9 +280,12 @@ export const useCreateClients = () => {
             // Очищаем все кэши при создании нового клиента
             clearAllCaches();
             console.log('Client created:', data);
+            toast.success('Клиенты успешно экспортированы в Excel');
+
         },
         onError: (error: Error) => {
             console.error("Create client error:", error.message);
+            toast.success(error.message);
         },
     });
 };

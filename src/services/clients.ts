@@ -12,6 +12,7 @@ export interface GetClientsParams {
     personal_number?: string;
     sector_name?: string;
     ordering?: string;
+    all?: boolean; // Добавляем параметр all
 }
 
 // Интерфейс для параметров экспорта Excel
@@ -82,6 +83,9 @@ export const getClients = async (params?: GetClientsParams) => {
     // Сортировка
     if (params?.ordering) queryParams.append('ordering', params.ordering);
 
+    // Параметр all - получаем всех клиентов без пагинации
+    if (params?.all) queryParams.append('all', 'true');
+
     const url = `${api}api/clients/clients/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 
     console.log('📦 Fetching clients with params:', params);
@@ -94,6 +98,11 @@ export const getClients = async (params?: GetClientsParams) => {
     });
 
     return res.data;
+}
+
+// Функция для получения ВСЕХ клиентов (удобная обертка)
+export const getAllClients = async () => {
+    return getClients({ all: true });
 }
 
 // Функция для скачивания Excel файла с клиентами

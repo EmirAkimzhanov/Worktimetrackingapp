@@ -35,7 +35,6 @@ interface ClientDialogProps {
     setClientForm: (form: ClientFormData) => void;
     onSave: () => void;
     managers?: Array<{ value: number; label: string }>;
-    // НОВЫЕ ПРОПЫ для сохранения фильтров и пагинации
     currentFilters?: Record<string, any>;
     currentPage?: number;
 }
@@ -66,7 +65,6 @@ export function ClientDialog({
     const { mutate: editClient, isLoading: isEditing } = useEditClients();
     const { data: pieOptions } = useGetPIE();
 
-    // Функция для перезагрузки клиентов с сохранением фильтров и пагинации
     const reloadClientsWithFilters = useCallback(() => {
         const params = {
             ...currentFilters,
@@ -77,7 +75,6 @@ export function ClientDialog({
         getClients(params);
     }, [currentFilters, currentPage, getClients]);
 
-    // ✅ Функция для преобразования store_countries в массив
     const getCountriesArray = useMemo(() => {
         if (!store_countries) return [];
         if (Array.isArray(store_countries)) return store_countries;
@@ -87,7 +84,6 @@ export function ClientDialog({
         return [];
     }, [store_countries]);
 
-    // ✅ Функция для преобразования store_sectors в массив
     const getSectorsArray = useMemo(() => {
         if (!store_sectors) return [];
         if (Array.isArray(store_sectors)) return store_sectors;
@@ -97,7 +93,6 @@ export function ClientDialog({
         return [];
     }, [store_sectors]);
 
-    // ✅ Безопасное преобразование значения в число
     const safeToNumber = useCallback((value: any, defaultValue: number = 0): number => {
         if (value === null || value === undefined) return defaultValue;
         if (typeof value === 'number') return value;
@@ -109,7 +104,6 @@ export function ClientDialog({
         return defaultValue;
     }, []);
 
-    // ✅ Функции для поиска ID с проверками
     const getSectorId = useCallback((sectorName: string) => {
         if (!sectorName) return 0;
         const sectorsArray = getSectorsArray;
@@ -139,7 +133,6 @@ export function ClientDialog({
         return 0;
     }, [pieOptions]);
 
-    // ✅ Заполнение формы при редактировании
     useEffect(() => {
         if (editingClient && open && !isInitializedRef.current) {
             isInitializedRef.current = true;
@@ -161,7 +154,6 @@ export function ClientDialog({
         }
     }, [editingClient, open, setClientForm, getSectorId, getCountryId, getPieId, safeToNumber]);
 
-    // ✅ Безопасное получение значения формы
     const getFormValue = useCallback((key: keyof ClientFormData) => {
         const value = clientForm?.[key];
 
@@ -205,9 +197,6 @@ export function ClientDialog({
         if (!getFormValue('client_code')?.toString().trim()) {
             newErrors.client_code = 'Client code is required';
         }
-        if (!getFormValue('pie') || getFormValue('pie') === 0) {
-            newErrors.pie = 'PIE is required';
-        }
         if (!getFormValue('country') || getFormValue('country') === 0) {
             newErrors.country = 'Country is required';
         }
@@ -219,24 +208,61 @@ export function ClientDialog({
     const handleSave = () => {
         if (!validateForm()) return;
 
-        if (editingClient && editingClient.id) {
-            const clientData = {
+        // ✅ Формируем объект только с заполненными полями
+        const buildClientData = () => {
+            const data: any = {
                 name: getFormValue('name'),
                 personal_number: getFormValue('personal_number'),
-                group: getFormValue('group'),
-                manager: getFormValue('manager') || 0,
-                sector: getFormValue('sector') || 0,
                 client_code: getFormValue('client_code'),
-                bvd: getFormValue('bvd'),
-                pie: getFormValue('pie'),
-                country_id: getFormValue('country') === 0 ? null : getFormValue('country'),
+                country: getFormValue('country') === 0 ? null : getFormValue('country'),
             };
+
+            // ✅ Добавляем manager только если выбран (не 0)
+            const managerValue = getFormValue('manager');
+            if (managerValue && managerValue !== 0) {
+                data.manager = managerValue;
+            }
+
+            // ✅ Добавляем sector только если выбран (не 0)
+            const sectorValue = getFormValue('sector');
+            if (sectorValue && sectorValue !== 0) {
+                data.sector = sectorValue;
+            }
+
+            // ✅ Добавляем pie только если выбран (не 0)
+            const pieValue = getFormValue('pie');
+            if (pieValue && pieValue !== 0) {
+                data.pie = pieValue;
+            }
+
+            // ✅ Добавляем group только если не пустая строка
+            const groupValue = getFormValue('group');
+            if (groupValue && groupValue.toString().trim() !== '') {
+                data.group = groupValue;
+            }
+
+            // ✅ Добавляем bvd только если не пустая строка
+            const bvdValue = getFormValue('bvd');
+            if (bvdValue && bvdValue.toString().trim() !== '') {
+                data.bvd = bvdValue;
+            }
+
+            return data;
+        };
+
+        const clientData = buildClientData();
+
+        if (editingClient && editingClient.id) {
+            // Для редактирования используем country_id
+            if (clientData.country) {
+                clientData.country_id = clientData.country;
+                delete clientData.country;
+            }
 
             editClient(
                 { body: clientData, client_id: editingClient.id },
                 {
                     onSuccess: () => {
-                        // Перезагружаем клиентов с сохранением фильтров и пагинации
                         reloadClientsWithFilters();
                         resetForm();
                         onOpenChange(false);
@@ -248,20 +274,8 @@ export function ClientDialog({
                 }
             );
         } else {
-            const clientData = {
-                name: getFormValue('name'),
-                personal_number: getFormValue('personal_number'),
-                group: getFormValue('group'),
-                sector: getFormValue('sector') || 0,
-                client_code: getFormValue('client_code'),
-                bvd: getFormValue('bvd'),
-                pie: getFormValue('pie'),
-                country: getFormValue('country') === 0 ? null : getFormValue('country'),
-            };
-
             createClient(clientData, {
                 onSuccess: () => {
-                    // Перезагружаем клиентов с сохранением фильтров и пагинации
                     reloadClientsWithFilters();
                     resetForm();
                     onOpenChange(false);
@@ -280,7 +294,6 @@ export function ClientDialog({
             [field]: value
         }));
 
-        // Очищаем ошибку для этого поля
         if (errors[field]) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -466,7 +479,7 @@ export function ClientDialog({
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="pie">PIE *</Label>
+                            <Label htmlFor="pie">PIE</Label>
                             <Select
                                 value={String(getFormValue('pie') ?? 0)}
                                 onValueChange={(value: string) =>
@@ -492,7 +505,6 @@ export function ClientDialog({
                                     })}
                                 </SelectContent>
                             </Select>
-                            {errors.pie && <p className="text-sm text-red-500">{errors.pie}</p>}
                         </div>
 
                         <div className="space-y-2">
@@ -537,7 +549,6 @@ export function ClientDialog({
                             !getFormValue('name')?.toString().trim() ||
                             !getFormValue('personal_number')?.toString().trim() ||
                             !getFormValue('client_code')?.toString().trim() ||
-                            !getFormValue('pie') || getFormValue('pie') === 0 ||
                             !getFormValue('country') || getFormValue('country') === 0 ||
                             isLoading
                         }

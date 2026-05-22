@@ -22,8 +22,12 @@ import { useEditProject, useGetProjects, useSendProject } from '../../../hooks/u
 import { toast } from 'sonner';
 import { useGetManagers } from '../../../hooks/useManagers';
 import { useGetServiceType } from '../../../hooks/useRefBooks';
+import { useGetClients } from '../../../hooks/useClients';
+import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '../../ui/utils';
 
-// Simple VisuallyHidden component
 const VisuallyHidden = ({ children }: { children: React.ReactNode }) => {
     return (
         <div style={{
@@ -52,7 +56,6 @@ interface ProjectDialogProps {
     managers?: { id: number; first_name: string; last_name: string; email: string; is_active: boolean }[];
     predefinedColors: { name: string; value: string }[];
     onSave: () => void;
-    // НОВЫЕ ПРОПЫ для сохранения фильтров и пагинации
     currentFilters?: Record<string, any>;
     currentPage?: number;
 }
@@ -74,6 +77,7 @@ export function ProjectDialog({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isDataReady, setIsDataReady] = useState(false);
+    const [isClientSelectOpen, setIsClientSelectOpen] = useState(false);
 
     const { mutate: getDepartments, isPending: isDepartmentsLoading } = useGetDepartments();
     const store_departments = useUserStore((state) => state.departments);
@@ -86,16 +90,20 @@ export function ProjectDialog({
     const { mutate: getProjects } = useGetProjects();
     const { mutate: editProject } = useEditProject();
     const { data: serviceType } = useGetServiceType();
-    const { data: project_managers, isLoading: isLoadingManagers, error: managersError } = useGetManagers();
+    const { mutate: getClients } = useGetClients();
 
-    // Загружаем департаменты при открытии
+    const { data: project_managers, isLoading: isLoadingManagers } = useGetManagers();
+
     useEffect(() => {
         if (open && (!store_departments || store_departments.length === 0)) {
             getDepartments();
         }
     }, [open, store_departments, getDepartments]);
 
-    // Функция для поиска ID по названию/коду
+    useEffect(() => {
+        getClients({ all: true });
+    }, [open, getClients]);
+
     const findIdByValue = (list: any[], value: string, key: string = 'name'): number | undefined => {
         if (!list || !value) return undefined;
         const item = list.find(item => {
@@ -105,21 +113,17 @@ export function ProjectDialog({
         return item?.id;
     };
 
-    // Функция для перезагрузки проектов с сохранением фильтров и пагинации
     const reloadProjectsWithFilters = () => {
         const params = {
             ...currentFilters,
             page: currentPage,
             page_size: 30,
         };
-        console.log('🔄 Reloading projects with params:', params);
         getProjects(params);
     };
 
-    // Заполнение формы при редактировании с преобразованием названий в ID
     useEffect(() => {
         if (open && editingProject) {
-            // Проверяем, что все необходимые справочники загружены
             const allDataLoaded = () => {
                 if (!editingProject) return true;
                 if (editingProject.status && !store_statuses?.length) return false;
@@ -249,20 +253,13 @@ export function ProjectDialog({
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (!projectForm.ic?.trim()) {
-            newErrors.ic = 'Project name is required';
-        }
-        if (!projectForm.description?.trim()) {
-            newErrors.description = 'Project description is required';
-        }
+
 
         if (!editingProject) {
             if (!projectForm.service_type_id || projectForm.service_type_id === 0) {
                 newErrors.service_type = 'Service type is required';
             }
-            if (!projectForm.entity?.trim()) {
-                newErrors.entity = 'Entity is required';
-            }
+
             if (!projectForm.agreement_date) {
                 newErrors.agreement_date = 'Agreement date is required';
             }
@@ -304,7 +301,6 @@ export function ProjectDialog({
                 {
                     onSuccess: () => {
                         toast.success('Project updated successfully');
-                        // Перезагружаем проекты с сохранением фильтров и пагинации
                         reloadProjectsWithFilters();
                         onOpenChange(false);
                         resetForm();
@@ -320,7 +316,6 @@ export function ProjectDialog({
             sendProject(projectData, {
                 onSuccess: () => {
                     toast.success('Project created successfully');
-                    // Перезагружаем проекты с сохранением фильтров и пагинации
                     reloadProjectsWithFilters();
                     onOpenChange(false);
                     resetForm();
@@ -334,7 +329,6 @@ export function ProjectDialog({
         }
     };
 
-    // --- Вспомогательные функции для рендеринга ---
     const getActiveStatuses = () => {
         if (!store_statuses || !Array.isArray(store_statuses)) return [];
         return store_statuses.filter(status => status.is_active !== false);
@@ -365,6 +359,12 @@ export function ProjectDialog({
         return store_task_types.filter(taskType => taskType.is_active !== false);
     };
 
+    const allActiveClients = getActiveStoreClients();
+
+    const selectedClientName = projectForm.client_id
+        ? allActiveClients.find(c => Number(c.id) === Number(projectForm.client_id))?.name ?? 'Select client'
+        : 'Select client';
+
     const renderStatuses = () => {
         const activeStatuses = getActiveStatuses();
         if (activeStatuses.length === 0) return <SelectItem value="none" disabled>No statuses available</SelectItem>;
@@ -383,27 +383,12 @@ export function ProjectDialog({
 
     const renderManagers = () => {
         const activeManagers = getActiveManagers();
-
-        if (isLoadingManagers) {
-            return <SelectItem value="none" disabled>Loading managers...</SelectItem>;
-        }
-
-        if (!activeManagers || !Array.isArray(activeManagers) || activeManagers.length === 0) {
-            return <SelectItem value="none" disabled>No managers available</SelectItem>;
-        }
-
+        if (isLoadingManagers) return <SelectItem value="none" disabled>Loading managers...</SelectItem>;
+        if (!activeManagers || activeManagers.length === 0) return <SelectItem value="none" disabled>No managers available</SelectItem>;
         return activeManagers.map(manager => (
             <SelectItem key={manager.id} value={manager.id.toString()}>
                 {manager.first_name} {manager.last_name}
             </SelectItem>
-        ));
-    };
-
-    const renderClients = () => {
-        const activeClients = getActiveStoreClients();
-        if (activeClients.length === 0) return <SelectItem value="none" disabled>No clients available</SelectItem>;
-        return activeClients.map(client => (
-            <SelectItem key={client.id} value={client.id.toString()}>{client.name}</SelectItem>
         ));
     };
 
@@ -444,7 +429,6 @@ export function ProjectDialog({
 
     const isLoading = isSubmitting || isSending;
 
-    // Если данные ещё не загружены, показываем индикатор загрузки
     if (open && editingProject && !isDataReady) {
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
@@ -470,11 +454,12 @@ export function ProjectDialog({
                         {editingProject ? 'Update project details' : 'Create a new project'}
                     </DialogDescription>
                 </DialogHeader>
+
                 <div className="space-y-4 py-4">
-                    {/* Project Name и Recurring */}
+                    {/* IC и Recurring */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="project-name">IC *</Label>
+                            <Label htmlFor="project-name">IC </Label>
                             <Input
                                 id="project-name"
                                 value={projectForm.ic || ''}
@@ -507,7 +492,7 @@ export function ProjectDialog({
                     {/* Description и Color */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="project-description">Project Description *</Label>
+                            <Label htmlFor="project-description">Project Description </Label>
                             <Textarea
                                 id="project-description"
                                 value={projectForm.description || ''}
@@ -523,7 +508,7 @@ export function ProjectDialog({
                             {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-sm font-medium">Project Color *</Label>
+                            <Label className="text-sm font-medium">Project Color </Label>
                             <div className="flex flex-wrap gap-1.5">
                                 {predefinedColors.map(color => (
                                     <button
@@ -567,17 +552,15 @@ export function ProjectDialog({
                     {/* Status, Chargeable, Country, Department */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="project-status">Status</Label>
+                            <Label>Status</Label>
                             <Select
                                 value={projectForm.status_id?.toString() || "none"}
-                                onValueChange={(value: string) => setProjectForm({
+                                onValueChange={(value) => setProjectForm({
                                     ...projectForm,
                                     status_id: value !== "none" ? parseInt(value) : undefined
                                 })}
                             >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select status" />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Select status</SelectItem>
                                     {renderStatuses()}
@@ -594,23 +577,19 @@ export function ProjectDialog({
                                         setProjectForm({ ...projectForm, is_chargeable: checked === true })
                                     }
                                 />
-                                <Label htmlFor="project-chargeable" className="cursor-pointer text-sm">
-                                    Is chargeable
-                                </Label>
+                                <Label htmlFor="project-chargeable" className="cursor-pointer text-sm">Is chargeable</Label>
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="project-country">Country</Label>
+                            <Label>Country</Label>
                             <Select
                                 value={projectForm.country_id?.toString() || "none"}
-                                onValueChange={(value: string) => setProjectForm({
+                                onValueChange={(value) => setProjectForm({
                                     ...projectForm,
                                     country_id: value !== "none" ? parseInt(value) : undefined
                                 })}
                             >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select country" />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Select country</SelectItem>
                                     {renderCountries()}
@@ -618,14 +597,14 @@ export function ProjectDialog({
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="project-department">Department</Label>
+                            <Label>Department</Label>
                             <Select
                                 value={projectForm.department_id?.toString() || "none"}
                                 onValueChange={handleDepartmentChange}
                                 disabled={isDepartmentsLoading}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder={isDepartmentsLoading ? "Loading departments..." : "Select department"} />
+                                    <SelectValue placeholder={isDepartmentsLoading ? "Loading..." : "Select department"} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Select department</SelectItem>
@@ -638,10 +617,10 @@ export function ProjectDialog({
                     {/* Manager, Client, Service Line, Task Type */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="project-manager">Project Manager</Label>
+                            <Label>Project Manager</Label>
                             <Select
                                 value={projectForm.manager_id?.toString() || "none"}
-                                onValueChange={(value: string) => setProjectForm({
+                                onValueChange={(value) => setProjectForm({
                                     ...projectForm,
                                     manager_id: value !== "none" ? parseInt(value) : undefined
                                 })}
@@ -650,7 +629,7 @@ export function ProjectDialog({
                                 <SelectTrigger>
                                     {isLoadingManagers ? (
                                         <div className="flex items-center">
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2" />
                                             Loading managers...
                                         </div>
                                     ) : (
@@ -663,36 +642,84 @@ export function ProjectDialog({
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {/* Client — Combobox с поиском */}
                         <div className="space-y-2">
-                            <Label htmlFor="project-client">Client</Label>
-                            <Select
-                                value={projectForm.client_id?.toString() || "none"}
-                                onValueChange={(value: string) => setProjectForm({
-                                    ...projectForm,
-                                    client_id: value !== "none" ? parseInt(value) : undefined
-                                })}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select client" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Select client</SelectItem>
-                                    {renderClients()}
-                                </SelectContent>
-                            </Select>
+                            <Label>Client</Label>
+                            <Popover open={isClientSelectOpen} onOpenChange={setIsClientSelectOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="secondary"
+                                        style={{ backgroundColor: '#f3f3f5' }}
+                                        role="combobox"
+                                        aria-expanded={isClientSelectOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate text-left">{selectedClientName}</span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    className="w-[--radix-popover-trigger-width] p-0"
+                                    align="start"
+                                    style={{ height: '350px', overflow: 'hidden' }}
+                                >
+                                    <Command style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                        <CommandInput placeholder="Search client..." />
+                                        <CommandList style={{ flex: 1, overflow: 'auto', maxHeight: 'unset' }}>
+                                            <CommandEmpty>No clients found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="__none__"
+                                                    onSelect={() => {
+                                                        setProjectForm({ ...projectForm, client_id: undefined });
+                                                        setIsClientSelectOpen(false);
+                                                    }}
+                                                    className="cursor-pointer hover:bg-accent"
+                                                >
+                                                    {/* <Check className={cn(
+                                                        'mr-2 h-4 w-4 shrink-0',
+                                                        !projectForm.client_id ? 'opacity-100' : 'opacity-0'
+                                                    )} /> */}
+                                                    — Not selected —
+                                                </CommandItem>
+                                                {allActiveClients.map(client => (
+                                                    <CommandItem
+                                                        key={client.id}
+                                                        value={`${client.name}__${client.client_code ?? ''}__${client.id}`}
+                                                        onSelect={() => {
+                                                            setProjectForm({ ...projectForm, client_id: Number(client.id) });
+                                                            setIsClientSelectOpen(false);
+                                                        }}
+                                                        className="cursor-pointer hover:bg-accent"
+                                                    >
+                                                        {/* <Check className={cn(
+                                                            'mr-2 h-4 w-4 shrink-0',
+                                                            Number(projectForm.client_id) === Number(client.id) ? 'opacity-100' : 'opacity-0'
+                                                        )} /> */}
+                                                        <span>{client.name}</span>
+                                                        {client.client_code && (
+                                                            <span className="ml-2 text-xs text-gray-400">({client.client_code})</span>
+                                                        )}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
+
                         <div className="space-y-2">
-                            <Label htmlFor="project-service-line">Service Line</Label>
+                            <Label>Service Line</Label>
                             <Select
                                 value={projectForm.service_line_id?.toString() || "none"}
-                                onValueChange={(value: string) => setProjectForm({
+                                onValueChange={(value) => setProjectForm({
                                     ...projectForm,
                                     service_line_id: value !== "none" ? parseInt(value) : undefined
                                 })}
                             >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select service line" />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Select service line" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Select service line</SelectItem>
                                     {renderServiceLines()}
@@ -700,17 +727,15 @@ export function ProjectDialog({
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="project-task-type">Task Type</Label>
+                            <Label>Task Type</Label>
                             <Select
                                 value={projectForm.task_type_id?.toString() || "none"}
-                                onValueChange={(value: string) => setProjectForm({
+                                onValueChange={(value) => setProjectForm({
                                     ...projectForm,
                                     task_type_id: value !== "none" ? parseInt(value) : undefined
                                 })}
                             >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select task type" />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue placeholder="Select task type" /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Select task type</SelectItem>
                                     {renderTaskTypes()}
@@ -725,7 +750,7 @@ export function ProjectDialog({
                             <Label htmlFor="service-type">Service Type {!editingProject && '*'}</Label>
                             <Select
                                 value={projectForm.service_type_id?.toString() || "none"}
-                                onValueChange={(value: string) => {
+                                onValueChange={(value) => {
                                     setProjectForm({
                                         ...projectForm,
                                         service_type_id: value !== "none" ? parseInt(value) : undefined,
@@ -745,7 +770,7 @@ export function ProjectDialog({
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="entity">Entity {!editingProject && '*'}</Label>
+                            <Label htmlFor="entity">Entity </Label>
                             <Input
                                 id="entity"
                                 value={projectForm.entity || ''}
@@ -776,10 +801,8 @@ export function ProjectDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="display-flex pt-4 justify-between">
-                    <Button variant="outline" onClick={handleClose}>
-                        Cancel
-                    </Button>
+                <DialogFooter className="pt-4 justify-between">
+                    <Button variant="outline" onClick={handleClose}>Cancel</Button>
                     <Button
                         onClick={handleSubmit}
                         disabled={isLoading}
