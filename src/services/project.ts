@@ -81,7 +81,10 @@ export const getProjects = async (params?: {
     country_code?: string;
     department_name?: string;
     ordering?: string;
+    country_of_ubo_code?: string;  // ✅ УЖЕ ЕСТЬ в типах
     status_name?: string;
+    is_code_recurring?: string;  // ✅ ДОБАВИТЬ если нужно
+    status?: string;  // ✅ ДОБАВИТЬ если нужно
 }) => {
     const token = useUserStore.getState().access_token;
 
@@ -100,9 +103,14 @@ export const getProjects = async (params?: {
     if (params?.country_code) queryParams.append('country_code', params.country_code);
     if (params?.department_name) queryParams.append('department_name', params.department_name);
     if (params?.status_name) queryParams.append('status_name', params.status_name);
+    if (params?.status) queryParams.append('status', params.status);  // ✅ ДОБАВЛЕНО
     if (params?.ordering) queryParams.append('ordering', params.ordering);
+    if (params?.country_of_ubo_code) queryParams.append('country_of_ubo_code', params.country_of_ubo_code);  // ✅ ДОБАВЛЕНО
+    if (params?.is_code_recurring) queryParams.append('is_code_recurring', params.is_code_recurring);  // ✅ ДОБАВЛЕНО
 
     const url = `${api}api/projects/projects/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
+    console.log('🔍 API Request URL:', url);  // Для отладки
 
     const res = await axios(url, {
         headers: {
@@ -113,7 +121,7 @@ export const getProjects = async (params?: {
     return res.data;
 }
 
-// Интерфейс для параметров экспорта Excel (те же параметры, что и для getProjects)
+// Интерфейс для параметров экспорта Excel
 export interface GetProjectsExcelParams {
     page?: number;
     page_size?: number;
@@ -124,6 +132,9 @@ export interface GetProjectsExcelParams {
     department_name?: string;
     ordering?: string;
     status_name?: string;
+    country_of_ubo_code?: string;  // ✅ ДОБАВЛЕНО
+    is_code_recurring?: string;  // ✅ ДОБАВЛЕНО
+    status?: string;  // ✅ ДОБАВЛЕНО
 }
 
 // Функция для скачивания Excel файла с проектами
@@ -134,7 +145,7 @@ export const getProjectsExcel = async (params?: GetProjectsExcelParams): Promise
         throw new Error("No access token available");
     }
 
-    // Формируем query параметры (те же самые, что и в getProjects)
+    // Формируем query параметры
     const queryParams = new URLSearchParams();
 
     if (params?.page) queryParams.append('page', params.page.toString());
@@ -145,14 +156,17 @@ export const getProjectsExcel = async (params?: GetProjectsExcelParams): Promise
     if (params?.country_code) queryParams.append('country_code', params.country_code);
     if (params?.department_name) queryParams.append('department_name', params.department_name);
     if (params?.status_name) queryParams.append('status_name', params.status_name);
+    if (params?.status) queryParams.append('status', params.status);  // ✅ ДОБАВЛЕНО
     if (params?.ordering) queryParams.append('ordering', params.ordering);
+    if (params?.country_of_ubo_code) queryParams.append('country_of_ubo_code', params.country_of_ubo_code);  // ✅ ДОБАВЛЕНО
+    if (params?.is_code_recurring) queryParams.append('is_code_recurring', params.is_code_recurring);  // ✅ ДОБАВЛЕНО
 
     try {
         const res = await axios.get(`${api}api/projects/projects/?export=excel`, {
             headers: {
                 Authorization: `Bearer ${token}`,
             },
-            params: Object.fromEntries(queryParams), // Передаем параметры как объект
+            params: Object.fromEntries(queryParams),
             responseType: 'blob'
         });
 
@@ -166,4 +180,3 @@ export const getProjectsExcel = async (params?: GetProjectsExcelParams): Promise
         throw error;
     }
 }
-

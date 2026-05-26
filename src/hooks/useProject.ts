@@ -17,8 +17,9 @@ interface GetProjectsParams {
     country_code?: string;
     department_name?: string;
     status?: string;
-    status_name?: string;  // ДОБАВЛЕНО status_name
+    status_name?: string;
     is_code_recurring?: string;
+    country_of_ubo_code?: string;
     ordering?: string;
 }
 
@@ -50,8 +51,9 @@ const getCacheKey = (params?: GetProjectsParams) => {
         country_code,
         department_name,
         status,
-        status_name,  // ДОБАВЛЕНО status_name
+        status_name,
         is_code_recurring,
+        country_of_ubo_code,
         ordering
     } = params;
     return JSON.stringify({
@@ -63,9 +65,10 @@ const getCacheKey = (params?: GetProjectsParams) => {
         country_code: country_code || '',
         department_name: department_name || '',
         status: status || '',
-        status_name: status_name || '',  // ДОБАВЛЕНО status_name
+        status_name: status_name || '',
         is_code_recurring: is_code_recurring || '',
-        ordering: ordering || ''
+        ordering: ordering || '',
+        country_of_ubo_code: country_of_ubo_code || ''  // ✅ ДОБАВЛЕНО
     });
 };
 
@@ -188,6 +191,7 @@ export const useGetProjects = () => {
 
     return useMutation({
         mutationFn: async (params?: GetProjectsParams) => {
+
             const {
                 page = 1,
                 page_size = 30,
@@ -198,8 +202,9 @@ export const useGetProjects = () => {
                 country_code,
                 department_name,
                 status,
-                status_name,  // ДОБАВЛЕНО status_name
+                status_name,
                 is_code_recurring,
+                country_of_ubo_code,  // ✅ ДОБАВЛЕНО
                 ordering
             } = params || {};
 
@@ -212,9 +217,10 @@ export const useGetProjects = () => {
                 ...(country_code && { country_code }),
                 ...(department_name && { department_name }),
                 ...(status && { status }),
-                ...(status_name && { status_name }),  // ДОБАВЛЕНО status_name
+                ...(status_name && { status_name }),
                 ...(is_code_recurring && { is_code_recurring }),
-                ...(ordering && { ordering })
+                ...(ordering && { ordering }),
+                ...(country_of_ubo_code && { country_of_ubo_code })  // ✅ ДОБАВЛЕНО
             };
 
             console.log('🔍 Query params before cache check:', queryParams);
@@ -355,8 +361,9 @@ export const projectsCacheUtils = {
             country_code,
             department_name,
             status,
-            status_name,  // ДОБАВЛЕНО status_name
+            status_name,
             is_code_recurring,
+            country_of_ubo_code,  // ✅ ДОБАВЛЕНО
             ordering
         } = params || {};
 
@@ -369,9 +376,10 @@ export const projectsCacheUtils = {
             ...(country_code && { country_code }),
             ...(department_name && { department_name }),
             ...(status && { status }),
-            ...(status_name && { status_name }),  // ДОБАВЛЕНО status_name
+            ...(status_name && { status_name }),
             ...(is_code_recurring && { is_code_recurring }),
-            ...(ordering && { ordering })
+            ...(ordering && { ordering }),
+            ...(country_of_ubo_code && { country_of_ubo_code })  // ✅ ДОБАВЛЕНО
         };
 
         const data = await getProjects(queryParams);
@@ -395,7 +403,6 @@ export const projectsCacheUtils = {
         return projectsCache?.params || null;
     }
 };
-
 
 export const useExportProjectsExcelMutation = () => {
     return useMutation({

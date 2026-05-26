@@ -6,7 +6,7 @@ import { CountryWithClients, MainEntity, OnlyClient } from "../types/client";
 import { Project, ProjectBody, ProjectTasks } from "../types/project";
 import { Task, TasksArray } from "../types/task";
 import { LeaveArray } from "../types/leave";
-import { Holidays, TimeEntry } from "../types/timeEntrys";
+import { Holidays, TimeEntry, WorkingWeekends } from "../types/timeEntrys";
 import { Department, Position } from "../types/types";
 import { DepartmentWithMembers } from "../types/departments";
 import { Status, StatusesArray } from "../types/statuses";
@@ -18,6 +18,7 @@ import { Monitoring } from "../types/monitoring";
 import { GlobalSettings } from "../types/settings";
 import { Me } from "../types/auth";
 import { Manager } from "../types/managers";
+import { getWorkingWeekends } from "../services/timeEntry";
 
 // Определяем тип для роли (можно заменить на импорт из types, если есть)
 export interface Role {
@@ -214,6 +215,8 @@ interface UserState {
 
   currentMonth: string | null;
 
+  workingWeekends: WorkingWeekends[] | null;
+
   projectsPagination: ProjectsPagination | null;
   usersPagination: UsersPagination | null;
   clientsPagination: ClientsPagination | null;
@@ -254,6 +257,8 @@ interface UserState {
   setTimeEntries: (timeEntries: TimeEntry[] | null) => void;
 
   setDepartments: (departments: Department[] | null) => void;
+
+  setWorkingWeekends: (workingWeekends: WorkingWeekends[] | null) => void;
 
   setDepartmentMembers: (
     departmentMembers: DepartmentWithMembers | null,
@@ -341,6 +346,8 @@ export const useUserStore = create<UserState>()(
       countries: null,
       selectedCountry: null,
 
+      workingWeekends: null,
+
       client_projects: null,
       project_tasks: null,
       internal_tasks: null,
@@ -400,6 +407,8 @@ export const useUserStore = create<UserState>()(
       setCountries: (countries) => set({ countries }),
 
       setMe: (me) => set({ me }),
+
+      setWorkingWeekends: (workingWeekends) => set({ workingWeekends }),
 
       setManagers: (managers) => set({ managers }),
 
@@ -756,6 +765,7 @@ export const useUserStore = create<UserState>()(
           selectedCountry: null,
           client_projects: null,
           project_tasks: null,
+          workingWeekends: null,
           internal_tasks: null,
           leaves: null,
           time_entries: null,
@@ -800,6 +810,7 @@ export const useUserStore = create<UserState>()(
         refresh_token: state.refresh_token,
         user: state.user,
         me: state.me,
+        workingWeekends: state.workingWeekends,
         projectsPagination: state.projectsPagination,
         managers: state.managers,
         selectedCountry: state.selectedCountry,

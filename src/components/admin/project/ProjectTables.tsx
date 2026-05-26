@@ -68,6 +68,7 @@ interface Filters {
     manager: string;
     country: string;
     department: string;
+    country_of_ubo_code: string;
     status: string;
 }
 
@@ -147,6 +148,7 @@ export function ProjectsTable({
         manager: '',
         country: '',
         department: '',
+        country_of_ubo_code: '',
         status: '',
     });
 
@@ -156,6 +158,7 @@ export function ProjectsTable({
     const debouncedCountry = useDebounce(localFilters.country, 300);
     const debouncedDepartment = useDebounce(localFilters.department, 300);
     const debouncedStatus = useDebounce(localFilters.status, 300);
+    const debouncedCountryOfUbo = useDebounce(localFilters.country_of_ubo_code, 300);
 
     const [ordering, setOrdering] = useState<string>('code');
     const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -184,6 +187,7 @@ export function ProjectsTable({
         if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
         if (debouncedDepartment && debouncedDepartment.trim()) params.department_name = debouncedDepartment;
         if (debouncedStatus && debouncedStatus.trim()) params.status_name = debouncedStatus;
+        if (debouncedCountryOfUbo && debouncedCountryOfUbo.trim()) params.country_of_ubo_code = debouncedCountryOfUbo;
 
         if (includePagination) {
             params.page = currentPage;
@@ -191,12 +195,12 @@ export function ProjectsTable({
         }
 
         return params;
-    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering, currentPage, pageSize]);
+    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering, currentPage, pageSize, debouncedCountryOfUbo]);
 
     const loadProjects = useCallback((page: number) => {
         const params = getCurrentFilterParams(true);
         params.page = page;
-
+        params.forceRefresh = true;
         console.log('📦 Loading projects with params:', params);
         getProjects(params);
         setCurrentPage(page);
@@ -210,7 +214,7 @@ export function ProjectsTable({
             setIsInitialLoad(false);
             loadProjects(1);
         }
-    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering]);
+    }, [debouncedCode, debouncedClient, debouncedManager, debouncedCountry, debouncedDepartment, debouncedStatus, ordering, debouncedCountryOfUbo]);
 
     // Функция для экспорта в Excel
     const handleExportExcel = () => {
@@ -230,6 +234,7 @@ export function ProjectsTable({
             client: '',
             manager: '',
             country: '',
+            country_of_ubo_code: '',
             department: '',
             status: '',
         };
@@ -521,6 +526,11 @@ export function ProjectsTable({
     const departmentsArray = getDepartmentsArray;
     const statusesArray = getStatusesArray;
 
+    console.log('🔍 Current values:', {
+        localCountryOfUbo: localFilters.country_of_ubo_code,
+        debouncedCountryOfUbo: debouncedCountryOfUbo
+    });
+
     return (
         <>
             <div className="space-y-4">
@@ -587,6 +597,26 @@ export function ProjectsTable({
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Countries</SelectItem>
+                            {countriesArray.map((country: any, idx: number) => {
+                                if (!country || country === null) return null;
+                                return (
+                                    <SelectItem key={country.id || idx} value={country.code || String(country.id)}>
+                                        {country.name || 'Unknown'}
+                                    </SelectItem>
+                                );
+                            })}
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={localFilters.country_of_ubo_code || "all"}  // ✅ ИСПРАВЛЕНО
+                        onValueChange={(value) => handleFilterChange('country_of_ubo_code', value === "all" ? "" : value)}
+                    >
+                        <SelectTrigger className="h-8 w-[160px]">  {/* Увеличил ширину */}
+                            <SelectValue placeholder="Country of UBO" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Countries of UBO</SelectItem>
                             {countriesArray.map((country: any, idx: number) => {
                                 if (!country || country === null) return null;
                                 return (
@@ -675,9 +705,10 @@ export function ProjectsTable({
                                 <TableHead className="min-w-[100px]">Code</TableHead>
                                 <TableHead className="min-w-[120px]">Client</TableHead>
                                 <TableHead className="min-w-[150px]">Manager</TableHead>
+                                <TableHead className="min-w-[150px]">Country of UBO</TableHead>
                                 <TableHead className="min-w-[100px]">Reccuring</TableHead>
                                 <TableHead className="min-w-[100px]">Status</TableHead>
-                                <TableHead className="min-w-[100px]">Country</TableHead>
+                                <TableHead className="min-w-[100px]">Country of business registration</TableHead>
                                 <TableHead className="min-w-[120px]">Department</TableHead>
                                 <TableHead className="min-w-[80px]">Actions</TableHead>
                             </TableRow>
@@ -728,6 +759,12 @@ export function ProjectsTable({
                                                 <TableCell className="min-w-0">
                                                     <span className="truncate block text-xs">
                                                         {getProjectManagerName(project?.manager)}
+                                                    </span>
+                                                </TableCell>
+
+                                                <TableCell className="min-w-0 " >
+                                                    <span className="truncate block text-xs">
+                                                        {project?.country_of_ubo_code || '-'}
                                                     </span>
                                                 </TableCell>
 

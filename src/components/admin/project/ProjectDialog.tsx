@@ -255,6 +255,35 @@ export function ProjectDialog({
 
 
 
+        if (!projectForm.status_id) {
+            newErrors.status = 'Status is required';
+        }
+        if (!projectForm.country_id) {
+            newErrors.country = 'Country is required';
+        }
+        if (!projectForm.department_id) {
+            newErrors.department = 'Department is required';
+        }
+        if (!projectForm.manager_id) {
+            newErrors.manager = 'Project manager is required';
+        }
+        if (!projectForm.client_id) {
+            newErrors.client = 'Client is required';
+        }
+        if (!projectForm.service_line_id) {
+            newErrors.service_line = 'Service line is required';
+        }
+        if (!projectForm.task_type_id) {
+            newErrors.task_type = 'Task type is required';
+        }
+        if (!projectForm.service_type_id || projectForm.service_type_id === 0) {
+            newErrors.service_type = 'Service type is required';
+        }
+
+        if (!projectForm.agreement_date) {
+            newErrors.agreement_date = 'Agreement date is required';
+        }
+
         if (!editingProject) {
             if (!projectForm.service_type_id || projectForm.service_type_id === 0) {
                 newErrors.service_type = 'Service type is required';
@@ -552,7 +581,7 @@ export function ProjectDialog({
                     {/* Status, Chargeable, Country, Department */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
-                            <Label>Status</Label>
+                            <Label>Status*</Label>
                             <Select
                                 value={projectForm.status_id?.toString() || "none"}
                                 onValueChange={(value) => setProjectForm({
@@ -581,7 +610,7 @@ export function ProjectDialog({
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label>Country</Label>
+                            <Label>Country*</Label>
                             <Select
                                 value={projectForm.country_id?.toString() || "none"}
                                 onValueChange={(value) => setProjectForm({
@@ -597,7 +626,7 @@ export function ProjectDialog({
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label>Department</Label>
+                            <Label>Department*</Label>
                             <Select
                                 value={projectForm.department_id?.toString() || "none"}
                                 onValueChange={handleDepartmentChange}
@@ -617,7 +646,7 @@ export function ProjectDialog({
                     {/* Manager, Client, Service Line, Task Type */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
-                            <Label>Project Manager</Label>
+                            <Label>Project Manager*</Label>
                             <Select
                                 value={projectForm.manager_id?.toString() || "none"}
                                 onValueChange={(value) => setProjectForm({
@@ -645,7 +674,7 @@ export function ProjectDialog({
 
                         {/* Client — Combobox с поиском */}
                         <div className="space-y-2">
-                            <Label>Client</Label>
+                            <Label>Client*</Label>
                             <Popover open={isClientSelectOpen} onOpenChange={setIsClientSelectOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -711,7 +740,7 @@ export function ProjectDialog({
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Service Line</Label>
+                            <Label>Service Line*</Label>
                             <Select
                                 value={projectForm.service_line_id?.toString() || "none"}
                                 onValueChange={(value) => setProjectForm({
@@ -727,7 +756,7 @@ export function ProjectDialog({
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label>Task Type</Label>
+                            <Label>Task Type*</Label>
                             <Select
                                 value={projectForm.task_type_id?.toString() || "none"}
                                 onValueChange={(value) => setProjectForm({
@@ -747,7 +776,7 @@ export function ProjectDialog({
                     {/* Service Type, Entity, Agreement Date */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="service-type">Service Type {!editingProject && '*'}</Label>
+                            <Label htmlFor="service-type">Service Type{!editingProject && '*'}</Label>
                             <Select
                                 value={projectForm.service_type_id?.toString() || "none"}
                                 onValueChange={(value) => {

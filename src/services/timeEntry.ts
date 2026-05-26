@@ -6,7 +6,7 @@ import { TimeEntry } from '../components/TimeTrackerContext';
 import { CalendarEvent } from '../types/calendar';
 
 
-export const sendTimeEntry = async (body: TimeBody) => {
+export const sendTimeEntry = async (body: TimeBody, isSingleDate?: boolean) => {
     const token = useUserStore.getState().access_token;
     console.log(token);
 
@@ -14,14 +14,17 @@ export const sendTimeEntry = async (body: TimeBody) => {
         throw new Error("No access token available");
     }
 
-    const res = await axios.post(`${api}api/calendars/time-entries/`, body,
+    // Формируем URL с параметром, если isSingleDate === true
+    let url = `${api}api/calendars/time-entries/`;
+    if (isSingleDate) {
+        url += `?single_date=true`;
+    }
 
-        {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        }
-    );
+    const res = await axios.post(url, body, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
     return res.data;
 }
 
@@ -164,6 +167,25 @@ export const getHolidayCalendar = async () => {
     }
 
     const res = await axios(`${api}api/calendars/calendars/holidays/`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}
+
+export const getWorkingWeekends = async () => {
+    const token = useUserStore.getState().access_token;
+    console.log(token);
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios(`${api}api/calendars/calendars/working-weekends/`,
 
         {
             headers: {

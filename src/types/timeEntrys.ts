@@ -66,3 +66,14 @@ export interface ReminderBody {
     start_date: string;
     end_date: string;
 }
+
+export interface WorkingWeekends {
+    id: number;
+    date: string;
+    input_date: string;
+    holiday_name: string | null;
+    day_type: string;
+    description: string;
+    is_recurring: boolean;
+    country: number;
+}

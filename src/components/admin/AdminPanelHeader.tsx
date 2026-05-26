@@ -39,24 +39,7 @@ export function AdminPanelHeader({ activeTab, onTabChange, onAddClick }: AdminPa
 
     ];
 
-    // Остальные табы в меню More (убрал reprots отсюда)
-    const moreTabs = [
-        { id: 'country', label: 'Countries' },
-        { id: 'teams', label: 'Teams' },
-        { id: 'department', label: 'Department' },
-        { id: 'monitoring', label: 'Monitoring' },
-        { id: 'pie', label: 'Pie' },
-        { id: 'serviceType', label: 'Service-Type' },
-        { id: 'sectors', label: 'Sectors' },
-        { id: 'service-line', label: 'Service-line' },
-        { id: 'project-status', label: 'Project-status' },
 
-
-
-
-    ];
-
-    const isMoreTabActive = moreTabs.some(tab => tab.id === activeTab);
 
     return (
         <CardHeader style={{ backgroundColor: '#1F4E78' }} className="text-white border-b">

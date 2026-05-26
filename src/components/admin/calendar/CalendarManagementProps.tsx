@@ -417,6 +417,7 @@ export function CalendarManagement({
                                         <div className="space-y-4">
                                             <CalendarHolidaysTab
                                                 config={currentConfig}
+                                                countryId={selectedCountryId}
                                                 onAddHoliday={onAddHoliday}
                                                 onUpdateHoliday={onUpdateHoliday}
                                                 onDeleteHoliday={onDeleteHoliday}

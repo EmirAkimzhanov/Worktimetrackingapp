@@ -554,19 +554,19 @@ export function TimeEntryForm() {
     setIsSubmitting(true);
 
     if (activeTab === 'external') {
-      if (!projectId || !description || !hours || !country || !client) {
+      if (!projectId || !hours || !country || !client) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
       }
     } else if (activeTab === 'internal') {
-      if (!selectedTask || !description || !hours) {
+      if (!selectedTask || !hours) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
       }
     } else if (activeTab === 'vacations') {
-      if (!selectedLeaveType || !description || !hours) {
+      if (!selectedLeaveType || !hours) {
         toast.error('Please fill in all required fields');
         setIsSubmitting(false);
         return;
@@ -1010,7 +1010,7 @@ export function TimeEntryForm() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '48%' }}>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '49%' }}>
                     <Switch
                       id="weekends"
                       checked={includeWeekends}
@@ -1020,7 +1020,7 @@ export function TimeEntryForm() {
                       Include weekends
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '48%' }}>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '49%' }}>
                     <Switch
                       id="holidays"
                       checked={includeHolidays}
@@ -1050,7 +1050,7 @@ export function TimeEntryForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
+              <Label htmlFor="description">Description </Label>
               <Textarea
                 id="description"
                 value={description}
@@ -1166,25 +1166,27 @@ export function TimeEntryForm() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
-                  <Switch
-                    id="weekends"
-                    checked={includeWeekends}
-                    onCheckedChange={setIncludeWeekends}
-                  />
-                  <Label htmlFor="weekends" className="cursor-pointer">
-                    Include weekends
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
-                  <Switch
-                    id="holidays"
-                    checked={includeHolidays}
-                    onCheckedChange={setIncludeHolidays}
-                  />
-                  <Label htmlFor="holidays" className="cursor-pointer">
-                    Include holidays
-                  </Label>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '49%' }}>
+                    <Switch
+                      id="weekends"
+                      checked={includeWeekends}
+                      onCheckedChange={setIncludeWeekends}
+                    />
+                    <Label htmlFor="weekends" className="cursor-pointer">
+                      Include weekends
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '49%' }}>
+                    <Switch
+                      id="holidays"
+                      checked={includeHolidays}
+                      onCheckedChange={setIncludeHolidays}
+                    />
+                    <Label htmlFor="holidays" className="cursor-pointer">
+                      Include holidays
+                    </Label>
+                  </div>
                 </div>
               </>
             )}
@@ -1205,7 +1207,7 @@ export function TimeEntryForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
+              <Label htmlFor="description">Description </Label>
               <Textarea
                 id="description"
                 value={description}
@@ -1313,25 +1315,27 @@ export function TimeEntryForm() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
-                  <Switch
-                    id="weekends"
-                    checked={includeWeekends}
-                    onCheckedChange={setIncludeWeekends}
-                  />
-                  <Label htmlFor="weekends" className="cursor-pointer">
-                    Include weekends
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg">
-                  <Switch
-                    id="holidays"
-                    checked={includeHolidays}
-                    onCheckedChange={setIncludeHolidays}
-                  />
-                  <Label htmlFor="holidays" className="cursor-pointer">
-                    Include holidays
-                  </Label>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '49%' }}>
+                    <Switch
+                      id="weekends"
+                      checked={includeWeekends}
+                      onCheckedChange={setIncludeWeekends}
+                    />
+                    <Label htmlFor="weekends" className="cursor-pointer">
+                      Include weekends
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 bg-slate-50 rounded-lg" style={{ width: '49%' }}>
+                    <Switch
+                      id="holidays"
+                      checked={includeHolidays}
+                      onCheckedChange={setIncludeHolidays}
+                    />
+                    <Label htmlFor="holidays" className="cursor-pointer">
+                      Include holidays
+                    </Label>
+                  </div>
                 </div>
               </>
             )}
@@ -1352,7 +1356,7 @@ export function TimeEntryForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
+              <Label htmlFor="description">Description </Label>
               <Textarea
                 id="description"
                 value={description}

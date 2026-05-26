@@ -224,7 +224,7 @@ export function SettingsTab({
     const mainTabs = [
         { id: 'teams', label: 'Teams', icon: Users },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
-        { id: 'departments', label: 'Departments', icon: Briefcase },
+        { id: 'departments', label: 'Task types', icon: Briefcase },
         { id: 'roles', label: 'Roles', icon: Shield },
         { id: 'positions', label: 'Positions', icon: Layers },
         { id: 'countries', label: 'Countries', icon: Globe },

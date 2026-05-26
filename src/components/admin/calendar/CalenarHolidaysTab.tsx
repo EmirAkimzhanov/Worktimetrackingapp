@@ -43,6 +43,7 @@ import { useGetGlobalSettings } from "../../../hooks/useGlobalSettings";
 
 interface CalendarHolidaysTabProps {
     config: CountryCalendarConfig;
+    countryId: number;
     onAddHoliday: (countryId: number, holiday: Holiday) => void;
     onUpdateHoliday: (countryId: number, holiday: Holiday) => void;
     onDeleteHoliday: (countryId: number, holidayId: number) => void;
@@ -52,6 +53,7 @@ interface CalendarHolidaysTabProps {
 
 export function CalendarHolidaysTab({
     config,
+    countryId,
     onAddHoliday,
     onUpdateHoliday,
     onDeleteHoliday,
@@ -66,7 +68,6 @@ export function CalendarHolidaysTab({
     const { mutate: getCalendar } = useGetCalendar();
     const { mutate: sendCalendar } = useSendCalendar();
     const calendar = useUserStore((state) => state.calendar);
-    const countries = useUserStore((state) => state.countries);
     const { mutate: editCalendar } = useEditCalendar();
     const { mutate: deleteCalendar } = useDeleteCalendar();
     const { mutate: getGlobalSettings } = useGetGlobalSettings();
@@ -81,13 +82,7 @@ export function CalendarHolidaysTab({
         type: "holiday" | "workWeekend";
     } | null>(null);
 
-    // ✅ Безопасное преобразование countries в массив
-    const countriesArray = useMemo(() => {
-        if (!countries) return [];
-        if (Array.isArray(countries)) return countries.filter(c => c && c !== null);
-        if (typeof countries === 'object') return Object.values(countries).filter(c => c && c !== null);
-        return [];
-    }, [countries]);
+
 
     // ✅ Безопасное преобразование calendar в массив
     const calendarArray = useMemo(() => {
@@ -97,35 +92,19 @@ export function CalendarHolidaysTab({
         return [];
     }, [calendar]);
 
-    const correctCountryId = useMemo(() => {
-        if (!countriesArray || countriesArray.length === 0) {
-            return config.id;
-        }
-
-        // Находим страну по названию или коду из config
-        const country = countriesArray.find(
-            (c) =>
-                c.name?.toLowerCase() === config.country?.toLowerCase() ||
-                c.code === config.countryCode ||
-                c.id === config.id,
-        );
-
-        return country?.id || config.id;
-    }, [config, countriesArray]);
 
     useEffect(() => {
         getCalendar();
         // Загружаем time entries при монтировании
-    }, [correctCountryId]);
+    }, [countryId]);
 
-    // ✅ Исправлено: используем calendarArray вместо calendar
     const holidays = useMemo(() => {
-        if (!calendarArray || calendarArray.length === 0) return [];
+        if (!calendarArray || calendarArray.length === 0 || !countryId) return [];
 
         return calendarArray
             .filter(
                 (item) =>
-                    item && item.day_type === "holiday" && item.country === correctCountryId,
+                    item && item.day_type === "holiday" && item.country === countryId,
             )
             .map((item) => ({
                 id: item.id,
@@ -138,7 +117,7 @@ export function CalendarHolidaysTab({
                 is_halfday: false,
                 country_id: item.country,
             }));
-    }, [calendarArray, correctCountryId]);
+    }, [calendarArray, countryId]);
 
     // ✅ Исправлено: используем calendarArray вместо calendar
     const workWeekends = useMemo(() => {
@@ -148,7 +127,7 @@ export function CalendarHolidaysTab({
             .filter(
                 (item) =>
                     item && item.day_type === "working_weekend" &&
-                    item.country === correctCountryId,
+                    item.country === countryId,
             )
             .map((item) => ({
                 id: item.id,
@@ -158,7 +137,7 @@ export function CalendarHolidaysTab({
                 description: item.description || "Working day",
                 country_id: item.country,
             }));
-    }, [calendarArray, correctCountryId]);
+    }, [calendarArray, countryId]);
 
     // Функция для форматирования даты
     const formatDate = (dateString: string) => {
@@ -258,7 +237,7 @@ export function CalendarHolidaysTab({
             day_type: "holiday" as const,
             description: holiday.description || "",
             is_recurring: holiday.is_recurring,
-            country: correctCountryId,
+            country: countryId,
         };
 
         if (editingHoliday && editingHoliday.id) {
@@ -269,10 +248,10 @@ export function CalendarHolidaysTab({
                 },
                 {
                     onSuccess: () => {
-                        onUpdateHoliday(correctCountryId, {
+                        onUpdateHoliday(countryId, {
                             ...holiday,
                             id: editingHoliday.id,
-                            country_id: correctCountryId,
+                            country_id: countryId,
                         });
                         refreshAllData();
                         toast.success("Holiday updated successfully");
@@ -288,10 +267,10 @@ export function CalendarHolidaysTab({
         } else {
             sendCalendar(calendarData, {
                 onSuccess: () => {
-                    onAddHoliday(correctCountryId, {
+                    onAddHoliday(countryId, {
                         ...holiday,
                         id: Date.now(),
-                        country_id: correctCountryId,
+                        country_id: countryId,
                     });
                     refreshAllData();
                     toast.success("Holiday added successfully");
@@ -315,7 +294,7 @@ export function CalendarHolidaysTab({
             day_type: "working_weekend" as const,
             description: workWeekend.description || "",
             is_recurring: false,
-            country: correctCountryId,
+            country: countryId,
         };
 
         if (editingWorkWeekend && editingWorkWeekend.id) {
@@ -340,10 +319,10 @@ export function CalendarHolidaysTab({
         } else {
             sendCalendar(calendarData, {
                 onSuccess: () => {
-                    onAddWorkWeekend(correctCountryId, {
+                    onAddWorkWeekend(countryId, {
                         ...workWeekend,
                         id: Date.now(),
-                        country_id: correctCountryId,
+                        country_id: countryId,
                     });
                     refreshAllData();
                     toast.success("Work weekend added successfully");
@@ -352,7 +331,7 @@ export function CalendarHolidaysTab({
                 },
                 onError: (error) => {
                     console.error("Error creating work weekend:", error);
-                    toast.error("Failed to add work weekend");
+                    // toast.error("Failed to add work weekend");
                 },
             });
         }
@@ -606,24 +585,25 @@ export function CalendarHolidaysTab({
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {itemToDelete && (
-                                <>
-                                    This action cannot be undone. This will permanently delete{" "}
-                                    <span className="font-semibold text-red-600">
-                                        {itemToDelete.type === "holiday"
-                                            ? itemToDelete.name
-                                            : "this work weekend"}
-                                    </span>{" "}
-                                    from the calendar.
-                                    <div className="mt-3 p-3 bg-red-50 rounded-md">
-                                        <p className="text-sm text-red-700 font-medium">
-                                            ⚠️ Warning: This change will affect all users and cannot
-                                            be recovered.
-                                        </p>
-                                    </div>
-                                </>
-                            )}
+                        <AlertDialogDescription asChild>
+                            <div>
+                                {itemToDelete && (
+                                    <>
+                                        This action cannot be undone. This will permanently delete{" "}
+                                        <span className="font-semibold text-red-600">
+                                            {itemToDelete.type === "holiday"
+                                                ? itemToDelete.name
+                                                : "this work weekend"}
+                                        </span>{" "}
+                                        from the calendar.
+                                        <div className="mt-3 p-3 bg-red-50 rounded-md">
+                                            <span className="text-sm text-red-700 font-medium">
+                                                ⚠️ Warning: This change will affect all users and cannot be recovered.
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

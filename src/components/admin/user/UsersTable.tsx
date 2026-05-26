@@ -752,6 +752,7 @@ export function UsersTable({
                             <TableRow>
                                 <TableHead>First Name</TableHead>
                                 <TableHead>Last Name</TableHead>
+                                <TableHead>Phone Number</TableHead>
                                 <TableHead>Email</TableHead>
                                 <TableHead>Position</TableHead>
                                 <TableHead>Department</TableHead>
@@ -785,6 +786,11 @@ export function UsersTable({
                                         <TableCell className="font-medium">
                                             <span className="truncate block text-xs">
                                                 {user.last_name || '-'}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="font-medium">
+                                            <span className="truncate block text-xs">
+                                                {user.phone_number || '-'}
                                             </span>
                                         </TableCell>
                                         <TableCell>

@@ -1,8 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
-import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, sendCalendar, sendLetter, sendReminder, sendTimeEntry } from "../services/timeEntry";
+import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, getWorkingWeekends, sendCalendar, sendLetter, sendReminder, sendTimeEntry } from "../services/timeEntry";
 import { EditDate, LetterBody, ReminderBody, TimeBody } from '../types/timeEntrys';
 import { useUserStore } from '../store/UsersStore';
 import { CalendarEvent } from '../types/calendar';
+import { toast } from 'sonner';
 
 // ========== КЭШ ДЛЯ TIME ENTRY И КАЛЕНДАРЯ ==========
 
@@ -62,13 +63,30 @@ const getCachedHolidayCalendar = () => {
     }
     return null;
 };
+let workingWeekendsCache: { data: any; timestamp: number } | null = null;
+
+const clearWorkingWeekendsCache = () => {
+    workingWeekendsCache = null;
+    console.log('Working weekends cache cleared');
+};
+
+const getCachedWorkingWeekends = () => {
+    const now = Date.now();
+    if (workingWeekendsCache && (now - workingWeekendsCache.timestamp) < CACHE_DURATION) {
+        console.log('Returning cached working weekends data');
+        return workingWeekendsCache.data;
+    }
+    return null;
+};
 
 // ========== ХУКИ С КЭШИРОВАНИЕМ ==========
 
 export const useSendTimeEntrys = () => {
     return useMutation({
         mutationFn: async (body: TimeBody) => {
-            const result = await sendTimeEntry(body);
+            // Автоматически определяем single_date если start_date равен end_date
+            const isSingleDate = body.start_date === body.end_date;
+            const result = await sendTimeEntry(body, isSingleDate);
             // Очищаем кэш при создании новой записи времени
             clearTimeEntriesCache();
             return result;
@@ -81,7 +99,6 @@ export const useSendTimeEntrys = () => {
         },
     });
 };
-
 export const useGetTimeEntrys = () => {
     const setTimeEntries = useUserStore((state) => state.setTimeEntries);
 
@@ -110,6 +127,7 @@ export const useGetTimeEntrys = () => {
         },
     });
 };
+
 
 
 
@@ -173,6 +191,32 @@ export const useGetCalendar = () => {
         },
     });
 };
+export const useGetWorkingWeekends = () => {
+    const setWorkingWeekends = useUserStore((state) => state.setWorkingWeekends);
+
+    return useMutation({
+        mutationFn: async (forceRefresh?: boolean) => {
+            if (!forceRefresh) {
+                const cached = getCachedWorkingWeekends();
+                if (cached) {
+                    return cached;
+                }
+            }
+
+            console.log(forceRefresh ? 'Force refreshing working weekends' : 'Fetching fresh working weekends');
+            const data = await getWorkingWeekends();
+            workingWeekendsCache = { data, timestamp: Date.now() };
+            return data;
+        },
+        onSuccess: (data) => {
+            setWorkingWeekends(data);
+            console.log('Working weekends loaded:', data);
+        },
+        onError: (error) => {
+            console.error("Get working weekends error:", error);
+        },
+    });
+};
 
 export const useSendCalendar = () => {
     return useMutation({
@@ -182,8 +226,22 @@ export const useSendCalendar = () => {
             clearCalendarCache();
             return result;
         },
-        onError: (error) => {
-            console.error("Send calendar error:", error);
+        onError: (error: any) => {
+            let errorMessage = error.message;
+
+            if (error.response?.data) {
+                if (typeof error.response.data === 'object') {
+                    errorMessage = error.response.data.message ||
+                        error.response.data.error ||
+                        error.response.data.detail ||
+                        JSON.stringify(error.response.data);
+                }
+                else if (typeof error.response.data === 'string') {
+                    errorMessage = error.response.data;
+                }
+            }
+
+            toast(errorMessage);
         },
     });
 };
