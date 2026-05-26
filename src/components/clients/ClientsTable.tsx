@@ -239,16 +239,17 @@ export function ClientsTable({
     loadClients(currentPage);
   };
 
-  // ✅ Исправлено: безопасное получение данных с проверкой на массив
   const displayClients = React.useMemo(() => {
-    if (store_clients && Array.isArray(store_clients) && store_clients.length > 0) {
+    // Всегда используем store_clients, даже если он пустой
+    if (store_clients && Array.isArray(store_clients)) {
       return store_clients;
     }
-    if (clients && Array.isArray(clients) && clients.length > 0) {
+    // Используем clients только как fallback для первого рендера
+    if (isInitialLoad && clients && Array.isArray(clients) && clients.length > 0) {
       return clients;
     }
     return [];
-  }, [store_clients, clients]);
+  }, [store_clients, clients, isInitialLoad]);
 
   const totalCount = clientsPagination?.count || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
