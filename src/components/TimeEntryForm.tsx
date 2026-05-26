@@ -85,7 +85,6 @@ export function TimeEntryForm() {
   const [country, setCountry] = useState<string>('');
   const [client, setClient] = useState('');
   const [clientSearch, setClientSearch] = useState(''); // Состояние для поиска клиента
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
   const [isLoadingInternalTasks, setIsLoadingInternalTasks] = useState(false);
   const [isLoadingLeaves, setIsLoadingLeaves] = useState(false);
@@ -97,7 +96,7 @@ export function TimeEntryForm() {
   const internalTasksLoadedRef = useRef(false);
   const leavesLoadedRef = useRef(false);
 
-  const { mutate: sendEntrys } = useSendTimeEntrys();
+  const { mutate: sendEntrys, isPending: isSubmitting } = useSendTimeEntrys();
   const { mutate: getCountries } = useGetCountries();
   const { mutate: getClients, isPending: isLoadingClients } = useGetCountryClients();
   const { mutate: getClientProjects } = useGetCLientProjecs();
@@ -545,30 +544,20 @@ export function TimeEntryForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // УБРАНА проверка на выходные для single date
-    // if (inputMode === 'single' && isWeekend(date)) {
-    //   toast.error('Weekends are not allowed for single date entries. Please select a weekday or use Date Range mode.');
-    //   return;
-    // }
-
-    setIsSubmitting(true);
-
+    // Валидация
     if (activeTab === 'external') {
       if (!projectId || !hours || !country || !client) {
         toast.error('Please fill in all required fields');
-        setIsSubmitting(false);
         return;
       }
     } else if (activeTab === 'internal') {
       if (!selectedTask || !hours) {
         toast.error('Please fill in all required fields');
-        setIsSubmitting(false);
         return;
       }
     } else if (activeTab === 'vacations') {
       if (!selectedLeaveType || !hours) {
         toast.error('Please fill in all required fields');
-        setIsSubmitting(false);
         return;
       }
     }
@@ -576,7 +565,6 @@ export function TimeEntryForm() {
     const hoursNum = parseFloat(hours);
     if (isNaN(hoursNum) || hoursNum < 0.5 || hoursNum > 24) {
       toast.error('Hours must be between 0.5 and 24');
-      setIsSubmitting(false);
       return;
     }
 
@@ -585,10 +573,11 @@ export function TimeEntryForm() {
       const end = new Date(endDate);
       if (start > end) {
         toast.error('Start date must be before end date');
-        setIsSubmitting(false);
         return;
       }
     }
+
+    // Устанавливаем submitting ТОЛЬКО после всех валидаций
 
     const requestBody = createRequestBody();
 
@@ -597,13 +586,10 @@ export function TimeEntryForm() {
         const entriesToAdd = [];
         const selectedCountryObj = localCountryOptions.find(c => c.value === country);
         const selectedClient = clientOptions.find(c => c.value === client);
-        // Находим выбранный проект по projectId (который содержит ID проекта)
         const selectedProjectOption = projectOptions.find(p => p.project_id === parseInt(projectId));
         const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
         const selectedInternalTask = internalTaskOptions.find(t => t.value === selectedTask);
         const selectedLeave = leaveOptions.find(l => l.value === selectedLeaveType);
-
-        console.log('Selected project option:', selectedProjectOption); // Для отладки
 
         if (inputMode === 'single') {
           let entry;
@@ -620,7 +606,7 @@ export function TimeEntryForm() {
           } else if (activeTab === 'external') {
             entry = {
               type: 'external',
-              projectId: projectId, // ID проекта (число)
+              projectId: projectId,
               projectName: selectedProjectOption?.label || '',
               projectCode: selectedProjectOption?.code || '',
               task: selectedProjectTask?.label || selectedTask,
@@ -673,7 +659,7 @@ export function TimeEntryForm() {
               } else if (activeTab === 'external') {
                 entry = {
                   type: 'external',
-                  projectId: projectId, // ID проекта (число)
+                  projectId: projectId,
                   projectName: selectedProjectOption?.label || '',
                   projectCode: selectedProjectOption?.code || '',
                   task: selectedProjectTask?.label || selectedTask,
@@ -731,7 +717,6 @@ export function TimeEntryForm() {
         toast.error('Failed to add time entry: ' + error.message);
       },
       onSettled: () => {
-        setIsSubmitting(false);
       }
     });
   };
@@ -742,18 +727,8 @@ export function TimeEntryForm() {
       : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100";
 
   const isSubmitDisabled = () => {
-    if (isSubmitting) return true;
-    // УБРАНА проверка на выходные для single date
-    // if (inputMode === 'single' && isWeekend(date)) return true;
 
-    if (activeTab === 'external') {
-      return !projectId || !selectedTask || !country || !client;
-    } else if (activeTab === 'internal') {
-      return !selectedTask;
-    } else if (activeTab === 'vacations') {
-      return !selectedLeaveType;
-    }
-    return false;
+    return isSubmitting;
   };
 
   return (

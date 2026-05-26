@@ -258,7 +258,25 @@ export const useEditCalendar = () => {
         },
         onSuccess: async () => {
             await getCalendarMutation.mutateAsync(true); // 💥 force refresh
-        }
+        },
+        onError: (error: any) => {
+            let errorMessage = error.message;
+
+            if (error.response?.data) {
+                if (typeof error.response.data === 'object') {
+                    errorMessage = error.response.data.message ||
+                        error.response.data.error ||
+                        error.response.data.detail ||
+                        JSON.stringify(error.response.data);
+                }
+                else if (typeof error.response.data === 'string') {
+                    errorMessage = error.response.data;
+                }
+            }
+
+            toast(errorMessage);
+        },
+
     });
 };
 

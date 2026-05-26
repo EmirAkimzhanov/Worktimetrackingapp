@@ -312,7 +312,6 @@ export function CalendarHolidaysTab({
                     },
                     onError: (error) => {
                         console.error("Error updating work weekend:", error);
-                        toast.error("Failed to update work weekend");
                     },
                 },
             );

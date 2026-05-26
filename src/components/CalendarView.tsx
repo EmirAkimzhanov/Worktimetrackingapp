@@ -382,8 +382,11 @@ export function CalendarView() {
               const isWorkingWeekendDay = workingWeekend !== null;
               const isDayOffDay = !isWorkingWeekendDay && isDayOff(dateStr);
               const dayEntries = getEntriesForDate(day);
-              const totalEntriesCount = dayEntries.filter(e => !isHolidayEntry(e) && !isWorkingWeekendEntry(e)).length;
+              // Считаем ВСЕ записи (включая праздники и рабочие выходные)
+              const totalEntriesCount = dayEntries.length;
+              const regularEntriesCount = dayEntries.filter(e => !isHolidayEntry(e) && !isWorkingWeekendEntry(e)).length;
               const isHoliday = holiday !== null;
+              const totalHours = getTotalHoursForDate(day);
 
               let dayBgColor = '', dayBorderColor = '', dayTextColor = '';
 
@@ -426,34 +429,35 @@ export function CalendarView() {
                       {isDayOffDay && !isHoliday && !isWorkingWeekendDay && <Coffee className="w-3 h-3 text-amber-500" />}
                     </div>
 
-                    {/* {isHoliday && holiday && (
-                      <div className="text-[10px] text-red-600 text-center font-medium truncate px-1">
-                        {holiday.holiday_name}
-                      </div>
-                    )}
-
-                    {isWorkingWeekendDay && !isHoliday && (
-                      <div className="text-[10px] text-green-600 text-center font-medium truncate px-1">
-                        Working Day
-                      </div>
-                    )}
-
-                    {isDayOffDay && !isHoliday && !isWorkingWeekendDay && (
-                      <div className="text-[10px] text-amber-600 text-center font-medium truncate px-1">
-                        Day Off
-                      </div>
-                    )} */}
-                    {(totalEntriesCount > 0 || isWorkingWeekendDay) && !isHoliday && (
+                    {/* Отображаем информацию если есть часы ИЛИ есть записи ИЛИ это особый день */}
+                    {(totalHours > 0 || regularEntriesCount > 0 || isHoliday || isWorkingWeekendDay) && (
                       <div className="flex-1 space-y-0 overflow-hidden mt-0">
-                        <div className={`text-xs text-center font-medium rounded-md py-0.5 px-1 ${isWorkingWeekendDay
-                          ? 'text-green-600 bg-green-50'
-                          : 'text-blue-600 bg-blue-50'
+                        <div className={`text-xs text-center font-medium rounded-md py-0.5 px-1 ${isHoliday && totalHours === 0 && regularEntriesCount === 0 ? 'text-red-600 bg-red-50' :
+                          isWorkingWeekendDay && totalHours === 0 && regularEntriesCount === 0 ? 'text-green-600 bg-green-50' :
+                            isDayOffDay && totalHours === 0 && regularEntriesCount === 0 ? 'text-amber-600 bg-amber-50' :
+                              'text-blue-600 bg-blue-50'
                           }`}>
-                          {getTotalHoursForDate(day) > 0 && (
-                            <div className="-mt-0.5">{`${getTotalHoursForDate(day).toFixed(1)}h`}</div>
+                          {/* Всегда показываем часы если они есть */}
+                          {totalHours > 0 && (
+                            <div className="-mt-0.5">{`${totalHours.toFixed(1)}h`}</div>
                           )}
-                          {totalEntriesCount > 0 && (
-                            <div className="text-[10px] opacity-75 -mt-0.5">{totalEntriesCount} entry{totalEntriesCount !== 1 ? 's' : ''}</div>
+                          {/* Показываем количество обычных записей если они есть */}
+                          {regularEntriesCount > 0 && (
+                            <div className="text-[10px] opacity-75 -mt-0.5">
+                              {regularEntriesCount} entry{regularEntriesCount !== 1 ? 's' : ''}
+                            </div>
+                          )}
+                          {/* Показываем метку для праздника без записей */}
+                          {isHoliday && totalHours === 0 && regularEntriesCount === 0 && (
+                            <div className="text-[10px] opacity-75 -mt-0.5"></div>
+                          )}
+                          {/* Показываем метку для рабочего выходного без записей */}
+                          {isWorkingWeekendDay && !isHoliday && totalHours === 0 && regularEntriesCount === 0 && (
+                            <div className="text-[10px] opacity-75 -mt-0.5"></div>
+                          )}
+                          {/* Показываем метку для обычного выходного без записей */}
+                          {isDayOffDay && !isHoliday && !isWorkingWeekendDay && totalHours === 0 && regularEntriesCount === 0 && (
+                            <div className="text-[10px] opacity-75 -mt-0.5"></div>
                           )}
                         </div>
                       </div>
@@ -483,7 +487,7 @@ export function CalendarView() {
                 </span>
                 <div className="w-px h-4 bg-gray-200" />
                 <span className="text-sm text-gray-600">
-                  {selectedDateEntries.length} {selectedDateEntries.length === 1 ? 'entry' : 'entries'}
+                  {selectedDateEntries.filter(e => !isHolidayEntry(e) && !isWorkingWeekendEntry(e)).length} {selectedDateEntries.filter(e => !isHolidayEntry(e) && !isWorkingWeekendEntry(e)).length === 1 ? 'entry' : 'entries'}
                 </span>
               </div>
             )}
