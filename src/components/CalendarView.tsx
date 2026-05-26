@@ -444,7 +444,7 @@ export function CalendarView() {
                           {/* Показываем количество обычных записей если они есть */}
                           {regularEntriesCount > 0 && (
                             <div className="text-[10px] opacity-75 -mt-0.5">
-                              {regularEntriesCount} entry{regularEntriesCount !== 1 ? 's' : ''}
+                              {regularEntriesCount} {regularEntriesCount === 1 ? 'entry' : 'entries'}
                             </div>
                           )}
                           {/* Показываем метку для праздника без записей */}

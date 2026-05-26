@@ -52,18 +52,7 @@ export function UserDialog({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const isInitializedRef = useRef(false);
 
-    // ✅ Безопасное получение данных из store
-    const department_roles = useMemo(() => {
-        const roles = useUserStore.getState().department_roles;
-        if (!roles) return [];
-        if (Array.isArray(roles)) {
-            return roles.filter(role => role && role !== null);
-        }
-        if (typeof roles === 'object') {
-            return Object.values(roles).filter(role => role && role !== null);
-        }
-        return [];
-    }, []);
+    const department_roles = useUserStore((state) => state.department_roles) ?? [];
 
     const user_grades = useMemo(() => {
         const grades = useUserStore.getState().user_grades;
@@ -251,16 +240,38 @@ export function UserDialog({
         }
     }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, roles, setUserForm, findId, getRoleIdFromEditingUser]);
 
-    // ✅ Эффект для обновления role_id когда roles загрузятся
     useEffect(() => {
+        if (isUserChangingRole.current) return;
+
         if (editingUser && open && roles && roles.length > 0 && userForm.role_id) {
             const expectedRoleId = getRoleIdFromEditingUser();
+
             if (expectedRoleId && expectedRoleId !== userForm.role_id) {
-                console.log('Updating role_id from', userForm.role_id, 'to', expectedRoleId);
-                setUserForm(prev => ({ ...prev, role_id: expectedRoleId }));
+                setUserForm(prev => ({
+                    ...prev,
+                    role_id: expectedRoleId
+                }));
             }
         }
     }, [editingUser, open, roles, userForm.role_id, getRoleIdFromEditingUser, setUserForm]);
+
+    // ✅ Добавьте после всех других useEffect
+    useEffect(() => {
+        console.log('Current userForm.role_id:', userForm.role_id);
+        console.log('Available roles:', roles);
+
+        // Если role_id не установлен или не существует в списке ролей, устанавливаем первую роль
+        if (roles && roles.length > 0 && (!userForm.role_id || !roles.some(r => r.id === userForm.role_id))) {
+            const defaultRoleId = roles[0].id;
+            console.log('Setting default role_id to:', defaultRoleId);
+            setUserForm(prev => ({ ...prev, role_id: defaultRoleId }));
+        }
+    }, [roles, userForm.role_id, setUserForm]);
+    useEffect(() => {
+        if (!open) {
+            isUserChangingRole.current = false;
+        }
+    }, [open]);
 
     const resetForm = () => {
         setUserForm({
@@ -408,12 +419,7 @@ export function UserDialog({
         }).filter(Boolean);
     }, [safeToString]);
 
-    // Для отладки
-    console.log('=== Debug Info ===');
-    console.log('userForm.role_id:', userForm.role_id);
-    console.log('roles from store:', roles);
-    console.log('editingUser?.role_id:', editingUser?.role_id);
-    console.log('editingUser?.role:', editingUser?.role);
+    const isUserChangingRole = useRef(false);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -583,27 +589,38 @@ export function UserDialog({
                             </Select>
                         </div>
                     </div>
-
                     {/* Пятая строка: System Role и Active Status */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="role">System Role *</Label>
                             <Select
-                                key={`role-select-${userForm.role_id}`}
-                                value={userForm.role_id ? safeToString(userForm.role_id) : undefined}
+                                value={safeToString(userForm.role_id) || ""}
                                 onValueChange={(value: string) => {
+                                    isUserChangingRole.current = true;
+
                                     const parsedValue = parseInt(value);
-                                    if (!isNaN(parsedValue) && parsedValue > 0) {
-                                        setUserForm({ ...userForm, role_id: parsedValue });
+                                    if (!isNaN(parsedValue)) {
+                                        setUserForm(prev => ({
+                                            ...prev,
+                                            role_id: parsedValue
+                                        }));
                                     }
                                 }}
                                 disabled={isLoading || !roles || roles.length === 0}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Select system role" />
+                                    <SelectValue placeholder={!roles || roles.length === 0 ? "Loading roles..." : "Select system role"} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {renderSelectOptions(roles || [])}
+                                    {roles && roles.length > 0 ? (
+                                        roles.map((role: Role) => (
+                                            <SelectItem key={role.id} value={safeToString(role.id)}>
+                                                {role.name}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <SelectItem value="0" disabled>No roles available</SelectItem>
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>

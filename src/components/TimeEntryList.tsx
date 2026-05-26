@@ -785,7 +785,7 @@ export function TimeEntryList() {
                                   </Button>
                                 ) : (
                                   <>
-                                    <Button
+                                    {/* <Button
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => handleEdit(group)}
@@ -793,7 +793,7 @@ export function TimeEntryList() {
                                       className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                                     >
                                       <Edit className="w-4 h-4" />
-                                    </Button>
+                                    </Button> */}
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -837,7 +837,7 @@ export function TimeEntryList() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex gap-1">
-                                  <Button
+                                  {/* <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
@@ -861,7 +861,7 @@ export function TimeEntryList() {
                                     disabled={isSubmitting || isDeleting || isBulkDeleting}
                                   >
                                     <Edit className="w-3 h-3" />
-                                  </Button>
+                                  </Button> */}
                                   <Button
                                     variant="ghost"
                                     size="icon"
