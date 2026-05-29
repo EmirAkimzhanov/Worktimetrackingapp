@@ -1533,7 +1533,7 @@ export function TimeEntryList() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter style={{ display: 'flex', justifyContent: 'space-between' }}>
             <Button
               variant="outline"
               onClick={() => setEditingEntry(null)}
