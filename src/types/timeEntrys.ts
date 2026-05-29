@@ -77,3 +77,4 @@ export interface WorkingWeekends {
     is_recurring: boolean;
     country: number;
 }
+

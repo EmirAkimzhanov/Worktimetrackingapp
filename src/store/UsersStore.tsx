@@ -169,6 +169,8 @@ interface UserState {
 
   time_entries: TimeEntry[] | null;
 
+  time_entry: TimeEntry | null;
+
   departments: Department[] | null;
 
   department_members: DepartmentWithMembers | null;
@@ -233,6 +235,8 @@ interface UserState {
   setMe: (me: Me) => void;
 
   setManagers: (managers: Manager[] | null) => void;
+
+  setTimeEntry: (time_entry: TimeEntry | null) => void;
 
   setCountries: (countries: Countries) => void;
   setSelectedCountry: (country: CountryWithClients | null) => void;
@@ -353,6 +357,7 @@ export const useUserStore = create<UserState>()(
       internal_tasks: null,
       leaves: null,
       time_entries: null,
+      time_entry: null,
 
       managers: null,
       departments: null,
@@ -436,6 +441,9 @@ export const useUserStore = create<UserState>()(
       setCalendarHolidays: (calendar_holidays) => set({ calendar_holidays }),
 
       setTimeEntries: (timeEntries) => set({ time_entries: timeEntries }),
+
+      setTimeEntry: (timeEntry) => set({ time_entry: timeEntry }),
+
 
       setDepartments: (departments) => set({ departments }),
 
@@ -769,6 +777,7 @@ export const useUserStore = create<UserState>()(
           internal_tasks: null,
           leaves: null,
           time_entries: null,
+          time_entry: null,
           departments: null,
           department_members: null,
           statuses: null,
@@ -811,6 +820,7 @@ export const useUserStore = create<UserState>()(
         user: state.user,
         me: state.me,
         workingWeekends: state.workingWeekends,
+        time_entry: state.time_entry,
         projectsPagination: state.projectsPagination,
         managers: state.managers,
         selectedCountry: state.selectedCountry,
