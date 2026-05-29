@@ -103,18 +103,48 @@ export function CalendarView() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
 
+  // Инициализация currentDate с проверкой на валидность сохраненных значений
   const [currentDate, setCurrentDate] = useState(() => {
-    if (currentMonth) {
-      return new Date(currentMonth);
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth();
+
+    // Проверяем сохраненные значения из store
+    if (currentYear && currentMonth) {
+      const savedYear = parseInt(currentYear);
+      const savedMonth = parseInt(currentMonth);
+
+      // Валидация: год должен быть между 2000 и 2100, месяц между 0 и 11
+      if (!isNaN(savedYear) && !isNaN(savedMonth) &&
+        savedYear >= 2000 && savedYear <= 2100 &&
+        savedMonth >= 0 && savedMonth <= 11) {
+        return new Date(savedYear, savedMonth, 1);
+      }
     }
-    return new Date();
+
+    // Если сохраненные значения некорректны, возвращаем текущую дату
+    return new Date(todayYear, todayMonth, 1);
   });
 
-  // В CalendarView.tsx, измените useEffect, который сохраняет месяц
+  // Эффект для синхронизации store с currentDate при монтировании (если были некорректные значения)
+  useEffect(() => {
+    const savedYear = currentYear ? parseInt(currentYear) : null;
+    const savedMonth = currentMonth ? parseInt(currentMonth) : null;
+
+    const isYearValid = savedYear !== null && !isNaN(savedYear) && savedYear >= 2000 && savedYear <= 2100;
+    const isMonthValid = savedMonth !== null && !isNaN(savedMonth) && savedMonth >= 0 && savedMonth <= 11;
+
+    // Если сохраненные значения некорректны, обновляем store
+    if (!isYearValid || !isMonthValid) {
+      const today = new Date();
+      setCurrentMonth(today.getMonth().toString());
+      setCurrentYear(today.getFullYear().toString());
+    }
+  }, []); // Выполняется только один раз
+
   // Обновляем месяц в store при изменении
   useEffect(() => {
     if (setCurrentMonth) {
-      // Сохраняем только номер месяца (0-11)
       setCurrentMonth(currentDate.getMonth().toString());
     }
   }, [currentDate, setCurrentMonth]);
@@ -122,7 +152,6 @@ export function CalendarView() {
   // Обновляем год в store при изменении
   useEffect(() => {
     if (setCurrentYear) {
-      // Сохраняем год как строку
       setCurrentYear(currentDate.getFullYear().toString());
     }
   }, [currentDate, setCurrentYear]);
@@ -395,8 +424,6 @@ export function CalendarView() {
               const isWorkingWeekendDay = workingWeekend !== null;
               const isDayOffDay = !isWorkingWeekendDay && isDayOff(dateStr);
               const dayEntries = getEntriesForDate(day);
-              // Считаем ВСЕ записи (включая праздники и рабочие выходные)
-              const totalEntriesCount = dayEntries.length;
               const regularEntriesCount = dayEntries.filter(e => !isHolidayEntry(e) && !isWorkingWeekendEntry(e)).length;
               const isHoliday = holiday !== null;
               const totalHours = getTotalHoursForDate(day);
@@ -442,7 +469,6 @@ export function CalendarView() {
                       {isDayOffDay && !isHoliday && !isWorkingWeekendDay && <Coffee className="w-3 h-3 text-amber-500" />}
                     </div>
 
-                    {/* Отображаем информацию если есть часы ИЛИ есть записи ИЛИ это особый день */}
                     {(totalHours > 0 || regularEntriesCount > 0 || isHoliday || isWorkingWeekendDay) && (
                       <div className="flex-1 space-y-0 overflow-hidden mt-0">
                         <div className={`text-xs text-center font-medium rounded-md py-0.5 px-1 ${isHoliday && totalHours === 0 && regularEntriesCount === 0 ? 'text-red-600 bg-red-50' :
@@ -450,27 +476,13 @@ export function CalendarView() {
                             isDayOffDay && totalHours === 0 && regularEntriesCount === 0 ? 'text-amber-600 bg-amber-50' :
                               'text-blue-600 bg-blue-50'
                           }`}>
-                          {/* Всегда показываем часы если они есть */}
                           {totalHours > 0 && (
                             <div className="-mt-0.5">{`${totalHours.toFixed(1)}h`}</div>
                           )}
-                          {/* Показываем количество обычных записей если они есть */}
                           {regularEntriesCount > 0 && (
                             <div className="text-[10px] opacity-75 -mt-0.5">
                               {regularEntriesCount} {regularEntriesCount === 1 ? 'entry' : 'entries'}
                             </div>
-                          )}
-                          {/* Показываем метку для праздника без записей */}
-                          {isHoliday && totalHours === 0 && regularEntriesCount === 0 && (
-                            <div className="text-[10px] opacity-75 -mt-0.5"></div>
-                          )}
-                          {/* Показываем метку для рабочего выходного без записей */}
-                          {isWorkingWeekendDay && !isHoliday && totalHours === 0 && regularEntriesCount === 0 && (
-                            <div className="text-[10px] opacity-75 -mt-0.5"></div>
-                          )}
-                          {/* Показываем метку для обычного выходного без записей */}
-                          {isDayOffDay && !isHoliday && !isWorkingWeekendDay && totalHours === 0 && regularEntriesCount === 0 && (
-                            <div className="text-[10px] opacity-75 -mt-0.5"></div>
                           )}
                         </div>
                       </div>

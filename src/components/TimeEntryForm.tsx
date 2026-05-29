@@ -9,8 +9,8 @@ import { Switch } from './ui/switch';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane, Search, X } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
-import { toast } from 'sonner@2.0.3';
-import { useGetHolidayTimeEntrys, useGetTimeEntrys, useSendTimeEntrys } from '../hooks/useTimeEntry';
+import { toast } from 'sonner';
+import { useGetHolidayTimeEntrys, useGetTimeEntriesStats, useGetTimeEntrys, useSendTimeEntrys } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
 import { useGetCountries } from '../hooks/useCountries';
 import { Country } from '../types/countries';
@@ -80,11 +80,11 @@ export function TimeEntryForm() {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [hours, setHours] = useState('8');
-  const [includeWeekends, setIncludeWeekends] = useState(false); // по умолчанию выключен
-  const [includeHolidays, setIncludeHolidays] = useState(false); // ДОБАВЛЕН новый ползунок, по умолчанию выключен
+  const [includeWeekends, setIncludeWeekends] = useState(false);
+  const [includeHolidays, setIncludeHolidays] = useState(false);
   const [country, setCountry] = useState<string>('');
   const [client, setClient] = useState('');
-  const [clientSearch, setClientSearch] = useState(''); // Состояние для поиска клиента
+  const [clientSearch, setClientSearch] = useState('');
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
   const [isLoadingInternalTasks, setIsLoadingInternalTasks] = useState(false);
   const [isLoadingLeaves, setIsLoadingLeaves] = useState(false);
@@ -105,6 +105,7 @@ export function TimeEntryForm() {
   const { mutate: getLeaves } = useGetLeaves();
   const { mutate: getTimeEntrys } = useGetTimeEntrys();
   const { mutate: getCalendarHolidays } = useGetHolidayTimeEntrys();
+  const { mutate: getTimeEntriesStats } = useGetTimeEntriesStats();
 
   // Получаем данные из стора
   const countries = useUserStore((state) => state.countries);
@@ -118,6 +119,46 @@ export function TimeEntryForm() {
   const internal_tasks = useUserStore((state) => state.internal_tasks);
   const setInternalTasks = useUserStore((state) => state.setInternalTasks);
   const leaves = useUserStore((state) => state.leaves);
+  const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
+  const setCurrentYear = useUserStore((state) => state.setCurrentYear);
+  const currentMonth = useUserStore((state) => state.currentMonth);
+  const currentYear = useUserStore((state) => state.currentYear);
+
+  // Функция для обновления статистики по конкретной дате
+  const refreshStatsForDate = (targetDate: Date) => {
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth(); // 0-11
+    const monthForApi = month + 1; // API ожидает 1-12
+
+    console.log('Refreshing stats for:', { year, month, monthForApi });
+
+    // Обновляем store с текущим месяцем и годом
+    setCurrentMonth(month.toString());
+    setCurrentYear(year.toString());
+
+    // Отправляем запрос на статистику
+    getTimeEntriesStats(
+      { year: year.toString(), month: monthForApi.toString() },
+      {
+        onSuccess: (data) => {
+          console.log('Stats refreshed successfully:', data);
+        },
+        onError: (error) => {
+          console.error('Failed to refresh stats:', error);
+        }
+      }
+    );
+  };
+
+  // Функция для получения даты из формы
+  const getDateFromForm = (): Date | null => {
+    if (inputMode === 'single') {
+      return new Date(date);
+    } else {
+      // Для диапазона используем startDate
+      return new Date(startDate);
+    }
+  };
 
   // Функция проверки является ли день выходным
   const isWeekend = (dateString: string): boolean => {
@@ -126,14 +167,11 @@ export function TimeEntryForm() {
     return dayOfWeek === 0 || dayOfWeek === 6;
   };
 
-  // УБРАНА ВАЛИДАЦИЯ для single date - теперь можно выбрать любой день
   const validateSingleDate = (dateToCheck: string): boolean => {
-    // Валидация убрана - можно выбирать любой день, включая выходные
     setDateError('');
     return true;
   };
 
-  // Обработчик изменения даты для single mode
   const handleDateChange = (newDate: string) => {
     setDate(newDate);
     if (inputMode === 'single') {
@@ -141,7 +179,6 @@ export function TimeEntryForm() {
     }
   };
 
-  // Обработчик изменения startDate
   const handleStartDateChange = (newDate: string) => {
     setStartDate(newDate);
     if (inputMode === 'single') {
@@ -149,7 +186,6 @@ export function TimeEntryForm() {
     }
   };
 
-  // Обработчик изменения режима ввода
   const handleInputModeChange = (value: InputMode) => {
     setInputMode(value);
     setDateError('');
@@ -158,7 +194,6 @@ export function TimeEntryForm() {
     }
   };
 
-  // Преобразуем клиентов в формат для Select с сортировкой по алфавиту
   const allClientOptions = useMemo(() => {
     if (!Array.isArray(clients) || clients.length === 0) return [];
 
@@ -172,11 +207,9 @@ export function TimeEntryForm() {
         personal_number: client.personal_number || ''
       }));
 
-    // Сортируем по алфавиту по полю label
     return options.sort((a, b) => a.label.localeCompare(b.label));
   }, [clients]);
 
-  // Фильтруем клиентов по поиску
   const clientOptions = useMemo(() => {
     if (!clientSearch.trim()) {
       return allClientOptions;
@@ -187,21 +220,19 @@ export function TimeEntryForm() {
     );
   }, [allClientOptions, clientSearch]);
 
-  // НОВАЯ ФУНКЦИЯ: Преобразуем проекты в формат для Select (новый формат с project_codes)
   const projectOptions = useMemo((): ProjectOption[] => {
     if (!client_projects?.project_codes || !Array.isArray(client_projects.project_codes)) {
       return [];
     }
 
     return client_projects.project_codes.map((pc: ProjectCode) => ({
-      value: String(pc.id),          // <-- ВОТ ЭТО НУЖНО (71, 72)
-      label: client_projects.name,   // можно оставить имя клиента/проекта
-      code: pc.code,                 // сам код
-      project_id: pc.project         // id проекта (если нужен)
+      value: String(pc.id),
+      label: client_projects.name,
+      code: pc.code,
+      project_id: pc.project
     }));
   }, [client_projects]);
 
-  // Преобразуем задачи проекта в формат для Select
   const projectTaskOptions = useMemo(() => {
     if (!project_tasks?.tasks || !Array.isArray(project_tasks.tasks)) return [];
 
@@ -214,7 +245,6 @@ export function TimeEntryForm() {
       }));
   }, [project_tasks]);
 
-  // Преобразуем внутренние задачи в формат для Select
   const internalTaskOptions = useMemo(() => {
     if (!internal_tasks || !Array.isArray(internal_tasks)) return [];
 
@@ -227,7 +257,6 @@ export function TimeEntryForm() {
       }));
   }, [internal_tasks]);
 
-  // Преобразуем leaves в формат для Select
   const leaveOptions = useMemo(() => {
     if (!leaves || !Array.isArray(leaves)) {
       return [];
@@ -242,7 +271,6 @@ export function TimeEntryForm() {
       }));
   }, [leaves]);
 
-  // Функция для преобразования стран в опции
   const convertCountriesToOptions = (countriesData: any): Array<{ value: string, label: string, code: string }> => {
     if (!countriesData) return [];
 
@@ -265,7 +293,6 @@ export function TimeEntryForm() {
     return options;
   };
 
-  // Обновляем опции стран при изменении данных в сторе
   useEffect(() => {
     if (countries && !countriesLoadedRef.current) {
       const options = convertCountriesToOptions(countries);
@@ -277,7 +304,6 @@ export function TimeEntryForm() {
     }
   }, [countries]);
 
-  // Загружаем страны при монтировании компонента
   useEffect(() => {
     if (!countriesLoadedRef.current) {
       setIsCountriesLoading(true);
@@ -289,7 +315,6 @@ export function TimeEntryForm() {
       if (!hasCountriesInStore) {
         getCountries(undefined, {
           onSuccess: () => {
-            // После успешной загрузки, страны будут в сторе
           },
           onError: (error) => {
             console.error('Failed to load countries:', error);
@@ -307,7 +332,6 @@ export function TimeEntryForm() {
     }
   }, []);
 
-  // Загружаем внутренние задачи при монтировании компонента
   useEffect(() => {
     if (!internalTasksLoadedRef.current) {
       setIsLoadingInternalTasks(true);
@@ -334,7 +358,6 @@ export function TimeEntryForm() {
     }
   }, []);
 
-  // Загружаем leaves при монтировании компонента
   useEffect(() => {
     if (!leavesLoadedRef.current) {
       setIsLoadingLeaves(true);
@@ -360,20 +383,18 @@ export function TimeEntryForm() {
     }
   }, []);
 
-  // Загружаем клиентов при выборе страны
   useEffect(() => {
     if (country && activeTab === 'external') {
       getClients(country);
-      setClientSearch(''); // Сбрасываем поиск при смене страны
+      setClientSearch('');
     }
   }, [country, activeTab]);
 
-  // Функция для загрузки проектов при выборе клиента
   const handleClientChange = (clientId: string) => {
     setClient(clientId);
     setProjectId('');
     setSelectedTask('');
-    setClientSearch(''); // Сбрасываем поиск после выбора
+    setClientSearch('');
     clearProjectTasks();
 
     if (clientId) {
@@ -404,17 +425,13 @@ export function TimeEntryForm() {
     }
   };
 
-  // Функция для загрузки задач при выборе проекта
   const handleProjectChange = (selectedCodeId: string) => {
-    // Находим выбранный project_code и берем из него project_id
     const selectedProjectCode = projectOptions.find(p => p.value === selectedCodeId);
 
     if (selectedProjectCode) {
-      // Сохраняем ID project_code для отправки в запросе
       setProjectId(selectedCodeId);
       setSelectedTask('');
 
-      // Для загрузки задач используем project_id, а не ID кода
       const projectIdForTasks = selectedProjectCode.project_id;
 
       if (projectIdForTasks) {
@@ -487,7 +504,7 @@ export function TimeEntryForm() {
       hours: parseFloat(hours),
       ...(inputMode === 'single'
         ? { start_date: date, end_date: date }
-        : { start_date: startDate, end_date: endDate, weekends_included: includeWeekends, holidays_included: includeHolidays } // ДОБАВЛЕН holidays_included
+        : { start_date: startDate, end_date: endDate, weekends_included: includeWeekends, holidays_included: includeHolidays }
       )
     };
 
@@ -495,7 +512,7 @@ export function TimeEntryForm() {
       case 'external': {
         const selectedCountryObj = localCountryOptions.find(c => c.value === country);
         const selectedClient = clientOptions.find(c => c.value === client);
-        const selectedProjectCode = projectOptions.find(p => p.value === projectId); // projectId хранит ID project_code
+        const selectedProjectCode = projectOptions.find(p => p.value === projectId);
         const selectedProjectTask = projectTaskOptions.find(t => t.value === selectedTask);
 
         return {
@@ -503,7 +520,6 @@ export function TimeEntryForm() {
           id: 0,
           country: selectedCountryObj?.value ? parseInt(selectedCountryObj.value) : null,
           client: selectedClient?.value ? parseInt(selectedClient.value) : null,
-          // ✅ ВОТ ЗДЕСЬ - отправляем ID project_code (71, 72...)
           project_code: selectedProjectCode?.value ? parseInt(selectedProjectCode.value) : null,
           task_type: selectedProjectTask?.task_type || null,
           task: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : null,
@@ -577,8 +593,6 @@ export function TimeEntryForm() {
       }
     }
 
-    // Устанавливаем submitting ТОЛЬКО после всех валидаций
-
     const requestBody = createRequestBody();
 
     sendEntrys(requestBody, {
@@ -636,12 +650,12 @@ export function TimeEntryForm() {
         } else {
           const start = new Date(startDate);
           const end = new Date(endDate);
-          const currentDate = new Date(start);
+          const currentDateLoop = new Date(start);
           const endDateForLoop = new Date(end);
           endDateForLoop.setDate(endDateForLoop.getDate() + 1);
 
-          while (currentDate < endDateForLoop) {
-            const dayOfWeek = currentDate.getDay();
+          while (currentDateLoop < endDateForLoop) {
+            const dayOfWeek = currentDateLoop.getDay();
             const isWeekendDay = dayOfWeek === 0 || dayOfWeek === 6;
 
             if (includeWeekends || !isWeekendDay) {
@@ -653,7 +667,7 @@ export function TimeEntryForm() {
                   task: selectedInternalTask?.label || selectedTask,
                   task_id: selectedInternalTask?.value ? parseInt(selectedInternalTask.value) : undefined,
                   description,
-                  date: currentDate.toISOString().split('T')[0],
+                  date: currentDateLoop.toISOString().split('T')[0],
                   hours: hoursNum,
                 };
               } else if (activeTab === 'external') {
@@ -665,7 +679,7 @@ export function TimeEntryForm() {
                   task: selectedProjectTask?.label || selectedTask,
                   task_id: selectedProjectTask?.value ? parseInt(selectedProjectTask.value) : undefined,
                   description,
-                  date: currentDate.toISOString().split('T')[0],
+                  date: currentDateLoop.toISOString().split('T')[0],
                   hours: hoursNum,
                   country: selectedCountryObj?.label || country,
                   client: selectedClient?.label || client,
@@ -678,7 +692,7 @@ export function TimeEntryForm() {
                   leave_type_label: selectedLeave?.label || selectedLeaveType,
                   leave_id: selectedLeave?.value ? parseInt(selectedLeave.value) : undefined,
                   description,
-                  date: currentDate.toISOString().split('T')[0],
+                  date: currentDateLoop.toISOString().split('T')[0],
                   hours: hoursNum,
                 };
               }
@@ -688,7 +702,7 @@ export function TimeEntryForm() {
               }
             }
 
-            currentDate.setDate(currentDate.getDate() + 1);
+            currentDateLoop.setDate(currentDateLoop.getDate() + 1);
           }
         }
 
@@ -698,6 +712,12 @@ export function TimeEntryForm() {
             ? 'Time entry added successfully'
             : `Added ${entriesToAdd.length} time entries for the period ${startDate} to ${endDate}`;
           toast.success(message);
+
+          // ✅ ОБНОВЛЯЕМ СТАТИСТИКУ после успешного добавления
+          const targetDate = getDateFromForm();
+          if (targetDate) {
+            refreshStatsForDate(targetDate);
+          }
         } else {
           toast.warning('No time entries were added. Check your date range and weekend settings.');
         }
@@ -727,7 +747,6 @@ export function TimeEntryForm() {
       : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100";
 
   const isSubmitDisabled = () => {
-
     return isSubmitting;
   };
 
@@ -738,7 +757,6 @@ export function TimeEntryForm() {
           <Plus className="w-5 h-5" />
           Add Time Entry
         </CardTitle>
-        {/* <CardDescription style={{ margin: '0' }}>Track your work hours and vacations</CardDescription> */}
       </CardHeader>
       <CardContent className="pt-6">
         <div className="mb-6">
@@ -770,8 +788,10 @@ export function TimeEntryForm() {
           </div>
         </div>
 
+        {/* External Tab */}
         {activeTab === 'external' && (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* ... остальной код external формы без изменений ... */}
             <div className="space-y-2">
               <ToggleGroup
                 type="single"
@@ -835,7 +855,6 @@ export function TimeEntryForm() {
                       )}
                     </SelectTrigger>
                     <SelectContent className="max-h-[280px] overflow-y-auto">
-                      {/* Поле поиска - фиксируется при скролле */}
                       <div className="sticky top-0 bg-white z-10 p-2 border-b">
                         <div className="relative">
                           <Input
@@ -859,8 +878,6 @@ export function TimeEntryForm() {
                           )}
                         </div>
                       </div>
-
-                      {/* Контейнер с прокруткой для списка клиентов */}
                       <div className="max-h-[200px] overflow-y-auto" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                         {clientOptions.length === 0 && clientSearch ? (
                           <div className="p-4 text-center text-gray-500 text-sm">
@@ -1031,7 +1048,6 @@ export function TimeEntryForm() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Detailed description of the work done"
                 rows={3}
-              // required
               />
             </div>
 
@@ -1044,7 +1060,7 @@ export function TimeEntryForm() {
           </form>
         )}
 
-        {/* Для internal вкладки */}
+        {/* Internal Tab */}
         {activeTab === 'internal' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -1188,7 +1204,6 @@ export function TimeEntryForm() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Detailed description of the work done"
                 rows={3}
-              // required
               />
             </div>
 
@@ -1201,7 +1216,7 @@ export function TimeEntryForm() {
           </form>
         )}
 
-        {/* Для vacations вкладки */}
+        {/* Vacations Tab */}
         {activeTab === 'vacations' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -1337,7 +1352,6 @@ export function TimeEntryForm() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Vacation description"
                 rows={3}
-              // required
               />
             </div>
 

@@ -10,7 +10,7 @@ import { Search, X, ListTodo, Briefcase, Plane, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGetCLientProjecs, useGetCountryClients } from '../hooks/useClients';
 import { useGetProjectTasks } from '../hooks/useProject';
-import { useEditTimeEntry } from '../hooks/useTimeEntry';
+import { useEditTimeEntry, useGetTimeEntriesStats } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
 
 interface ProjectOption {
@@ -65,12 +65,42 @@ export function EditTimeEntryDialog({
     const { mutate: getClientProjects } = useGetCLientProjecs();
     const { mutate: getProjectTasks } = useGetProjectTasks();
     const { mutate: getClients } = useGetCountryClients();
+    const { mutate: getTimeEntriesStats } = useGetTimeEntriesStats();
 
     const countriesFromStore = useUserStore((state) => state.countries);
     const internal_tasks = useUserStore((state) => state.internal_tasks);
     const leaves = useUserStore((state) => state.leaves);
     const selectedCountry = useUserStore((state) => state.selectedCountry);
     const clients = selectedCountry?.clients ?? [];
+    const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
+    const setCurrentYear = useUserStore((state) => state.setCurrentYear);
+
+    // Функция для обновления статистики по дате
+    const refreshStatsForDate = (dateString: string) => {
+        const targetDate = new Date(dateString);
+        const year = targetDate.getFullYear();
+        const month = targetDate.getMonth(); // 0-11
+        const monthForApi = month + 1; // API ожидает 1-12
+
+        console.log('Refreshing stats after edit for:', { year, month, monthForApi });
+
+        // Обновляем store с текущим месяцем и годом
+        setCurrentMonth(month.toString());
+        setCurrentYear(year.toString());
+
+        // Отправляем запрос на статистику
+        getTimeEntriesStats(
+            { year: year.toString(), month: monthForApi.toString() },
+            {
+                onSuccess: (data) => {
+                    console.log('Stats refreshed after edit:', data);
+                },
+                onError: (error) => {
+                    console.error('Failed to refresh stats after edit:', error);
+                }
+            }
+        );
+    };
 
     // Загружаем страны
     useEffect(() => {
@@ -455,6 +485,10 @@ export function EditTimeEntryDialog({
                         hours: hoursNum,
                     });
                     toast.success('Entry updated successfully');
+
+                    // ✅ Обновляем статистику после успешного редактирования
+                    refreshStatsForDate(editDate);
+
                     onClose();
                     onSuccess();
                 },
@@ -795,7 +829,6 @@ export function EditTimeEntryDialog({
                         />
                     </div>
 
-                    {/* Switch для Include weekends и Include holidays */}
 
                 </div>
 

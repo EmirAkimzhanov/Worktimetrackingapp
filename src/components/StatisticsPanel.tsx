@@ -9,26 +9,42 @@ export function StatisticsPanel() {
   const { filters } = useTimeTracker();
   const time_entries = useUserStore((state) => state.time_entries);
   const { mutate: getTimeEntrys } = useGetTimeEntrys();
+  const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
+  const setCurrentYear = useUserStore((state) => state.setCurrentYear);
   const currentMonth = useUserStore((state) => state.currentMonth);
   const currentYear = useUserStore((state) => state.currentYear);
   const timeEntriesStats = useUserStore((state) => state.time_entries_stats);
   const { mutate: getTimeEntriesStats } = useGetTimeEntriesStats();
 
   const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Преобразуем currentMonth (номер месяца 0-11) и currentYear в числа
-  const selectedYear = currentYear ? parseInt(currentYear) : new Date().getFullYear();
-  const selectedMonth = currentMonth ? parseInt(currentMonth) : new Date().getMonth();
+  // Получаем сегодняшнюю дату
+  const today = new Date();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth(); // 0-11
+
+  // При монтировании устанавливаем текущий месяц и год в store
+  useEffect(() => {
+    if (!isInitialized) {
+      console.log('Initializing with today\'s date:', { year: todayYear, month: todayMonth });
+      setCurrentMonth(todayMonth.toString());
+      setCurrentYear(todayYear.toString());
+      setIsInitialized(true);
+    }
+  }, []);
+
+  // Используем значения из store или сегодняшнюю дату
+  const selectedYear = currentYear ? parseInt(currentYear) : todayYear;
+  const selectedMonth = currentMonth ? parseInt(currentMonth) : todayMonth;
 
   // Загружаем данные при монтировании и при изменении месяца/года
   useEffect(() => {
-    if (currentYear !== null && currentMonth !== null && !isNaN(selectedYear) && !isNaN(selectedMonth)) {
+    if (isInitialized) {
       loadTimeEntries();
       loadStats();
-    } else {
-      console.log('Waiting for currentMonth and currentYear to be set...');
     }
-  }, [currentMonth, currentYear]);
+  }, [currentMonth, currentYear, isInitialized]);
 
   const loadTimeEntries = () => {
     getTimeEntrys(undefined, {
@@ -42,25 +58,23 @@ export function StatisticsPanel() {
   };
 
   const loadStats = () => {
-    // Проверяем, что year и month - валидные числа
-    if (!currentYear || !currentMonth) {
-      console.log('Cannot load stats: missing year or month');
-      return;
-    }
+    // Используем сегодняшнюю дату если значения в store нет
+    const year = currentYear || todayYear.toString();
+    const month = currentMonth || todayMonth.toString();
 
-    const yearNum = parseInt(currentYear);
-    const monthNum = parseInt(currentMonth);
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
 
     if (isNaN(yearNum) || isNaN(monthNum)) {
-      console.error('Invalid year or month:', { currentYear, currentMonth });
+      console.error('Invalid year or month:', { year, month });
       return;
     }
 
-    console.log('Loading stats for:', { year: yearNum, month: monthNum + 1 }); // monthNum + 1 для отображения (1-12)
+    console.log('Loading stats for:', { year: yearNum, month: monthNum + 1 });
 
     setIsStatsLoading(true);
     getTimeEntriesStats(
-      { year: currentYear, month: (monthNum + 1).toString() }, // API ожидает месяц 1-12
+      { year: year, month: (monthNum + 1).toString() }, // API ожидает месяц 1-12
       {
         onSuccess: (data) => {
           console.log('Statistics loaded:', data);
@@ -259,7 +273,7 @@ export function StatisticsPanel() {
 
   return (
     <div className="space-y-4">
-      {currentMonth !== null && currentYear !== null && !isNaN(selectedYear) && !isNaN(selectedMonth) && (
+      {isInitialized && (
         <div className="text-sm text-slate-500 mb-2">
           Showing data for: <span className="font-semibold text-blue-600">
             {statistics.monthName} {statistics.year}

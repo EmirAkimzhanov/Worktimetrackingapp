@@ -7,12 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner';
-import { useDeleteTimeEntry, useGetHolidayTimeEntrys, useGetTimeEntrys } from '../hooks/useTimeEntry';
+import { useDeleteTimeEntry, useGetHolidayTimeEntrys, useGetTimeEntrys, useGetTimeEntriesStats } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
 import { useGetInterbalTasks } from '../hooks/useTasks';
 import { useGetLeaves } from '../hooks/useLeaves';
-import { DeleteConfirmationDialogs } from './DeleteConfirmationDialogs';
 import { EditTimeEntryDialog } from './EditTimeEntryDialog';
+import { DeleteConfirmationDialogs } from './DeleteConfirmDialog';
 
 interface GroupedTimeEntry {
   id: string;
@@ -71,15 +71,41 @@ export function TimeEntryList() {
   const { mutateAsync: deleteTimeEntry } = useDeleteTimeEntry();
   const { mutate: getInternalTasks } = useGetInterbalTasks();
   const { mutate: getLeaves } = useGetLeaves();
+  const { mutate: getTimeEntriesStats } = useGetTimeEntriesStats();
 
   const time_entries = useUserStore((state) => state.time_entries);
   const internal_tasks = useUserStore((state) => state.internal_tasks);
   const leaves = useUserStore((state) => state.leaves);
+  const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
+  const setCurrentYear = useUserStore((state) => state.setCurrentYear);
+  const currentMonth = useUserStore((state) => state.currentMonth);
+  const currentYear = useUserStore((state) => state.currentYear);
 
   const [isLoadingInternalTasks, setIsLoadingInternalTasks] = useState(false);
   const [isLoadingLeaves, setIsLoadingLeaves] = useState(false);
 
   const safeTimeEntries = Array.isArray(time_entries) ? time_entries : [];
+
+  // Функция для обновления статистики
+  const refreshStats = () => {
+    const year = currentYear ? parseInt(currentYear) : new Date().getFullYear();
+    const month = currentMonth ? parseInt(currentMonth) : new Date().getMonth();
+    const monthForApi = month + 1;
+
+    console.log('Refreshing stats for:', { year, month, monthForApi });
+
+    getTimeEntriesStats(
+      { year: year.toString(), month: monthForApi.toString() },
+      {
+        onSuccess: (data) => {
+          console.log('Stats refreshed:', data);
+        },
+        onError: (error) => {
+          console.error('Failed to refresh stats:', error);
+        }
+      }
+    );
+  };
 
   // Загрузка внутренних задач
   useEffect(() => {
@@ -372,6 +398,7 @@ export function TimeEntryList() {
       setEntryToDelete(null);
       setDeleteDialogOpen(false);
       await loadTimeEntries();
+      refreshStats(); // ✅ Обновляем статистику после удаления
     } catch (error: any) {
       console.error('Failed to delete entry:', error);
       toast.error(error?.message || 'Failed to delete entry. Please try again.');
@@ -415,6 +442,7 @@ export function TimeEntryList() {
         toast.error(`Failed to delete ${selectedEntries.length - successful.length} entries`);
       }
       await loadTimeEntries();
+      refreshStats(); // ✅ Обновляем статистику после массового удаления
     } catch (error) {
       console.error('Bulk delete error:', error);
       toast.error('Something went wrong');
@@ -753,7 +781,10 @@ export function TimeEntryList() {
         open={!!editingEntry}
         editingEntry={editingEntry}
         onClose={() => setEditingEntry(null)}
-        onSuccess={loadTimeEntries}
+        onSuccess={() => {
+          loadTimeEntries();
+          refreshStats(); // ✅ Обновляем статистику после редактирования
+        }}
         updateEntry={updateEntry}
       />
 
