@@ -838,7 +838,6 @@ export function TimeEntryForm() {
                       {/* Поле поиска - фиксируется при скролле */}
                       <div className="sticky top-0 bg-white z-10 p-2 border-b">
                         <div className="relative">
-                          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                           <Input
                             placeholder="Search client..."
                             value={clientSearch}

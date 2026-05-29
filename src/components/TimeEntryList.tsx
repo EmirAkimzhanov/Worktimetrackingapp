@@ -1,51 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
-import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, ChevronDown, ChevronUp, ListTodo, Search, X } from 'lucide-react';
+import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner';
-import { useDeleteTimeEntry, useEditTimeEntry, useGetHolidayTimeEntrys, useGetTimeEntrys } from '../hooks/useTimeEntry';
+import { useDeleteTimeEntry, useGetHolidayTimeEntrys, useGetTimeEntrys } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
 import { useGetInterbalTasks } from '../hooks/useTasks';
 import { useGetLeaves } from '../hooks/useLeaves';
-import { useGetCLientProjecs, useGetCountryClients } from '../hooks/useClients';
-import { useGetProjectTasks } from '../hooks/useProject';
-
-interface ProjectCode {
-  id: number;
-  code: string;
-  project: number;
-  created_at: string;
-}
-
-interface ClientWithProjects {
-  id: number;
-  project_codes: ProjectCode[];
-  name: string;
-  group: string;
-  personal_number: string;
-  client_code: string;
-  bvd: string;
-  sector: number;
-  country: number;
-  pie: string | null;
-}
-
-interface ProjectOption {
-  value: string;
-  label: string;
-  code: string;
-  project_id?: number;
-}
+import { DeleteConfirmationDialogs } from './DeleteConfirmationDialogs';
+import { EditTimeEntryDialog } from './EditTimeEntryDialog';
 
 interface GroupedTimeEntry {
   id: string;
@@ -82,8 +49,6 @@ interface DeleteTarget {
 
 export function TimeEntryList() {
   const {
-    entries: mockEntries,
-    projects,
     filters,
     selectedEntries,
     setSelectedEntries,
@@ -100,121 +65,28 @@ export function TimeEntryList() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const [deleteErrors, setDeleteErrors] = useState<string[]>([]);
-  const [isLoadingSingleEntry, setIsLoadingSingleEntry] = useState(false);
-
-  // Состояния для формы редактирования
-  const [editProjectId, setEditProjectId] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editDate, setEditDate] = useState('');
-  const [editHours, setEditHours] = useState('');
-  const [editTaskType, setEditTaskType] = useState('');
-  const [editTask, setEditTask] = useState('');
-  const [editTaskId, setEditTaskId] = useState('');
-  const [editCountry, setEditCountry] = useState('');
-  const [editClient, setEditClient] = useState('');
-  const [editWeekendsIncluded, setEditWeekendsIncluded] = useState(false);
-  const [editLeaveTypeId, setEditLeaveTypeId] = useState('');
-
-  // Состояния для EXTERNAL блока
-  const [editClientSearch, setEditClientSearch] = useState('');
-  const [isLoadingEditProjects, setIsLoadingEditProjects] = useState(false);
-  const [isLoadingEditTasks, setIsLoadingEditTasks] = useState(false);
-  const [editProjectOptions, setEditProjectOptions] = useState<ProjectOption[]>([]);
-  const [editProjectTaskOptions, setEditProjectTaskOptions] = useState<Array<{ value: string, label: string, task_type: string }>>([]);
-  const [isLoadingEditClients, setIsLoadingEditClients] = useState(false);
-
-  // Локальное состояние для стран (не зависит от стора)
-  const [countryOptions, setCountryOptions] = useState<Array<{ value: string, label: string, code: string }>>([]);
 
   const { mutate: getTimeEntrys, isLoading: isLoadingEntries } = useGetTimeEntrys();
-  const { mutate: getTimeEntryById } = useGetTimeEntrys(); // используем тот же хук с id
   const { mutate: getCalendarHolidays } = useGetHolidayTimeEntrys();
-  const { mutate: editTimeEntry, isLoading: isEditing } = useEditTimeEntry();
-  const { mutateAsync: deleteTimeEntry, isLoading: isDeletingMutation } = useDeleteTimeEntry();
+  const { mutateAsync: deleteTimeEntry } = useDeleteTimeEntry();
   const { mutate: getInternalTasks } = useGetInterbalTasks();
   const { mutate: getLeaves } = useGetLeaves();
-  const { mutate: getClientProjects } = useGetCLientProjecs();
-  const { mutate: getProjectTasks } = useGetProjectTasks();
-  const { mutate: getClients } = useGetCountryClients();
-  const time_entry = useUserStore((state) => state.time_entry);
-  const setTimeEntry = useUserStore((state) => state.setTimeEntry);
 
   const time_entries = useUserStore((state) => state.time_entries);
   const internal_tasks = useUserStore((state) => state.internal_tasks);
   const leaves = useUserStore((state) => state.leaves);
-  const selectedCountry = useUserStore((state) => state.selectedCountry);
-  const clients = selectedCountry?.clients ?? [];
-  const countriesFromStore = useUserStore((state) => state.countries);
 
   const [isLoadingInternalTasks, setIsLoadingInternalTasks] = useState(false);
   const [isLoadingLeaves, setIsLoadingLeaves] = useState(false);
 
   const safeTimeEntries = Array.isArray(time_entries) ? time_entries : [];
 
-  // Загружаем страны один раз при монтировании и сохраняем в локальное состояние
-  useEffect(() => {
-    if (countriesFromStore && Array.isArray(countriesFromStore) && countriesFromStore.length > 0) {
-      const options = countriesFromStore
-        .filter(country => country && country.id != null && country.name)
-        .map((country: any) => ({
-          value: String(country.id),
-          label: country.name,
-          code: country.code || ''
-        }));
-      setCountryOptions(options);
-    }
-  }, [countriesFromStore]);
-
-  // Опции клиентов для редактирования
-  const allClientOptions = useMemo(() => {
-    if (!clients || !Array.isArray(clients)) return [];
-    return clients
-      .filter(client => client && client.id != null && client.name)
-      .map(client => ({
-        value: String(client.id),
-        label: client.name
-      }));
-  }, [clients]);
-
-  const editClientOptions = useMemo(() => {
-    if (!editClientSearch.trim()) return allClientOptions;
-    const searchLower = editClientSearch.toLowerCase();
-    return allClientOptions.filter(option =>
-      option.label.toLowerCase().includes(searchLower)
-    );
-  }, [allClientOptions, editClientSearch]);
-
-  const internalTaskOptions = useMemo(() => {
-    if (!internal_tasks || !Array.isArray(internal_tasks)) return [];
-    return internal_tasks
-      .filter((task: any) => task && task.id != null && task.name)
-      .map((task: any) => ({
-        value: String(task.id),
-        label: task.name || 'Unnamed Task',
-        task_type: task.task_type || ''
-      }));
-  }, [internal_tasks]);
-
-  const leaveOptions = useMemo(() => {
-    if (!leaves || !Array.isArray(leaves)) return [];
-    return leaves
-      .filter((leave: any) => leave && leave.id != null && leave.name)
-      .map((leave: any) => ({
-        value: String(leave.id),
-        label: leave.name || 'Unnamed Leave',
-        task_type: leave.task_type || ''
-      }));
-  }, [leaves]);
-
   // Загрузка внутренних задач
   useEffect(() => {
     if (!internal_tasks || internal_tasks.length === 0) {
       setIsLoadingInternalTasks(true);
       getInternalTasks(undefined, {
-        onSuccess: () => {
-          setIsLoadingInternalTasks(false);
-        },
+        onSuccess: () => setIsLoadingInternalTasks(false),
         onError: (error) => {
           console.error('Failed to load internal tasks:', error);
           setIsLoadingInternalTasks(false);
@@ -228,9 +100,7 @@ export function TimeEntryList() {
     if (!leaves || leaves.length === 0) {
       setIsLoadingLeaves(true);
       getLeaves(undefined, {
-        onSuccess: () => {
-          setIsLoadingLeaves(false);
-        },
+        onSuccess: () => setIsLoadingLeaves(false),
         onError: (error) => {
           console.error('Failed to load leaves:', error);
           setIsLoadingLeaves(false);
@@ -326,25 +196,6 @@ export function TimeEntryList() {
         onError: (error) => {
           console.error('Failed to load time entries:', error);
           toast.error('Failed to load time entries');
-          reject(error);
-        }
-      });
-    });
-  };
-
-  // Функция для загрузки одной записи по ID
-  const loadSingleTimeEntry = (entryId: string) => {
-    return new Promise((resolve, reject) => {
-      getTimeEntryById({ id: entryId }, {
-        onSuccess: (data) => {
-          console.log('Loaded single time entry:', data);
-          // Сохраняем в store
-          setTimeEntry(data);
-          resolve(data);
-        },
-        onError: (error) => {
-          console.error('Failed to load time entry:', error);
-          toast.error('Failed to load time entry');
           reject(error);
         }
       });
@@ -476,69 +327,8 @@ export function TimeEntryList() {
       }, 0);
   }, [filteredGroups, selectedEntries]);
 
-  const handleEditClientChange = (clientId: string) => {
-    setEditClient(clientId);
-    setEditProjectId('');
-    setEditTaskId('');
-    setEditProjectOptions([]);
-    setEditProjectTaskOptions([]);
-    setEditClientSearch('');
-
-    if (clientId) {
-      setIsLoadingEditProjects(true);
-      getClientProjects(clientId, {
-        onSuccess: (data: ClientWithProjects) => {
-          const options = data?.project_codes?.map(pc => ({
-            value: String(pc.id),
-            label: data.name,
-            code: pc.code,
-            project_id: pc.project
-          })) || [];
-          setEditProjectOptions(options);
-          setIsLoadingEditProjects(false);
-        },
-        onError: (error) => {
-          console.error('Failed to load projects:', error);
-          toast.error('Failed to load projects');
-          setIsLoadingEditProjects(false);
-        }
-      });
-    }
-  };
-
-  const handleEditProjectChange = (selectedCodeId: string) => {
-    setEditProjectId(selectedCodeId);
-    setEditTaskId('');
-    setEditProjectTaskOptions([]);
-
-    const selectedProjectCode = editProjectOptions.find(p => p.value === selectedCodeId);
-    const projectIdForTasks = selectedProjectCode?.project_id;
-
-    if (projectIdForTasks) {
-      setIsLoadingEditTasks(true);
-      getProjectTasks(String(projectIdForTasks), {
-        onSuccess: (data: any) => {
-          const tasks = data?.tasks?.map((task: any) => ({
-            value: String(task.id),
-            label: task.name || 'Unnamed Task',
-            task_type: task.task_type || ''
-          })) || [];
-          setEditProjectTaskOptions(tasks);
-          setIsLoadingEditTasks(false);
-        },
-        onError: (error) => {
-          console.error('Failed to load tasks:', error);
-          toast.error('Failed to load tasks');
-          setIsLoadingEditTasks(false);
-        }
-      });
-    }
-  };
-
-  const handleEdit = async (group: GroupedTimeEntry) => {
+  const handleEdit = (group: GroupedTimeEntry) => {
     const entryId = group.entryIds[0];
-
-    // Находим запись в уже загруженных time_entries по ID
     const fullEntry = safeTimeEntries.find(entry => String(entry.id) === entryId);
 
     if (!fullEntry) {
@@ -547,227 +337,21 @@ export function TimeEntryList() {
       return;
     }
 
-    console.log('Found entry in time_entries:', fullEntry);
-
-    const matchedInternalTask = internalTaskOptions.find(t =>
-      t.label === fullEntry.task || t.label === group.taskName
-    );
-    const matchedLeave = leaveOptions.find(l =>
-      l.label === fullEntry.task || l.label === group.taskName
-    );
-
     setEditingEntry({
       ...group,
       id: entryId,
       date: fullEntry.date || group.startDate,
-      task_id: fullEntry.task
+      task_id: fullEntry.task,
+      hours: fullEntry.hours || group.hours,
+      description: fullEntry.description || group.description,
+      task_type: fullEntry.task_type || group.task_type,
+      weekends_included: fullEntry.weekends_included || group.weekends_included,
+      client: fullEntry.client || group.client,
+      country: fullEntry.country || group.country,
+      project_code: fullEntry.project_code || group.projectCode,
+      task: fullEntry.task || group.task,
+      country_name: fullEntry.country_name || group.country_name
     });
-    setEditDate(fullEntry.date || group.startDate);
-    setEditHours(fullEntry.hours?.toString() || group.hours.toString());
-    setEditDescription(fullEntry.description || group.description);
-    setEditTaskType(fullEntry.task_type || group.task_type || '');
-    setEditWeekendsIncluded(fullEntry.weekends_included || group.weekends_included);
-    setEditClientSearch('');
-    setEditTask('');
-
-    // Internal
-    setEditTaskId(matchedInternalTask ? matchedInternalTask.value : '');
-
-    // Vacation
-    setEditLeaveTypeId(matchedLeave ? matchedLeave.value : '');
-
-    if (group.type === 'external') {
-      // Находим страну по названию или коду из полных данных
-      const matchedCountry = countryOptions.find(c =>
-        c.label === String(fullEntry.country_name) ||
-        c.code === String(fullEntry.country) ||
-        c.value === String(fullEntry.country)
-      );
-
-      const countryId = matchedCountry ? matchedCountry.value : '';
-      console.log('Found country:', matchedCountry, 'for country:', fullEntry.country);
-
-      setEditCountry(countryId);
-      setEditClient('');
-      setEditProjectId('');
-      setEditProjectOptions([]);
-      setEditProjectTaskOptions([]);
-
-      if (countryId) {
-        setIsLoadingEditClients(true);
-        // Загружаем клиентов для выбранной страны
-        getClients(countryId, {
-          onSuccess: (clientsData) => {
-            setIsLoadingEditClients(false);
-
-            const clientsList = Array.isArray(clientsData) ? clientsData : [];
-            console.log('Loaded clients:', clientsList);
-
-            // Ищем клиента по имени
-            const matchedClient = clientsList.find((c: any) => {
-              if (c.name === String(fullEntry.client)) return true;
-              if (String(c.id) === String(fullEntry.client)) return true;
-              return false;
-            });
-
-            console.log('Found client:', matchedClient);
-
-            if (matchedClient) {
-              setEditClient(String(matchedClient.id));
-
-              // Загружаем проекты для клиента
-              setIsLoadingEditProjects(true);
-              getClientProjects(String(matchedClient.id), {
-                onSuccess: (data: ClientWithProjects) => {
-                  const options = data?.project_codes?.map(pc => ({
-                    value: String(pc.id),
-                    label: data.name,
-                    code: pc.code,
-                    project_id: pc.project
-                  })) || [];
-                  setEditProjectOptions(options);
-                  setIsLoadingEditProjects(false);
-
-                  console.log('Loaded projects:', options);
-
-                  // Ищем проект по коду
-                  const matchedProject = options.find(p => {
-                    if (p.code === String(fullEntry.project_code)) return true;
-                    return false;
-                  });
-
-                  console.log('Found project:', matchedProject);
-
-                  if (matchedProject) {
-                    setEditProjectId(matchedProject.value);
-
-                    // Загружаем задачи для проекта
-                    if (matchedProject.project_id) {
-                      setIsLoadingEditTasks(true);
-                      getProjectTasks(String(matchedProject.project_id), {
-                        onSuccess: (taskData: any) => {
-                          const tasks = taskData?.tasks?.map((task: any) => ({
-                            value: String(task.id),
-                            label: task.name || 'Unnamed Task',
-                            task_type: task.task_type || ''
-                          })) || [];
-                          setEditProjectTaskOptions(tasks);
-                          setIsLoadingEditTasks(false);
-
-                          console.log('Loaded tasks:', tasks);
-
-                          // Ищем задачу по названию
-                          const matchedTask = tasks.find((t: any) => {
-                            if (t.label === String(fullEntry.task)) return true;
-                            return false;
-                          });
-
-                          console.log('Found task:', matchedTask);
-                          setEditTaskId(matchedTask ? matchedTask.value : '');
-                        },
-                        onError: () => setIsLoadingEditTasks(false)
-                      });
-                    }
-                  }
-                },
-                onError: () => setIsLoadingEditProjects(false)
-              });
-            }
-          },
-          onError: () => setIsLoadingEditClients(false)
-        });
-      }
-    } else {
-      setEditCountry('');
-      setEditClient('');
-      setEditProjectId('');
-      setEditProjectOptions([]);
-      setEditProjectTaskOptions([]);
-    }
-  };
-
-  const handleUpdate = () => {
-    if (!editingEntry) return;
-
-    const hoursNum = parseFloat(editHours);
-    if (isNaN(hoursNum) || hoursNum < 0.5 || hoursNum > 24) {
-      toast.error('Hours must be between 0.5 and 24');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    const editData: any = {
-      date: editDate,
-      hours: hoursNum,
-      description: editDescription,
-    };
-
-    if (editingEntry?.type === 'internal' && editTaskId) {
-      editData.task = parseInt(editTaskId);
-      const selectedTask = internalTaskOptions.find(t => t.value === editTaskId);
-      if (selectedTask?.task_type) {
-        editData.task_type = selectedTask.task_type;
-      }
-    } else if (editingEntry?.type === 'vacation' && editLeaveTypeId) {
-      editData.task = parseInt(editLeaveTypeId);
-      const selectedLeave = leaveOptions.find(l => l.value === editLeaveTypeId);
-      if (selectedLeave?.task_type) {
-        editData.task_type = selectedLeave.task_type;
-      }
-    } else if (editingEntry?.type === 'external') {
-      if (editTaskId) {
-        editData.task = parseInt(editTaskId);
-        const selectedTask = editProjectTaskOptions.find(t => t.value === editTaskId);
-        if (selectedTask?.task_type) {
-          editData.task_type = selectedTask.task_type;
-        }
-      }
-      if (editCountry && editCountry !== editingEntry.country) {
-        editData.country = parseInt(editCountry);
-      }
-      if (editClient && editClient !== editingEntry.client) {
-        editData.client = parseInt(editClient);
-      }
-      if (editProjectId && editProjectId !== editingEntry.projectId) {
-        editData.project_code = parseInt(editProjectId);
-      }
-    }
-
-    if (editWeekendsIncluded !== editingEntry.weekends_included) {
-      editData.weekends_included = editWeekendsIncluded;
-    }
-
-    editTimeEntry(
-      {
-        day_id: editingEntry.id,
-        body: editData,
-      },
-      {
-        onSuccess: (data) => {
-          console.log('Entry updated successfully:', data);
-          updateEntry(editingEntry.id, {
-            projectId: editProjectId,
-            projectName: editingEntry.projectName,
-            projectColor: editingEntry.projectColor,
-            projectCode: editingEntry.projectCode,
-            description: editDescription,
-            date: editDate,
-            hours: hoursNum,
-          });
-          toast.success('Entry updated successfully');
-          setEditingEntry(null);
-          loadTimeEntries();
-        },
-        onError: (error: any) => {
-          console.error('Failed to update entry:', error);
-          toast.error(error?.message || 'Failed to update entry. Please try again.');
-        },
-        onSettled: () => {
-          setIsSubmitting(false);
-        }
-      }
-    );
   };
 
   const handleDeleteSingle = (entryId: string) => {
@@ -779,22 +363,11 @@ export function TimeEntryList() {
     if (!entryToDelete) return;
     setIsDeleting(true);
     try {
-      await new Promise((resolve, reject) => {
-        deleteTimeEntry(entryToDelete.id, {
-          onSuccess: (data) => {
-            console.log('Entry deleted successfully:', data);
-            deleteEntry(entryToDelete.id);
-            if (selectedEntries.includes(entryToDelete.id)) {
-              setSelectedEntries(selectedEntries.filter(id => id !== entryToDelete.id));
-            }
-            resolve(data);
-          },
-          onError: (error) => {
-            console.error('Failed to delete entry:', error);
-            reject(error);
-          }
-        });
-      });
+      await deleteTimeEntry(entryToDelete.id);
+      deleteEntry(entryToDelete.id);
+      if (selectedEntries.includes(entryToDelete.id)) {
+        setSelectedEntries(selectedEntries.filter(id => id !== entryToDelete.id));
+      }
       toast.success('Entry deleted successfully');
       setEntryToDelete(null);
       setDeleteDialogOpen(false);
@@ -822,19 +395,15 @@ export function TimeEntryList() {
       return;
     }
     setIsBulkDeleting(true);
-    setDeleteErrors([]);
     try {
       const results = await Promise.allSettled(
         selectedEntries.map(id => deleteTimeEntry(id))
       );
       const successful: string[] = [];
-      const failed: { id: string; error: any }[] = [];
       results.forEach((result, index) => {
         const id = selectedEntries[index];
         if (result.status === 'fulfilled') {
           successful.push(id);
-        } else {
-          failed.push({ id, error: result.reason });
         }
       });
       if (successful.length > 0) {
@@ -842,9 +411,8 @@ export function TimeEntryList() {
         setSelectedEntries([]);
         toast.success(`Deleted ${successful.length} of ${selectedEntries.length}`);
       }
-      if (failed.length > 0) {
-        toast.error(`Failed to delete ${failed.length} entries`);
-        setDeleteErrors(failed.map(f => `ID ${f.id}`));
+      if (successful.length < selectedEntries.length) {
+        toast.error(`Failed to delete ${selectedEntries.length - successful.length} entries`);
       }
       await loadTimeEntries();
     } catch (error) {
@@ -930,7 +498,7 @@ export function TimeEntryList() {
               <CardDescription>
                 {filteredGroups.length} groups · {totalHours.toFixed(1)} total hours
                 {safeTimeEntries && ` · ${safeTimeEntries.length} total entries in database`}
-                {(isLoadingEntries || isSubmitting || isDeleting || isBulkDeleting || isLoadingSingleEntry) && ' · Loading...'}
+                {(isLoadingEntries || isSubmitting || isDeleting || isBulkDeleting) && ' · Loading...'}
               </CardDescription>
             </div>
             {selectedEntries.length > 0 && (
@@ -1069,7 +637,7 @@ export function TimeEntryList() {
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => handleEdit(group)}
-                                      disabled={isSubmitting || isDeleting || isBulkDeleting || isLoadingSingleEntry}
+                                      disabled={isSubmitting || isDeleting || isBulkDeleting}
                                       className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
                                     >
                                       <Edit className="w-4 h-4" />
@@ -1121,31 +689,12 @@ export function TimeEntryList() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                                    onClick={() => {
-                                      const entry = {
-                                        ...group,
-                                        id: group.entryIds[idx],
-                                        date: date,
-                                        task_id: group.task_id
-                                      };
-                                      setEditingEntry(entry);
-                                      setEditProjectId(group.projectId);
-                                      setEditDescription(group.description);
-                                      setEditDate(date);
-                                      setEditHours(group.hours.toString());
-                                      setEditTaskType(group.task_type || '');
-                                      setEditTask(group.task || '');
-                                      handleEdit({
-                                        ...group,
-                                        id: group.entryIds[idx],
-                                        startDate: date,
-                                        entryIds: [group.entryIds[idx]],
-                                        task_id: group.task_id
-                                      });
-                                      setEditCountry(group.country || '');
-                                      setEditClient(group.client || '');
-                                      setEditWeekendsIncluded(group.weekends_included);
-                                    }}
+                                    onClick={() => handleEdit({
+                                      ...group,
+                                      id: group.entryIds[idx],
+                                      startDate: date,
+                                      entryIds: [group.entryIds[idx]]
+                                    })}
                                     disabled={isSubmitting || isDeleting || isBulkDeleting}
                                   >
                                     <Edit className="w-3 h-3" />
@@ -1200,403 +749,25 @@ export function TimeEntryList() {
         </CardContent>
       </Card>
 
-      {/* Диалог редактирования */}
-      <Dialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Edit Time Entry</DialogTitle>
-            <DialogDescription>
-              Update the details of your time entry. Click save when you're done.
-            </DialogDescription>
-          </DialogHeader>
+      <EditTimeEntryDialog
+        open={!!editingEntry}
+        editingEntry={editingEntry}
+        onClose={() => setEditingEntry(null)}
+        onSuccess={loadTimeEntries}
+        updateEntry={updateEntry}
+      />
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Entry Type</Label>
-              <div className="flex items-center gap-2 p-2 border rounded-md bg-slate-50">
-                {getEntryIcon(editingEntry?.task_type || editingEntry?.type || '')}
-                <span className="capitalize font-medium">
-                  {editingEntry?.type || editingEntry?.task_type || 'Unknown'}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-date">Date *</Label>
-              <Input
-                id="edit-date"
-                type="date"
-                value={editDate}
-                onChange={(e) => setEditDate(e.target.value)}
-                disabled={isSubmitting}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-hours">Hours *</Label>
-              <Input
-                id="edit-hours"
-                type="number"
-                step="0.5"
-                min="0.5"
-                max="24"
-                value={editHours}
-                onChange={(e) => setEditHours(e.target.value)}
-                disabled={isSubmitting}
-                required
-              />
-              <p className="text-xs text-slate-500">Min: 0.5, Max: 24</p>
-            </div>
-
-            {/* EXTERNAL БЛОК */}
-            {editingEntry?.type === 'external' && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-country">Projects Country *</Label>
-                  <Select
-                    value={editCountry}
-                    onValueChange={(value) => {
-                      setEditCountry(value);
-                      setEditClient('');
-                      setEditProjectId('');
-                      setEditTaskId('');
-                      setEditProjectOptions([]);
-                      setEditProjectTaskOptions([]);
-                      setEditClientSearch(''); // Сбрасываем поиск при смене страны
-                      setIsLoadingEditClients(true);
-                      getClients(value, {
-                        onSuccess: () => setIsLoadingEditClients(false),
-                        onError: () => setIsLoadingEditClients(false),
-                      });
-                    }}
-                    disabled={isSubmitting || countryOptions.length === 0}
-                  >
-                    <SelectTrigger id="edit-country">
-                      <SelectValue placeholder={
-                        countryOptions.length === 0
-                          ? "Loading countries..."
-                          : "Select country"
-                      } />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {countryOptions.map(countryOption => (
-                        <SelectItem key={countryOption.value} value={countryOption.value}>
-                          {countryOption.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-client">Client *</Label>
-                  <div className="relative">
-                    <Select
-                      key={editCountry || 'no-country'} // Ключ на основе страны для пересоздания
-                      value={editClient}
-                      onValueChange={handleEditClientChange}
-                      disabled={!editCountry || isLoadingEditClients || isSubmitting}
-                    >
-                      <SelectTrigger id="edit-client" className="w-full">
-                        <SelectValue placeholder={
-                          !editCountry
-                            ? "Select country first"
-                            : isLoadingEditClients
-                              ? "Loading clients..."
-                              : allClientOptions.length === 0
-                                ? "No clients available"
-                                : "Select client"
-                        } />
-                      </SelectTrigger>
-                      <SelectContent className="w-full">
-                        {/* Фиксированная высота и скролл для всего контента */}
-                        <div className="max-h-[300px] overflow-y-auto">
-                          {/* Строка поиска - sticky */}
-                          <div className="sticky top-0 bg-white z-10 p-2 border-b">
-                            <div className="relative">
-                              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                              <Input
-                                placeholder="Search client..."
-                                value={editClientSearch}
-                                onChange={(e) => setEditClientSearch(e.target.value)}
-                                className="pl-8 pr-8 h-8 text-sm"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              {editClientSearch && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditClientSearch('');
-                                  }}
-                                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                                >
-                                  <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Список клиентов с ограничением высоты */}
-                          <div className="max-h-[200px] overflow-y-auto">
-                            {isLoadingEditClients ? (
-                              <div className="p-4 text-center text-gray-500 text-sm">
-                                Loading clients...
-                              </div>
-                            ) : editClientOptions.length === 0 ? (
-                              <div className="p-4 text-center text-gray-500 text-sm">
-                                {editClientSearch
-                                  ? `No clients found for "${editClientSearch}"`
-                                  : "No clients available"}
-                              </div>
-                            ) : (
-                              editClientOptions.map(clientOption => (
-                                <SelectItem key={clientOption.value} value={clientOption.value}>
-                                  <span className="font-medium">{clientOption.label}</span>
-                                </SelectItem>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-project">Projects code *</Label>
-                  <Select
-                    value={editProjectId}
-                    onValueChange={handleEditProjectChange}
-                    disabled={!editClient || editProjectOptions.length === 0 || isLoadingEditProjects || isSubmitting}
-                  >
-                    <SelectTrigger id="edit-project">
-                      {isLoadingEditProjects ? (
-                        <div className="flex items-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                          Loading projects...
-                        </div>
-                      ) : (
-                        <SelectValue placeholder={!editClient ? "Select client first" : editProjectOptions.length === 0 ? "No projects available" : "Select project"} />
-                      )}
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px] overflow-y-auto">
-                      {editProjectOptions.map(projectOption => (
-                        <SelectItem key={projectOption.value} value={projectOption.value}>
-                          <div className="flex flex-col py-1">
-                            <div className="flex items-center gap-2">
-                              {projectOption.code && (
-                                <code className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                                  {projectOption.code}
-                                </code>
-                              )}
-                              <span className="font-medium">{projectOption.label}</span>
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-task">Task *</Label>
-                  <Select
-                    value={editTaskId}
-                    onValueChange={(value) => {
-                      setEditTaskId(value);
-                      const selectedTask = editProjectTaskOptions.find(t => t.value === value);
-                      if (selectedTask?.task_type) {
-                        setEditTaskType(selectedTask.task_type);
-                      }
-                    }}
-                    disabled={!editProjectId || editProjectTaskOptions.length === 0 || isLoadingEditTasks || isSubmitting}
-                  >
-                    <SelectTrigger id="edit-task" className="w-full">
-                      {isLoadingEditTasks ? (
-                        <div className="flex items-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                          Loading tasks...
-                        </div>
-                      ) : (
-                        <div className="flex items-center">
-                          <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
-                          <SelectValue placeholder={!editProjectId ? "Select project first" : editProjectTaskOptions.length === 0 ? "No tasks available" : "Select task"} />
-                        </div>
-                      )}
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px] overflow-y-auto">
-                      {editProjectTaskOptions.map(taskOption => (
-                        <SelectItem key={taskOption.value} value={taskOption.value}>
-                          <span className="font-medium">{taskOption.label}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-
-            {/* INTERNAL БЛОК */}
-            {editingEntry?.type === 'internal' && (
-              <div className="space-y-2">
-                <Label>Task *</Label>
-                <Select
-                  value={editTaskId || (editingEntry?.task_id ? String(editingEntry.task_id) : '')}
-                  onValueChange={(value) => {
-                    setEditTaskId(value);
-                    const selectedTask = internalTaskOptions.find(t => t.value === value);
-                    if (selectedTask?.task_type) {
-                      setEditTaskType(selectedTask.task_type);
-                    }
-                  }}
-                  disabled={isSubmitting || isLoadingInternalTasks}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a task" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {internalTaskOptions.map(taskOption => (
-                      <SelectItem key={taskOption.value} value={taskOption.value}>
-                        {taskOption.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* VACATIONS БЛОК */}
-            {editingEntry?.type === 'vacation' && (
-              <div className="space-y-2">
-                <Label htmlFor="edit-leave-type">Leave Type *</Label>
-                <Select
-                  value={editLeaveTypeId || (editingEntry?.leave_id ? String(editingEntry.leave_id) : '')}
-                  onValueChange={(value) => {
-                    setEditLeaveTypeId(value);
-                    const selectedLeave = leaveOptions.find(l => l.value === value);
-                    if (selectedLeave?.task_type) {
-                      setEditTaskType(selectedLeave.task_type);
-                    }
-                  }}
-                  disabled={isSubmitting || isLoadingLeaves || leaveOptions.length === 0}
-                >
-                  <SelectTrigger id="edit-leave-type" className="w-full">
-                    {isLoadingLeaves ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                        Loading leave types...
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <ListTodo className="w-4 h-4 mr-2 text-gray-400" />
-                        <SelectValue placeholder={leaveOptions.length === 0 ? "No leave types available" : "Select leave type"} />
-                      </div>
-                    )}
-                  </SelectTrigger>
-                  <SelectContent>
-                    {leaveOptions.map(leaveOption => (
-                      <SelectItem key={leaveOption.value} value={leaveOption.value}>
-                        <span className="font-medium">{leaveOption.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description *</Label>
-              <Textarea
-                id="edit-description"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                rows={3}
-                disabled={isSubmitting}
-                required
-              />
-            </div>
-
-            {/* Weekends checkbox */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="edit-weekends"
-                checked={editWeekendsIncluded}
-                onCheckedChange={(checked) => setEditWeekendsIncluded(checked as boolean)}
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="edit-weekends" className="text-sm font-normal">
-                Include weekends
-              </Label>
-            </div>
-          </div>
-
-          <DialogFooter style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button
-              variant="outline"
-              onClick={() => setEditingEntry(null)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpdate}
-              style={{ backgroundColor: '#1F4E78' }}
-              disabled={isSubmitting || !editDate || !editHours || !editDescription}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Диалог подтверждения одиночного удаления */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Time Entry</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this time entry? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              disabled={isDeleting}
-              className="bg-red-500 hover:bg-red-600"
-              style={{ backgroundColor: '#EF4444' }}
-            >
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Диалог массового удаления */}
-      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Selected Entries</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedEntries.length} selected entries? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmBulkDelete}
-              disabled={isBulkDeleting}
-              className="bg-red-500 hover:bg-red-600"
-              style={{ backgroundColor: '#EF4444' }}
-            >
-              {isBulkDeleting ? 'Deleting...' : 'Delete All'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmationDialogs
+        deleteDialogOpen={deleteDialogOpen}
+        setDeleteDialogOpen={setDeleteDialogOpen}
+        bulkDeleteDialogOpen={bulkDeleteDialogOpen}
+        setBulkDeleteDialogOpen={setBulkDeleteDialogOpen}
+        selectedEntriesCount={selectedEntries.length}
+        isDeleting={isDeleting}
+        isBulkDeleting={isBulkDeleting}
+        onConfirmDelete={confirmDelete}
+        onConfirmBulkDelete={confirmBulkDelete}
+      />
     </>
   );
 }
