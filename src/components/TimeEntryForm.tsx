@@ -863,6 +863,7 @@ export function TimeEntryForm() {
                             onChange={(e) => setClientSearch(e.target.value)}
                             className="pl-8 pr-8 h-8 text-sm"
                             onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
                           />
                           {clientSearch && (
                             <button

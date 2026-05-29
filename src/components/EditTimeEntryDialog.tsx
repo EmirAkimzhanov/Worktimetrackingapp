@@ -630,6 +630,8 @@ export function EditTimeEntryDialog({
                                                 className="w-full"
                                                 position="popper"
                                                 sideOffset={5}
+                                                onCloseAutoFocus={(e) => e.preventDefault()}
+                                                onEscapeKeyDown={(e) => e.stopPropagation()}
                                             >
                                                 <div className="flex flex-col" style={{ height: '320px' }}>
                                                     <div className="sticky top-0 bg-white z-20 p-2 border-b shadow-sm flex-shrink-0">
@@ -640,6 +642,8 @@ export function EditTimeEntryDialog({
                                                                 onChange={(e) => setEditClientSearch(e.target.value)}
                                                                 className="pl-8 pr-8 h-8 text-sm"
                                                                 onClick={(e) => e.stopPropagation()}
+                                                                onKeyDown={(e) => e.stopPropagation()}
+
                                                             />
                                                             {editClientSearch && (
                                                                 <button
@@ -716,7 +720,7 @@ export function EditTimeEntryDialog({
                                 </div>
 
                                 {/* Task */}
-                                <div className="space-y-2">
+                                <div className="space-y-2" >
                                     <Label htmlFor="edit-task">Task *</Label>
                                     <Select
                                         value={editTaskId}
@@ -742,7 +746,7 @@ export function EditTimeEntryDialog({
                                                 </div>
                                             )}
                                         </SelectTrigger>
-                                        <SelectContent className="max-h-[300px] overflow-y-auto">
+                                        <SelectContent className="max-h-[300px] overflow-y-auto" style={{ height: '200px' }}>
                                             {editProjectTaskOptions.map(taskOption => (
                                                 <SelectItem key={taskOption.value} value={taskOption.value}>
                                                     <span className="font-medium">{taskOption.label}</span>
