@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, getWorkingWeekends, sendCalendar, sendLetter, sendReminder, sendTimeEntry } from "../services/timeEntry";
+import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, getWorkingWeekends, sendCalendar, sendLetter, sendReminder, sendTimeEntry, getTimeEntriesStats } from "../services/timeEntry";
 import { EditDate, LetterBody, ReminderBody, TimeBody } from '../types/timeEntrys';
 import { useUserStore } from '../store/UsersStore';
 import { CalendarEvent } from '../types/calendar';
@@ -10,8 +10,10 @@ import { toast } from 'sonner';
 let timeEntriesCache: { data: any; timestamp: number } | null = null;
 let calendarCache: { data: any; timestamp: number } | null = null;
 let holidayCalendarCache: { data: any; timestamp: number } | null = null;
+let timeEntriesStatsCache: { data: any; timestamp: number; year: string; month: string } | null = null;
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
+const STATS_CACHE_DURATION = 5 * 60 * 1000; // 5 минут для статистики
 
 // Функции очистки кэша
 const clearTimeEntriesCache = () => {
@@ -29,10 +31,16 @@ const clearHolidayCalendarCache = () => {
     console.log('Holiday calendar cache cleared');
 };
 
+const clearTimeEntriesStatsCache = () => {
+    timeEntriesStatsCache = null;
+    console.log('Time entries stats cache cleared');
+};
+
 const clearAllTimeCaches = () => {
     clearTimeEntriesCache();
     clearCalendarCache();
     clearHolidayCalendarCache();
+    clearTimeEntriesStatsCache();
     console.log('All time-related caches cleared');
 };
 
@@ -63,6 +71,7 @@ const getCachedHolidayCalendar = () => {
     }
     return null;
 };
+
 let workingWeekendsCache: { data: any; timestamp: number } | null = null;
 
 const clearWorkingWeekendsCache = () => {
@@ -89,6 +98,7 @@ export const useSendTimeEntrys = () => {
             const result = await sendTimeEntry(body, isSingleDate);
             // Очищаем кэш при создании новой записи времени
             clearTimeEntriesCache();
+            clearTimeEntriesStatsCache(); // Очищаем кэш статистики
             return result;
         },
         onSuccess: (data) => {
@@ -99,6 +109,7 @@ export const useSendTimeEntrys = () => {
         },
     });
 };
+
 export const useGetTimeEntrys = () => {
     const setTimeEntries = useUserStore((state) => state.setTimeEntries);
 
@@ -128,15 +139,13 @@ export const useGetTimeEntrys = () => {
     });
 };
 
-
-
-
 export const useEditTimeEntry = () => {
     return useMutation({
         mutationFn: async ({ day_id, body }: { day_id: string, body: EditDate }) => {
             const result = await editTimeEntry(day_id, body);
             // Очищаем кэш при редактировании
             clearTimeEntriesCache();
+            clearTimeEntriesStatsCache(); // Очищаем кэш статистики
             return result;
         },
         onSuccess: (data) => {
@@ -154,6 +163,7 @@ export const useDeleteTimeEntry = () => {
             const result = await deleteTimeEntry(day_id);
             // Очищаем кэш при удалении
             clearTimeEntriesCache();
+            clearTimeEntriesStatsCache(); // Очищаем кэш статистики
             return result;
         },
         onSuccess: (data) => {
@@ -191,6 +201,7 @@ export const useGetCalendar = () => {
         },
     });
 };
+
 export const useGetWorkingWeekends = () => {
     const setWorkingWeekends = useUserStore((state) => state.setWorkingWeekends);
 
@@ -246,7 +257,6 @@ export const useSendCalendar = () => {
     });
 };
 
-// mutationFn: async ({ body, day_id }: { body: CalendarEvent, day_id: string }) => {
 export const useEditCalendar = () => {
     const getCalendarMutation = useGetCalendar();
 
@@ -257,7 +267,7 @@ export const useEditCalendar = () => {
             return result;
         },
         onSuccess: async () => {
-            await getCalendarMutation.mutateAsync(true); // 💥 force refresh
+            await getCalendarMutation.mutateAsync(true);
         },
         onError: (error: any) => {
             let errorMessage = error.message;
@@ -276,7 +286,6 @@ export const useEditCalendar = () => {
 
             toast(errorMessage);
         },
-
     });
 };
 
@@ -284,7 +293,6 @@ export const useDeleteCalendar = () => {
     return useMutation({
         mutationFn: async (day_id: string) => {
             const result = await deleteCalendar(day_id);
-            // Очищаем кэш календаря при удалении
             clearCalendarCache();
             return result;
         },
@@ -325,10 +333,9 @@ export const useSendReminder = () => {
     return useMutation({
         mutationFn: async (body: ReminderBody) => {
             const result = await sendReminder(body);
-            // Отправка напоминания не требует очистки кэша
             return result;
         },
-        onSuccess: (data) => {
+        onSuccess: () => {
             console.log('Reminder sent');
         },
         onError: (error) => {
@@ -341,10 +348,9 @@ export const useSendLetter = () => {
     return useMutation({
         mutationFn: async (letterBody: LetterBody) => {
             const result = await sendLetter(letterBody);
-            // Отправка письма не требует очистки кэша
             return result;
         },
-        onSuccess: (data) => {
+        onSuccess: () => {
             console.log('Letter sent');
         },
         onError: (error) => {
@@ -353,12 +359,47 @@ export const useSendLetter = () => {
     });
 };
 
+// ========== НОВЫЙ ХУК ДЛЯ СТАТИСТИКИ TIME ENTRIES ==========
+
+export const useGetTimeEntriesStats = () => {
+    const setTimeEntriesStats = useUserStore((state) => state.setTimeEntriesStats);
+
+    return useMutation({
+        mutationFn: async ({ year, month, forceRefresh }: { year: string; month: string; forceRefresh?: boolean }) => {
+            // Проверяем кэш
+            if (!forceRefresh && timeEntriesStatsCache &&
+                timeEntriesStatsCache.year === year &&
+                timeEntriesStatsCache.month === month) {
+                const isCacheValid = Date.now() - timeEntriesStatsCache.timestamp < STATS_CACHE_DURATION;
+                if (isCacheValid) {
+                    console.log('Returning cached stats data');
+                    return timeEntriesStatsCache.data;
+                }
+            }
+
+            console.log(forceRefresh ? 'Force refreshing stats' : 'Fetching fresh stats');
+            // Используем существующую функцию из сервиса (которая использует вашу константу api)
+            const data = await getTimeEntriesStats(year, month);
+            timeEntriesStatsCache = { data, timestamp: Date.now(), year, month };
+            return data;
+        },
+        onSuccess: (data) => {
+            setTimeEntriesStats(data);
+            console.log('Time entries stats loaded:', data);
+        },
+        onError: (error) => {
+            console.error("Get time entries stats error:", error);
+        },
+    });
+};
+
 // ========== ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ==========
 
 export const timeCacheUtils = {
-    clearTimeEntriesCache: clearTimeEntriesCache,
-    clearCalendarCache: clearCalendarCache,
-    clearHolidayCalendarCache: clearHolidayCalendarCache,
+    clearTimeEntriesCache,
+    clearCalendarCache,
+    clearHolidayCalendarCache,
+    clearTimeEntriesStatsCache,
     clearAll: clearAllTimeCaches,
 
     isTimeEntriesCacheValid: () => {
@@ -379,6 +420,15 @@ export const timeCacheUtils = {
         return (now - holidayCalendarCache.timestamp) < CACHE_DURATION;
     },
 
+    isTimeEntriesStatsCacheValid: (year?: string, month?: string) => {
+        if (!timeEntriesStatsCache) return false;
+        if (year && month && (timeEntriesStatsCache.year !== year || timeEntriesStatsCache.month !== month)) {
+            return false;
+        }
+        const now = Date.now();
+        return (now - timeEntriesStatsCache.timestamp) < STATS_CACHE_DURATION;
+    },
+
     getTimeEntriesCacheAge: () => {
         if (!timeEntriesCache) return null;
         const now = Date.now();
@@ -395,6 +445,12 @@ export const timeCacheUtils = {
         if (!holidayCalendarCache) return null;
         const now = Date.now();
         return Math.floor((now - holidayCalendarCache.timestamp) / 1000);
+    },
+
+    getTimeEntriesStatsCacheAge: () => {
+        if (!timeEntriesStatsCache) return null;
+        const now = Date.now();
+        return Math.floor((now - timeEntriesStatsCache.timestamp) / 1000);
     },
 
     getTimeEntriesCacheAgeInMinutes: () => {
@@ -415,6 +471,12 @@ export const timeCacheUtils = {
         return Math.floor((now - holidayCalendarCache.timestamp) / 60000);
     },
 
+    getTimeEntriesStatsCacheAgeInMinutes: () => {
+        if (!timeEntriesStatsCache) return null;
+        const now = Date.now();
+        return Math.floor((now - timeEntriesStatsCache.timestamp) / 60000);
+    },
+
     getTimeEntriesCacheData: () => {
         return timeEntriesCache ? timeEntriesCache.data : null;
     },
@@ -425,6 +487,10 @@ export const timeCacheUtils = {
 
     getHolidayCalendarCacheData: () => {
         return holidayCalendarCache ? holidayCalendarCache.data : null;
+    },
+
+    getTimeEntriesStatsCacheData: () => {
+        return timeEntriesStatsCache ? timeEntriesStatsCache.data : null;
     },
 
     refreshTimeEntriesCache: async () => {
@@ -445,6 +511,13 @@ export const timeCacheUtils = {
         const data = await getHolidayCalendar();
         holidayCalendarCache = { data, timestamp: Date.now() };
         console.log('Holiday calendar cache refreshed');
+        return data;
+    },
+
+    refreshTimeEntriesStatsCache: async (year: string, month: string) => {
+        const data = await getTimeEntriesStats(year, month);
+        timeEntriesStatsCache = { data, timestamp: Date.now(), year, month };
+        console.log('Time entries stats cache refreshed');
         return data;
     },
 
@@ -472,11 +545,22 @@ export const timeCacheUtils = {
             ageInMinutes: Math.floor((now - holidayCalendarCache.timestamp) / 60000)
         };
 
+        const statsInfo = !timeEntriesStatsCache ? { exists: false } : {
+            exists: true,
+            year: timeEntriesStatsCache.year,
+            month: timeEntriesStatsCache.month,
+            isValid: (now - timeEntriesStatsCache.timestamp) < STATS_CACHE_DURATION,
+            ageInSeconds: Math.floor((now - timeEntriesStatsCache.timestamp) / 1000),
+            ageInMinutes: Math.floor((now - timeEntriesStatsCache.timestamp) / 60000)
+        };
+
         return {
             timeEntries: timeEntriesInfo,
             calendar: calendarInfo,
             holidayCalendar: holidayInfo,
-            cacheDurationMinutes: CACHE_DURATION / 60000
+            timeEntriesStats: statsInfo,
+            cacheDurationMinutes: CACHE_DURATION / 60000,
+            statsCacheDurationMinutes: STATS_CACHE_DURATION / 60000
         };
     }
 };

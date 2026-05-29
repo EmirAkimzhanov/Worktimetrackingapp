@@ -136,6 +136,16 @@ export interface ReportsData {
   reportSummary: ReportSummary | null;
 }
 
+// Тип для статистики time entries
+export interface TimeEntriesStats {
+  total_hours: number;
+  expected_hours: number;
+  completion_rate: number;
+  worked_days: number;
+  total_working_days: number;
+  total_records: number;
+}
+
 interface User {
   id: number;
   username: string;
@@ -170,6 +180,8 @@ interface UserState {
   time_entries: TimeEntry[] | null;
 
   time_entry: TimeEntry | null;
+
+  time_entries_stats: TimeEntriesStats | null;
 
   departments: Department[] | null;
 
@@ -216,6 +228,7 @@ interface UserState {
   managers: Manager[] | null;
 
   currentMonth: string | null;
+  currentYear: string | null; // 👈 ДОБАВЛЕНО
 
   workingWeekends: WorkingWeekends[] | null;
 
@@ -238,6 +251,8 @@ interface UserState {
 
   setTimeEntry: (time_entry: TimeEntry | null) => void;
 
+  setTimeEntriesStats: (time_entries_stats: TimeEntriesStats | null) => void;
+
   setCountries: (countries: Countries) => void;
   setSelectedCountry: (country: CountryWithClients | null) => void;
 
@@ -253,6 +268,7 @@ interface UserState {
   setLeaves: (leaves: LeaveArray | null) => void;
 
   setCurrentMonth: (currentMonth: string | null) => void;
+  setCurrentYear: (currentYear: string | null) => void; // 👈 ДОБАВЛЕНО
 
   setProjectsPagination: (pagination: ProjectsPagination | null) => void;
   setUsersPagination: (pagination: UsersPagination | null) => void;
@@ -358,6 +374,7 @@ export const useUserStore = create<UserState>()(
       leaves: null,
       time_entries: null,
       time_entry: null,
+      time_entries_stats: null,
 
       managers: null,
       departments: null,
@@ -384,6 +401,7 @@ export const useUserStore = create<UserState>()(
       usersPagination: null,
       clientsPagination: null,
       currentMonth: null,
+      currentYear: null, // 👈 ДОБАВЛЕНО
       reports: {
         timeReports: null,
         projectReports: null,
@@ -425,6 +443,8 @@ export const useUserStore = create<UserState>()(
 
       setCurrentMonth: (currentMonth) => set({ currentMonth }),
 
+      setCurrentYear: (currentYear) => set({ currentYear }), // 👈 ДОБАВЛЕНО
+
       setClientProjects: (clientProjects) =>
         set({ client_projects: clientProjects }),
 
@@ -444,6 +464,7 @@ export const useUserStore = create<UserState>()(
 
       setTimeEntry: (timeEntry) => set({ time_entry: timeEntry }),
 
+      setTimeEntriesStats: (stats) => set({ time_entries_stats: stats }),
 
       setDepartments: (departments) => set({ departments }),
 
@@ -778,6 +799,7 @@ export const useUserStore = create<UserState>()(
           leaves: null,
           time_entries: null,
           time_entry: null,
+          time_entries_stats: null,
           departments: null,
           department_members: null,
           statuses: null,
@@ -801,6 +823,8 @@ export const useUserStore = create<UserState>()(
           projectsPagination: null,
           usersPagination: null,
           clientsPagination: null,
+          currentMonth: null,
+          currentYear: null, // 👈 ДОБАВЛЕНО
           reports: {
             timeReports: null,
             projectReports: null,
@@ -821,6 +845,7 @@ export const useUserStore = create<UserState>()(
         me: state.me,
         workingWeekends: state.workingWeekends,
         time_entry: state.time_entry,
+        time_entries_stats: state.time_entries_stats,
         projectsPagination: state.projectsPagination,
         managers: state.managers,
         selectedCountry: state.selectedCountry,
@@ -848,6 +873,8 @@ export const useUserStore = create<UserState>()(
         monitoring: state.monitoring,
         globalSettings: state.globalSettings,
         calendar_holidays: state.calendar_holidays,
+        currentMonth: state.currentMonth,
+        currentYear: state.currentYear, // 👈 ДОБАВЛЕНО
       }),
     },
   ),

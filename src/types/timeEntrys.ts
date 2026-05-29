@@ -78,3 +78,11 @@ export interface WorkingWeekends {
     country: number;
 }
 
+export interface TimeEntryStats {
+    total_hours: number;
+    expected_hours: number;
+    completion_rate: number;
+    worked_days: number;
+    total_working_days: number;
+    total_records: number;
+}

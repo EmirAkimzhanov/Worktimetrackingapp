@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Checkbox } from './ui/checkbox';
+import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Search, X, ListTodo, Briefcase, Plane, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
@@ -45,6 +45,7 @@ export function EditTimeEntryDialog({
     const [editCountry, setEditCountry] = useState('');
     const [editClient, setEditClient] = useState('');
     const [editWeekendsIncluded, setEditWeekendsIncluded] = useState(false);
+    const [editHolidaysIncluded, setEditHolidaysIncluded] = useState(false);
     const [editLeaveTypeId, setEditLeaveTypeId] = useState('');
 
     // Состояния для EXTERNAL блока
@@ -153,6 +154,7 @@ export function EditTimeEntryDialog({
         setEditDescription(editingEntry.description || '');
         setEditTaskType(editingEntry.task_type || '');
         setEditWeekendsIncluded(editingEntry.weekends_included || false);
+        setEditHolidaysIncluded(editingEntry.holidays_included || false);
         setEditClientSearch('');
 
         if (editingEntry.type === 'internal') {
@@ -431,6 +433,10 @@ export function EditTimeEntryDialog({
             editData.weekends_included = editWeekendsIncluded;
         }
 
+        if (editHolidaysIncluded !== editingEntry.holidays_included) {
+            editData.holidays_included = editHolidaysIncluded;
+        }
+
         editTimeEntry(
             {
                 day_id: editingEntry.id,
@@ -481,7 +487,16 @@ export function EditTimeEntryDialog({
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-
+                    {/* Entry Type - полная ширина */}
+                    <div className="space-y-2">
+                        <Label>Entry Type</Label>
+                        <div className="flex items-center gap-2 p-2 border rounded-md bg-slate-50">
+                            {getEntryIcon(editingEntry?.task_type || editingEntry?.type || '')}
+                            <span className="capitalize font-medium">
+                                {editingEntry?.type || editingEntry?.task_type || 'Unknown'}
+                            </span>
+                        </div>
+                    </div>
 
                     {/* Date и Hours - в 2 колонки */}
                     <div className="grid grid-cols-2 gap-4">
@@ -657,6 +672,7 @@ export function EditTimeEntryDialog({
                                                                     {projectOption.code}
                                                                 </code>
                                                             )}
+                                                            <span className="font-medium">{projectOption.label}</span>
                                                         </div>
                                                     </div>
                                                 </SelectItem>
@@ -779,18 +795,8 @@ export function EditTimeEntryDialog({
                         />
                     </div>
 
-                    {/* Weekends checkbox - полная ширина */}
-                    <div className="flex items-center space-x-2">
-                        <Checkbox
-                            id="edit-weekends"
-                            checked={editWeekendsIncluded}
-                            onCheckedChange={(checked) => setEditWeekendsIncluded(checked as boolean)}
-                            disabled={isSubmitting}
-                        />
-                        <Label htmlFor="edit-weekends" className="text-sm font-normal">
-                            Include weekends
-                        </Label>
-                    </div>
+                    {/* Switch для Include weekends и Include holidays */}
+
                 </div>
 
                 <DialogFooter className="flex justify-between">

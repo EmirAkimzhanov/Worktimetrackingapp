@@ -233,3 +233,22 @@ export const sendLetter = async (letterBody: LetterBody) => {
     );
     return res.data;
 }
+
+export const getTimeEntriesStats = async (year: string | number, month: string | number) => {
+    const token = useUserStore.getState().access_token;
+    console.log(token);
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const res = await axios(`${api}api/calendars/time-entries/dashboard/?year=${year}&month=${month}`,
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+    return res.data;
+}

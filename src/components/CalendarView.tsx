@@ -72,6 +72,8 @@ export function CalendarView() {
   const calendar_holidays = useUserStore((state) => state.calendar_holidays);
   const currentMonth = useUserStore((state) => state.currentMonth);
   const setCurrentMonth = useUserStore((state) => state.setCurrentMonth);
+  const currentYear = useUserStore((state) => state.currentYear);
+  const setCurrentYear = useUserStore((state) => state.setCurrentYear);
   const me = useUserStore((state) => state.me);
   const workingWeekends = useUserStore((state) => state.workingWeekends);
   const { mutate: getWorkingWeekends } = useGetWorkingWeekends();
@@ -108,11 +110,22 @@ export function CalendarView() {
     return new Date();
   });
 
+  // В CalendarView.tsx, измените useEffect, который сохраняет месяц
+  // Обновляем месяц в store при изменении
   useEffect(() => {
     if (setCurrentMonth) {
-      setCurrentMonth(currentDate);
+      // Сохраняем только номер месяца (0-11)
+      setCurrentMonth(currentDate.getMonth().toString());
     }
   }, [currentDate, setCurrentMonth]);
+
+  // Обновляем год в store при изменении
+  useEffect(() => {
+    if (setCurrentYear) {
+      // Сохраняем год как строку
+      setCurrentYear(currentDate.getFullYear().toString());
+    }
+  }, [currentDate, setCurrentYear]);
 
   const allEntries = useMemo(() => {
     return safeTimeEntries;
