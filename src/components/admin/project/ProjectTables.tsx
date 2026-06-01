@@ -526,10 +526,7 @@ export function ProjectsTable({
     const departmentsArray = getDepartmentsArray;
     const statusesArray = getStatusesArray;
 
-    console.log('🔍 Current values:', {
-        localCountryOfUbo: localFilters.country_of_ubo_code,
-        debouncedCountryOfUbo: debouncedCountryOfUbo
-    });
+
 
     return (
         <>
