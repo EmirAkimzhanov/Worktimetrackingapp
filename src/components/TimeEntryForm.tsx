@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { Switch } from './ui/switch';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane, Search, X } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane, Search, X, FileText, Upload } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner';
 import { useGetHolidayTimeEntrys, useGetTimeEntriesStats, useGetTimeEntrys, useSendTimeEntrys } from '../hooks/useTimeEntry';
@@ -85,6 +85,7 @@ export function TimeEntryForm() {
   const [country, setCountry] = useState<string>('');
   const [client, setClient] = useState('');
   const [clientSearch, setClientSearch] = useState('');
+  const [leaveDocument, setLeaveDocument] = useState<File | null>(null);
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
   const [isLoadingInternalTasks, setIsLoadingInternalTasks] = useState(false);
   const [isLoadingLeaves, setIsLoadingLeaves] = useState(false);
@@ -127,16 +128,14 @@ export function TimeEntryForm() {
   // Функция для обновления статистики по конкретной дате
   const refreshStatsForDate = (targetDate: Date) => {
     const year = targetDate.getFullYear();
-    const month = targetDate.getMonth(); // 0-11
-    const monthForApi = month + 1; // API ожидает 1-12
+    const month = targetDate.getMonth();
+    const monthForApi = month + 1;
 
     console.log('Refreshing stats for:', { year, month, monthForApi });
 
-    // Обновляем store с текущим месяцем и годом
     setCurrentMonth(month.toString());
     setCurrentYear(year.toString());
 
-    // Отправляем запрос на статистику
     getTimeEntriesStats(
       { year: year.toString(), month: monthForApi.toString() },
       {
@@ -155,16 +154,8 @@ export function TimeEntryForm() {
     if (inputMode === 'single') {
       return new Date(date);
     } else {
-      // Для диапазона используем startDate
       return new Date(startDate);
     }
-  };
-
-  // Функция проверки является ли день выходным
-  const isWeekend = (dateString: string): boolean => {
-    const date = new Date(dateString);
-    const dayOfWeek = date.getDay();
-    return dayOfWeek === 0 || dayOfWeek === 6;
   };
 
   const validateSingleDate = (dateToCheck: string): boolean => {
@@ -484,6 +475,7 @@ export function TimeEntryForm() {
     }
     if (tab !== 'vacations') {
       setSelectedLeaveType('');
+      setLeaveDocument(null);
     }
     setDateError('');
   };
@@ -496,6 +488,7 @@ export function TimeEntryForm() {
     setProjectId('');
     setDateError('');
     setClientSearch('');
+    setLeaveDocument(null);
   };
 
   const createRequestBody = (): any => {
@@ -548,7 +541,8 @@ export function TimeEntryForm() {
           client: null,
           project: null,
           task_type: selectedLeave?.task_type || null,
-          task: selectedLeave?.value ? parseInt(selectedLeave.value) : null
+          task: selectedLeave?.value ? parseInt(selectedLeave.value) : null,
+          leave_document: leaveDocument
         };
       }
 
@@ -595,8 +589,9 @@ export function TimeEntryForm() {
 
     const requestBody = createRequestBody();
 
-    sendEntrys(requestBody, {
-      onSuccess: (data) => {
+    // Для vacations отправляем с файлом, если он есть
+    const sendOptions = {
+      onSuccess: (data: any) => {
         const entriesToAdd = [];
         const selectedCountryObj = localCountryOptions.find(c => c.value === country);
         const selectedClient = clientOptions.find(c => c.value === client);
@@ -641,6 +636,7 @@ export function TimeEntryForm() {
               description,
               date,
               hours: hoursNum,
+              has_document: !!leaveDocument,
             };
           }
 
@@ -694,6 +690,7 @@ export function TimeEntryForm() {
                   description,
                   date: currentDateLoop.toISOString().split('T')[0],
                   hours: hoursNum,
+                  has_document: !!leaveDocument,
                 };
               }
 
@@ -713,7 +710,6 @@ export function TimeEntryForm() {
             : `Added ${entriesToAdd.length} time entries for the period ${startDate} to ${endDate}`;
           toast.success(message);
 
-          // ✅ ОБНОВЛЯЕМ СТАТИСТИКУ после успешного добавления
           const targetDate = getDateFromForm();
           if (targetDate) {
             refreshStatsForDate(targetDate);
@@ -732,23 +728,30 @@ export function TimeEntryForm() {
 
         resetForm();
       },
-      onError: (error) => {
+      onError: (error: any) => {
         console.error('Ошибка отправки:', error);
         toast.error('Failed to add time entry: ' + error.message);
       },
       onSettled: () => {
       }
-    });
+    };
+
+    // Отправляем с файлом для vacations, если файл есть
+    if (activeTab === 'vacations' && leaveDocument) {
+      sendEntrys({ body: requestBody, file: leaveDocument }, sendOptions);
+    } else {
+      sendEntrys(requestBody, sendOptions);
+    }
+  };
+
+  const isSubmitDisabled = () => {
+    return isSubmitting;
   };
 
   const tabButtonClass = (tab: TabType) =>
     activeTab === tab
       ? "bg-blue-50 text-blue-700 border-blue-200"
       : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100";
-
-  const isSubmitDisabled = () => {
-    return isSubmitting;
-  };
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow border-t-4" style={{ borderTopColor: '#1F4E78' }}>
@@ -791,7 +794,6 @@ export function TimeEntryForm() {
         {/* External Tab */}
         {activeTab === 'external' && (
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* ... остальной код external формы без изменений ... */}
             <div className="space-y-2">
               <ToggleGroup
                 type="single"
@@ -1354,6 +1356,61 @@ export function TimeEntryForm() {
                 placeholder="Vacation description"
                 rows={3}
               />
+            </div>
+
+            {/* Поле для загрузки PDF файла */}
+            <div className="space-y-2">
+              <Label htmlFor="leaveDocument">Supporting Document (PDF)</Label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="leaveDocument"
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.type === 'application/pdf') {
+                          if (file.size <= 10 * 1024 * 1024) { // 10MB limit
+                            setLeaveDocument(file);
+                            toast.success(`File "${file.name}" selected`);
+                          } else {
+                            toast.error('File size must be less than 10MB');
+                            e.target.value = '';
+                          }
+                        } else {
+                          toast.error('Please select a PDF file');
+                          e.target.value = '';
+                        }
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  {/* <Upload className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /> */}
+                </div>
+                {leaveDocument && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setLeaveDocument(null);
+                      const input = document.getElementById('leaveDocument') as HTMLInputElement;
+                      if (input) input.value = '';
+                      toast.info('File removed');
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              {leaveDocument && (
+                <p className="text-sm text-green-600 flex items-center gap-1">
+                  <FileText className="w-3 h-3" />
+                  Selected: {leaveDocument.name} ({(leaveDocument.size / 1024).toFixed(2)} KB)
+                </p>
+              )}
+              <p className="text-xs text-gray-500">Upload a PDF file (max 10MB)</p>
             </div>
 
             <div className="flex items-center justify-between pt-2">

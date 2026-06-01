@@ -27,6 +27,7 @@ export interface TimeEntry {
     end_date: string;
     hours: number;
     description: string;
+    leave_document?: File | string | null;
 }
 
 export interface EditDate {

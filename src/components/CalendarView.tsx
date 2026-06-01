@@ -6,7 +6,7 @@ import { useTimeTracker } from './TimeTrackerContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { useUserStore } from '../store/UsersStore';
 import { useGetGlobalSettings } from '../hooks/useGlobalSettings';
-import { useGetWorkingWeekends } from '../hooks/useTimeEntry';
+import { useGetWorkingWeekends, useGetTimeEntrys } from '../hooks/useTimeEntry';
 
 // Интерфейс для записи времени
 interface TimeEntry {
@@ -77,6 +77,7 @@ export function CalendarView() {
   const me = useUserStore((state) => state.me);
   const workingWeekends = useUserStore((state) => state.workingWeekends);
   const { mutate: getWorkingWeekends } = useGetWorkingWeekends();
+  const { mutate: getTimeEntrys } = useGetTimeEntrys();
 
   // Загружаем рабочие выходные при монтировании
   useEffect(() => {
@@ -102,6 +103,7 @@ export function CalendarView() {
   const [selectedDateEntries, setSelectedDateEntries] = useState<SpecialDayEntry[]>([]);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
+  const [isLoadingEntries, setIsLoadingEntries] = useState(false);
 
   // Инициализация currentDate с проверкой на валидность сохраненных значений
   const [currentDate, setCurrentDate] = useState(() => {
@@ -126,6 +128,37 @@ export function CalendarView() {
     return new Date(todayYear, todayMonth, 1);
   });
 
+  // Функция для загрузки записей за текущий месяц
+  const loadEntriesForCurrentMonth = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    // Вычисляем первый и последний день месяца
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const startDate = firstDay.toISOString().split('T')[0];
+    const endDate = lastDay.toISOString().split('T')[0];
+
+    console.log(`Loading entries for ${month + 1}/${year}: ${startDate} to ${endDate}`);
+
+    setIsLoadingEntries(true);
+
+    getTimeEntrys(
+      { start_date: startDate, end_date: endDate, forceRefresh: true },
+      {
+        onSuccess: (data) => {
+          console.log(`Loaded entries for ${month + 1}/${year}:`, data);
+          setIsLoadingEntries(false);
+        },
+        onError: (error) => {
+          console.error('Failed to load entries for month:', error);
+          setIsLoadingEntries(false);
+        }
+      }
+    );
+  };
+
   // Эффект для синхронизации store с currentDate при монтировании (если были некорректные значения)
   useEffect(() => {
     const savedYear = currentYear ? parseInt(currentYear) : null;
@@ -140,7 +173,12 @@ export function CalendarView() {
       setCurrentMonth(today.getMonth().toString());
       setCurrentYear(today.getFullYear().toString());
     }
-  }, []); // Выполняется только один раз
+  }, []);
+
+  // Загружаем записи при изменении месяца
+  useEffect(() => {
+    loadEntriesForCurrentMonth();
+  }, [currentDate]);
 
   // Обновляем месяц в store при изменении
   useEffect(() => {
@@ -205,8 +243,20 @@ export function CalendarView() {
   };
 
   const filteredEntries = useMemo(() => {
-    return allEntries.filter(entry => {
-      if (!entry) return false;
+    // Сначала фильтруем по дате месяца
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const monthEntries = allEntries.filter(entry => {
+      if (!entry?.date) return false;
+      const entryDate = new Date(entry.date);
+      return entryDate >= firstDay && entryDate <= lastDay;
+    });
+
+    // Затем применяем остальные фильтры
+    return monthEntries.filter(entry => {
       if (filters.projects.length > 0 && entry.project && !filters.projects.includes(entry.project)) return false;
       if (filters.searchText && entry.description && !entry.description.toLowerCase().includes(filters.searchText.toLowerCase())) return false;
       if (filters.hoursRange !== 'all' && entry.hours) {
@@ -215,14 +265,9 @@ export function CalendarView() {
         if (filters.hoursRange === 'medium' && (hours < 4 || hours > 8)) return false;
         if (filters.hoursRange === 'high' && hours <= 8) return false;
       }
-      if (filters.dateRange && entry.date) {
-        const entryDate = new Date(entry.date);
-        const [start, end] = filters.dateRange;
-        if (entryDate < new Date(start) || entryDate > new Date(end)) return false;
-      }
       return true;
     });
-  }, [allEntries, filters]);
+  }, [allEntries, filters, currentDate]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -230,15 +275,28 @@ export function CalendarView() {
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   let startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
 
-  const previousMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  const goToCurrentMonth = () => setCurrentDate(new Date());
+  const previousMonth = () => {
+    const newDate = new Date(year, month - 1, 1);
+    setCurrentDate(newDate);
+  };
+
+  const nextMonth = () => {
+    const newDate = new Date(year, month + 1, 1);
+    setCurrentDate(newDate);
+  };
+
+  const goToCurrentMonth = () => {
+    const today = new Date();
+    const newDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    setCurrentDate(newDate);
+  };
 
   const handleRefresh = async () => {
     await refetchGlobalSettings?.();
     if (me?.country_id) {
       getWorkingWeekends(me.country_id);
     }
+    loadEntriesForCurrentMonth(); // Перезагружаем записи за текущий месяц
   };
 
   const getEntriesForDate = (day: number): SpecialDayEntry[] => {
@@ -392,18 +450,21 @@ export function CalendarView() {
                 <CalendarIcon className="w-5 h-5" />
                 Calendar View
               </CardTitle>
+              <CardDescription>
+                {isLoadingEntries && 'Loading entries for this month...'}
+              </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoadingSettings}>
-                <RefreshCw className={`w-4 h-4 mr-1 ${isLoadingSettings ? 'animate-spin' : ''}`} />
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoadingSettings || isLoadingEntries}>
+                <RefreshCw className={`w-4 h-4 mr-1 ${isLoadingSettings || isLoadingEntries ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              <Button variant="outline" size="icon" onClick={previousMonth}>
+              <Button variant="outline" size="icon" onClick={previousMonth} disabled={isLoadingEntries}>
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <Button variant="outline" size="sm" onClick={goToCurrentMonth}>Today</Button>
+              <Button variant="outline" size="sm" onClick={goToCurrentMonth} disabled={isLoadingEntries}>Today</Button>
               <div className="min-w-[180px] text-center font-medium">{monthName}</div>
-              <Button variant="outline" size="icon" onClick={nextMonth}>
+              <Button variant="outline" size="icon" onClick={nextMonth} disabled={isLoadingEntries}>
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
@@ -458,6 +519,7 @@ export function CalendarView() {
                   onClick={() => handleDayClick(day)}
                   className="aspect-square border rounded-lg p-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-slate-50"
                   style={{ backgroundColor: dayBgColor, borderColor: dayBorderColor }}
+                  disabled={isLoadingEntries}
                 >
                   <div className="h-full flex flex-col">
                     <div className="text-center mb-1 flex items-center justify-center gap-1">

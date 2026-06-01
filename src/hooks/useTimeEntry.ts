@@ -7,17 +7,19 @@ import { toast } from 'sonner';
 
 // ========== КЭШ ДЛЯ TIME ENTRY И КАЛЕНДАРЯ ==========
 
-let timeEntriesCache: { data: any; timestamp: number } | null = null;
+// Исправляем объявление кэша для поддержки разных ключей
+let timeEntriesCache: Record<string, { data: any; timestamp: number }> = {};
 let calendarCache: { data: any; timestamp: number } | null = null;
 let holidayCalendarCache: { data: any; timestamp: number } | null = null;
 let timeEntriesStatsCache: { data: any; timestamp: number; year: string; month: string } | null = null;
+let workingWeekendsCache: { data: any; timestamp: number } | null = null;
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
 const STATS_CACHE_DURATION = 5 * 60 * 1000; // 5 минут для статистики
 
 // Функции очистки кэша
 const clearTimeEntriesCache = () => {
-    timeEntriesCache = null;
+    timeEntriesCache = {};
     console.log('Time entries cache cleared');
 };
 
@@ -36,24 +38,21 @@ const clearTimeEntriesStatsCache = () => {
     console.log('Time entries stats cache cleared');
 };
 
+const clearWorkingWeekendsCache = () => {
+    workingWeekendsCache = null;
+    console.log('Working weekends cache cleared');
+};
+
 const clearAllTimeCaches = () => {
     clearTimeEntriesCache();
     clearCalendarCache();
     clearHolidayCalendarCache();
     clearTimeEntriesStatsCache();
+    clearWorkingWeekendsCache();
     console.log('All time-related caches cleared');
 };
 
 // Функции получения кэшированных данных
-const getCachedTimeEntries = () => {
-    const now = Date.now();
-    if (timeEntriesCache && (now - timeEntriesCache.timestamp) < CACHE_DURATION) {
-        console.log('Returning cached time entries data');
-        return timeEntriesCache.data;
-    }
-    return null;
-};
-
 const getCachedCalendar = () => {
     const now = Date.now();
     if (calendarCache && (now - calendarCache.timestamp) < CACHE_DURATION) {
@@ -72,13 +71,6 @@ const getCachedHolidayCalendar = () => {
     return null;
 };
 
-let workingWeekendsCache: { data: any; timestamp: number } | null = null;
-
-const clearWorkingWeekendsCache = () => {
-    workingWeekendsCache = null;
-    console.log('Working weekends cache cleared');
-};
-
 const getCachedWorkingWeekends = () => {
     const now = Date.now();
     if (workingWeekendsCache && (now - workingWeekendsCache.timestamp) < CACHE_DURATION) {
@@ -89,13 +81,12 @@ const getCachedWorkingWeekends = () => {
 };
 
 // ========== ХУКИ С КЭШИРОВАНИЕМ ==========
-
 export const useSendTimeEntrys = () => {
     return useMutation({
-        mutationFn: async (body: TimeBody) => {
+        mutationFn: async ({ body, file }: { body: TimeBody; file?: File }) => {
             // Автоматически определяем single_date если start_date равен end_date
             const isSingleDate = body.start_date === body.end_date;
-            const result = await sendTimeEntry(body, isSingleDate);
+            const result = await sendTimeEntry(body, isSingleDate, file);
             // Очищаем кэш при создании новой записи времени
             clearTimeEntriesCache();
             clearTimeEntriesStatsCache(); // Очищаем кэш статистики
@@ -114,24 +105,34 @@ export const useGetTimeEntrys = () => {
     const setTimeEntries = useUserStore((state) => state.setTimeEntries);
 
     return useMutation({
-        mutationFn: async (forceRefresh?: boolean) => {
+        mutationFn: async (params?: { start_date?: string; end_date?: string; forceRefresh?: boolean }) => {
+            const forceRefresh = params?.forceRefresh;
+            const start_date = params?.start_date;
+            const end_date = params?.end_date;
+
+            // Создаем ключ кэша на основе параметров
+            const cacheKey = `${start_date || 'all'}_${end_date || 'all'}`;
+
             // Если forceRefresh = true, игнорируем кэш
-            if (!forceRefresh && timeEntriesCache) {
-                const isCacheValid = Date.now() - timeEntriesCache.timestamp < CACHE_DURATION;
+            if (!forceRefresh && timeEntriesCache[cacheKey]) {
+                const isCacheValid = Date.now() - timeEntriesCache[cacheKey].timestamp < CACHE_DURATION;
                 if (isCacheValid) {
-                    console.log('Returning cached time entries');
-                    return timeEntriesCache.data;
+                    console.log('Returning cached time entries for key:', cacheKey);
+                    return timeEntriesCache[cacheKey].data;
                 }
             }
 
-            console.log(forceRefresh ? 'Force refreshing time entries' : 'Fetching fresh time entries');
-            const data = await getTimeEntry();
-            timeEntriesCache = { data, timestamp: Date.now() };
+            console.log(forceRefresh ? 'Force refreshing time entries' : 'Fetching fresh time entries', { start_date, end_date });
+            const data = await getTimeEntry(start_date, end_date);
+
+            // Сохраняем в кэш с ключом
+            timeEntriesCache[cacheKey] = { data, timestamp: Date.now() };
+
             return data;
         },
-        onSuccess: (data) => {
+        onSuccess: (data, params) => {
             setTimeEntries(data);
-            console.log('Time entries loaded:', data);
+            console.log('Time entries loaded:', data, 'with params:', params);
         },
         onError: (error) => {
             console.error("Get time entries error:", error);
@@ -400,12 +401,17 @@ export const timeCacheUtils = {
     clearCalendarCache,
     clearHolidayCalendarCache,
     clearTimeEntriesStatsCache,
+    clearWorkingWeekendsCache,
     clearAll: clearAllTimeCaches,
 
-    isTimeEntriesCacheValid: () => {
-        if (!timeEntriesCache) return false;
-        const now = Date.now();
-        return (now - timeEntriesCache.timestamp) < CACHE_DURATION;
+    isTimeEntriesCacheValid: (cacheKey?: string) => {
+        if (cacheKey) {
+            const cache = timeEntriesCache[cacheKey];
+            if (!cache) return false;
+            const now = Date.now();
+            return (now - cache.timestamp) < CACHE_DURATION;
+        }
+        return Object.keys(timeEntriesCache).length > 0;
     },
 
     isCalendarCacheValid: () => {
@@ -420,6 +426,12 @@ export const timeCacheUtils = {
         return (now - holidayCalendarCache.timestamp) < CACHE_DURATION;
     },
 
+    isWorkingWeekendsCacheValid: () => {
+        if (!workingWeekendsCache) return false;
+        const now = Date.now();
+        return (now - workingWeekendsCache.timestamp) < CACHE_DURATION;
+    },
+
     isTimeEntriesStatsCacheValid: (year?: string, month?: string) => {
         if (!timeEntriesStatsCache) return false;
         if (year && month && (timeEntriesStatsCache.year !== year || timeEntriesStatsCache.month !== month)) {
@@ -429,10 +441,14 @@ export const timeCacheUtils = {
         return (now - timeEntriesStatsCache.timestamp) < STATS_CACHE_DURATION;
     },
 
-    getTimeEntriesCacheAge: () => {
-        if (!timeEntriesCache) return null;
-        const now = Date.now();
-        return Math.floor((now - timeEntriesCache.timestamp) / 1000);
+    getTimeEntriesCacheAge: (cacheKey?: string) => {
+        if (cacheKey) {
+            const cache = timeEntriesCache[cacheKey];
+            if (!cache) return null;
+            const now = Date.now();
+            return Math.floor((now - cache.timestamp) / 1000);
+        }
+        return null;
     },
 
     getCalendarCacheAge: () => {
@@ -447,16 +463,26 @@ export const timeCacheUtils = {
         return Math.floor((now - holidayCalendarCache.timestamp) / 1000);
     },
 
+    getWorkingWeekendsCacheAge: () => {
+        if (!workingWeekendsCache) return null;
+        const now = Date.now();
+        return Math.floor((now - workingWeekendsCache.timestamp) / 1000);
+    },
+
     getTimeEntriesStatsCacheAge: () => {
         if (!timeEntriesStatsCache) return null;
         const now = Date.now();
         return Math.floor((now - timeEntriesStatsCache.timestamp) / 1000);
     },
 
-    getTimeEntriesCacheAgeInMinutes: () => {
-        if (!timeEntriesCache) return null;
-        const now = Date.now();
-        return Math.floor((now - timeEntriesCache.timestamp) / 60000);
+    getTimeEntriesCacheAgeInMinutes: (cacheKey?: string) => {
+        if (cacheKey) {
+            const cache = timeEntriesCache[cacheKey];
+            if (!cache) return null;
+            const now = Date.now();
+            return Math.floor((now - cache.timestamp) / 60000);
+        }
+        return null;
     },
 
     getCalendarCacheAgeInMinutes: () => {
@@ -471,14 +497,23 @@ export const timeCacheUtils = {
         return Math.floor((now - holidayCalendarCache.timestamp) / 60000);
     },
 
+    getWorkingWeekendsCacheAgeInMinutes: () => {
+        if (!workingWeekendsCache) return null;
+        const now = Date.now();
+        return Math.floor((now - workingWeekendsCache.timestamp) / 60000);
+    },
+
     getTimeEntriesStatsCacheAgeInMinutes: () => {
         if (!timeEntriesStatsCache) return null;
         const now = Date.now();
         return Math.floor((now - timeEntriesStatsCache.timestamp) / 60000);
     },
 
-    getTimeEntriesCacheData: () => {
-        return timeEntriesCache ? timeEntriesCache.data : null;
+    getTimeEntriesCacheData: (cacheKey?: string) => {
+        if (cacheKey) {
+            return timeEntriesCache[cacheKey] ? timeEntriesCache[cacheKey].data : null;
+        }
+        return timeEntriesCache;
     },
 
     getCalendarCacheData: () => {
@@ -489,13 +524,18 @@ export const timeCacheUtils = {
         return holidayCalendarCache ? holidayCalendarCache.data : null;
     },
 
+    getWorkingWeekendsCacheData: () => {
+        return workingWeekendsCache ? workingWeekendsCache.data : null;
+    },
+
     getTimeEntriesStatsCacheData: () => {
         return timeEntriesStatsCache ? timeEntriesStatsCache.data : null;
     },
 
-    refreshTimeEntriesCache: async () => {
-        const data = await getTimeEntry();
-        timeEntriesCache = { data, timestamp: Date.now() };
+    refreshTimeEntriesCache: async (start_date?: string, end_date?: string) => {
+        const cacheKey = `${start_date || 'all'}_${end_date || 'all'}`;
+        const data = await getTimeEntry(start_date, end_date);
+        timeEntriesCache[cacheKey] = { data, timestamp: Date.now() };
         console.log('Time entries cache refreshed');
         return data;
     },
@@ -514,6 +554,13 @@ export const timeCacheUtils = {
         return data;
     },
 
+    refreshWorkingWeekendsCache: async () => {
+        const data = await getWorkingWeekends();
+        workingWeekendsCache = { data, timestamp: Date.now() };
+        console.log('Working weekends cache refreshed');
+        return data;
+    },
+
     refreshTimeEntriesStatsCache: async (year: string, month: string) => {
         const data = await getTimeEntriesStats(year, month);
         timeEntriesStatsCache = { data, timestamp: Date.now(), year, month };
@@ -524,11 +571,15 @@ export const timeCacheUtils = {
     getCacheInfo: () => {
         const now = Date.now();
 
-        const timeEntriesInfo = !timeEntriesCache ? { exists: false } : {
+        const timeEntriesInfo = Object.keys(timeEntriesCache).length === 0 ? { exists: false } : {
             exists: true,
-            isValid: (now - timeEntriesCache.timestamp) < CACHE_DURATION,
-            ageInSeconds: Math.floor((now - timeEntriesCache.timestamp) / 1000),
-            ageInMinutes: Math.floor((now - timeEntriesCache.timestamp) / 60000)
+            keys: Object.keys(timeEntriesCache),
+            entries: Object.entries(timeEntriesCache).map(([key, cache]) => ({
+                key,
+                isValid: (now - cache.timestamp) < CACHE_DURATION,
+                ageInSeconds: Math.floor((now - cache.timestamp) / 1000),
+                ageInMinutes: Math.floor((now - cache.timestamp) / 60000)
+            }))
         };
 
         const calendarInfo = !calendarCache ? { exists: false } : {
@@ -545,6 +596,13 @@ export const timeCacheUtils = {
             ageInMinutes: Math.floor((now - holidayCalendarCache.timestamp) / 60000)
         };
 
+        const workingWeekendsInfo = !workingWeekendsCache ? { exists: false } : {
+            exists: true,
+            isValid: (now - workingWeekendsCache.timestamp) < CACHE_DURATION,
+            ageInSeconds: Math.floor((now - workingWeekendsCache.timestamp) / 1000),
+            ageInMinutes: Math.floor((now - workingWeekendsCache.timestamp) / 60000)
+        };
+
         const statsInfo = !timeEntriesStatsCache ? { exists: false } : {
             exists: true,
             year: timeEntriesStatsCache.year,
@@ -558,6 +616,7 @@ export const timeCacheUtils = {
             timeEntries: timeEntriesInfo,
             calendar: calendarInfo,
             holidayCalendar: holidayInfo,
+            workingWeekends: workingWeekendsInfo,
             timeEntriesStats: statsInfo,
             cacheDurationMinutes: CACHE_DURATION / 60000,
             statsCacheDurationMinutes: STATS_CACHE_DURATION / 60000

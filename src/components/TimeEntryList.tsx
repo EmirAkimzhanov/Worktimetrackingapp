@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, ChevronDown, ChevronUp } from 'lucide-react';
+import { Edit, Trash2, FileText, Clock, Calendar, Briefcase, Plane, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner';
 import { useDeleteTimeEntry, useGetHolidayTimeEntrys, useGetTimeEntrys, useGetTimeEntriesStats } from '../hooks/useTimeEntry';
@@ -13,6 +13,7 @@ import { useGetInterbalTasks } from '../hooks/useTasks';
 import { useGetLeaves } from '../hooks/useLeaves';
 import { EditTimeEntryDialog } from './EditTimeEntryDialog';
 import { DeleteConfirmationDialogs } from './DeleteConfirmDialog';
+import { api } from '../consts/api';
 
 interface GroupedTimeEntry {
   id: string;
@@ -40,6 +41,11 @@ interface GroupedTimeEntry {
   type: string;
   country_name: string;
   entryIds: string[];
+  leave_document?: {
+    id: number;
+    name: string;
+    url: string;
+  } | null;
 }
 
 interface DeleteTarget {
@@ -65,6 +71,9 @@ export function TimeEntryList() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const [currentStartDate, setCurrentStartDate] = useState<string | undefined>();
+  const [currentEndDate, setCurrentEndDate] = useState<string | undefined>();
 
   const { mutate: getTimeEntrys, isLoading: isLoadingEntries } = useGetTimeEntrys();
   const { mutate: getCalendarHolidays } = useGetHolidayTimeEntrys();
@@ -85,6 +94,85 @@ export function TimeEntryList() {
   const [isLoadingLeaves, setIsLoadingLeaves] = useState(false);
 
   const safeTimeEntries = Array.isArray(time_entries) ? time_entries : [];
+
+  const handleDownloadFile = async (documentUrl: string, fileName: string, entryId: string) => {
+    const token = useUserStore.getState().access_token;
+
+    if (!token) {
+      toast.error('Authentication required');
+      return;
+    }
+
+    setDownloadingFileId(entryId);
+
+    try {
+      const fullUrl = `${api}${documentUrl}`;
+      console.log('Downloading from:', fullUrl);
+
+      const response = await fetch(fullUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const contentType = response.headers.get("content-type");
+
+      if (contentType?.includes("application/json")) {
+        const errorData = await response.json();
+        console.error("API error:", errorData);
+        toast.error("Server returned error instead of file");
+        return;
+      }
+
+      const blob = await response.blob();
+      const finalName = fileName || "download.pdf";
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = finalName;
+      document.body.appendChild(link);
+      link.click();
+
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      toast.success(`Downloaded: ${finalName}`);
+
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download file');
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
+
+  // Функция для загрузки записей с фильтрами по датам
+  const loadTimeEntriesWithFilters = (startDate?: string, endDate?: string) => {
+    const params: { start_date?: string; end_date?: string; forceRefresh?: boolean } = {};
+
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+
+    return new Promise((resolve, reject) => {
+      getTimeEntrys(params, {
+        onSuccess: (data) => {
+          console.log('Loaded time entries with filters:', { startDate, endDate }, data);
+          resolve(data);
+        },
+        onError: (error) => {
+          console.error('Failed to load time entries:', error);
+          toast.error('Failed to load time entries');
+          reject(error);
+        }
+      });
+    });
+  };
 
   // Функция для обновления статистики
   const refreshStats = () => {
@@ -133,6 +221,29 @@ export function TimeEntryList() {
         }
       });
     }
+  }, []);
+
+  // Отслеживаем изменение фильтра дат
+  useEffect(() => {
+    if (filters.dateRange) {
+      const [start, end] = filters.dateRange;
+      if (start !== currentStartDate || end !== currentEndDate) {
+        setCurrentStartDate(start);
+        setCurrentEndDate(end);
+        loadTimeEntriesWithFilters(start, end);
+      }
+    } else if (currentStartDate !== undefined || currentEndDate !== undefined) {
+      // Если фильтр дат снят, загружаем все записи
+      setCurrentStartDate(undefined);
+      setCurrentEndDate(undefined);
+      loadTimeEntriesWithFilters();
+    }
+  }, [filters.dateRange]);
+
+  // Первоначальная загрузка
+  useEffect(() => {
+    loadTimeEntriesWithFilters();
+    getCalendarHolidays();
   }, []);
 
   const getTaskName = (taskId: number | null, taskType: string | null): string => {
@@ -207,27 +318,6 @@ export function TimeEntryList() {
     }
   };
 
-  useEffect(() => {
-    loadTimeEntries();
-    getCalendarHolidays();
-  }, []);
-
-  const loadTimeEntries = () => {
-    return new Promise((resolve, reject) => {
-      getTimeEntrys(undefined, {
-        onSuccess: (data) => {
-          console.log('Loaded time entries:', data);
-          resolve(data);
-        },
-        onError: (error) => {
-          console.error('Failed to load time entries:', error);
-          toast.error('Failed to load time entries');
-          reject(error);
-        }
-      });
-    });
-  };
-
   const groupedEntries = useMemo(() => {
     if (safeTimeEntries.length === 0) return [];
 
@@ -255,6 +345,7 @@ export function TimeEntryList() {
         weekends_included: entry.weekends_included || false,
         type: determineEntryType(entry),
         country_name: getCountryName(entry.country),
+        leave_document: entry.leave_document || null,
       };
     });
 
@@ -297,7 +388,8 @@ export function TimeEntryList() {
           weekends_included: entry.weekends_included,
           type: entry.type,
           country_name: entry.country_name,
-          entryIds: [entry.id]
+          entryIds: [entry.id],
+          leave_document: entry.leave_document,
         });
       }
     });
@@ -324,21 +416,11 @@ export function TimeEntryList() {
         if (filters.hoursRange === 'medium' && (group.hours < 4 || group.hours > 8)) return false;
         if (filters.hoursRange === 'high' && group.hours <= 8) return false;
       }
-      if (filters.dateRange) {
-        const [start, end] = filters.dateRange;
-        const groupStart = new Date(group.startDate);
-        const groupEnd = new Date(group.endDate);
-        const filterStart = new Date(start);
-        const filterEnd = new Date(end);
-        const hasOverlap = group.dates.some(date => {
-          const dateObj = new Date(date);
-          return dateObj >= filterStart && dateObj <= filterEnd;
-        });
-        if (!hasOverlap) return false;
-      }
+      // Фильтр по датам теперь применяется на уровне запроса к API,
+      // поэтому здесь дополнительная фильтрация не нужна
       return true;
     });
-  }, [groupedEntries, filters]);
+  }, [groupedEntries, filters.projects, filters.searchText, filters.hoursRange]);
 
   const totalHours = useMemo(() => {
     return filteredGroups.reduce((sum, group) => sum + group.totalHours, 0);
@@ -397,8 +479,8 @@ export function TimeEntryList() {
       toast.success('Entry deleted successfully');
       setEntryToDelete(null);
       setDeleteDialogOpen(false);
-      await loadTimeEntries();
-      refreshStats(); // ✅ Обновляем статистику после удаления
+      await loadTimeEntriesWithFilters(currentStartDate, currentEndDate);
+      refreshStats();
     } catch (error: any) {
       console.error('Failed to delete entry:', error);
       toast.error(error?.message || 'Failed to delete entry. Please try again.');
@@ -441,8 +523,8 @@ export function TimeEntryList() {
       if (successful.length < selectedEntries.length) {
         toast.error(`Failed to delete ${selectedEntries.length - successful.length} entries`);
       }
-      await loadTimeEntries();
-      refreshStats(); // ✅ Обновляем статистику после массового удаления
+      await loadTimeEntriesWithFilters(currentStartDate, currentEndDate);
+      refreshStats();
     } catch (error) {
       console.error('Bulk delete error:', error);
       toast.error('Something went wrong');
@@ -525,8 +607,9 @@ export function TimeEntryList() {
               </CardTitle>
               <CardDescription>
                 {filteredGroups.length} groups · {totalHours.toFixed(1)} total hours
-                {safeTimeEntries && ` · ${safeTimeEntries.length} total entries in database`}
+                {safeTimeEntries && ` · ${safeTimeEntries.length} total entries`}
                 {(isLoadingEntries || isSubmitting || isDeleting || isBulkDeleting) && ' · Loading...'}
+                {currentStartDate && currentEndDate && ` · Filtered: ${currentStartDate} to ${currentEndDate}`}
               </CardDescription>
             </div>
             {selectedEntries.length > 0 && (
@@ -568,13 +651,14 @@ export function TimeEntryList() {
                       <TableHead>Task</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead className="text-right">Hours</TableHead>
-                      <TableHead className="w-24">Expand</TableHead>
+                      <TableHead>Attached File</TableHead>
+                      <TableHead className="w-24">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredGroups.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-slate-500 py-8">
+                        <TableCell colSpan={9} className="text-center text-slate-500 py-8">
                           {safeTimeEntries.length > 0
                             ? 'No time entries match your filters'
                             : 'No time entries found. Add some using the form above.'}
@@ -645,6 +729,29 @@ export function TimeEntryList() {
                               </div>
                             </TableCell>
                             <TableCell>
+                              {group.leave_document ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDownloadFile(
+                                    group.leave_document!.url,
+                                    group.leave_document!.name,
+                                    group.id
+                                  )}
+                                  disabled={downloadingFileId === group.id}
+                                  className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                >
+                                  {downloadingFileId === group.id ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                                  ) : (
+                                    <FileText className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-slate-400">No file</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
                               <div className="flex gap-1">
                                 {group.count > 1 ? (
                                   <Button
@@ -685,61 +792,87 @@ export function TimeEntryList() {
                             </TableCell>
                           </TableRow>
 
-                          {expandedGroups.has(group.key) && group.dates.sort().map((date, idx) => (
-                            <TableRow key={`${group.key}-${idx}`} className="bg-slate-100/50 text-sm">
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedEntries.includes(group.entryIds[idx])}
-                                  onCheckedChange={() => toggleSelectEntry(group.entryIds[idx])}
-                                  disabled={isSubmitting || isDeleting || isBulkDeleting}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2 text-slate-600 pl-6">
-                                  <Calendar className="w-3 h-3" />
-                                  {formatDate(date)}
-                                </div>
-                              </TableCell>
-                              <TableCell colSpan={2} className="text-slate-500">
-                                Individual entry
-                              </TableCell>
-                              <TableCell></TableCell>
-                              <TableCell></TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Clock className="w-3 h-3 text-slate-500" />
-                                  <span>{group.hours}h</span>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                                    onClick={() => handleEdit({
-                                      ...group,
-                                      id: group.entryIds[idx],
-                                      startDate: date,
-                                      entryIds: [group.entryIds[idx]]
-                                    })}
+                          {expandedGroups.has(group.key) && group.dates.sort().map((date, idx) => {
+                            const individualEntry = safeTimeEntries.find(e => String(e.id) === group.entryIds[idx]);
+                            return (
+                              <TableRow key={`${group.key}-${idx}`} className="bg-slate-100/50 text-sm">
+                                <TableCell>
+                                  <Checkbox
+                                    checked={selectedEntries.includes(group.entryIds[idx])}
+                                    onCheckedChange={() => toggleSelectEntry(group.entryIds[idx])}
                                     disabled={isSubmitting || isDeleting || isBulkDeleting}
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                    onClick={() => handleDeleteSingle(group.entryIds[idx])}
-                                    disabled={isSubmitting || isDeleting || isBulkDeleting}
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2 text-slate-600 pl-6">
+                                    <Calendar className="w-3 h-3" />
+                                    {formatDate(date)}
+                                  </div>
+                                </TableCell>
+                                <TableCell colSpan={2} className="text-slate-500">
+                                  Individual entry
+                                </TableCell>
+                                <TableCell></TableCell>
+                                <TableCell></TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Clock className="w-3 h-3 text-slate-500" />
+                                    <span>{group.hours}h</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  {individualEntry?.leave_document ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDownloadFile(
+                                        individualEntry.leave_document.url,
+                                        individualEntry.leave_document.name,
+                                        group.entryIds[idx]
+                                      )}
+                                      disabled={downloadingFileId === group.entryIds[idx]}
+                                      className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 h-6 w-6 p-0"
+                                    >
+                                      {downloadingFileId === group.entryIds[idx] ? (
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600" />
+                                      ) : (
+                                        <FileText className="w-3 h-3" />
+                                      )}
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                                      onClick={() => handleEdit({
+                                        ...group,
+                                        id: group.entryIds[idx],
+                                        startDate: date,
+                                        entryIds: [group.entryIds[idx]]
+                                      })}
+                                      disabled={isSubmitting || isDeleting || isBulkDeleting}
+                                    >
+                                      <Edit className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                      onClick={() => handleDeleteSingle(group.entryIds[idx])}
+                                      disabled={isSubmitting || isDeleting || isBulkDeleting}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </React.Fragment>
                       ))
                     )}
@@ -782,8 +915,8 @@ export function TimeEntryList() {
         editingEntry={editingEntry}
         onClose={() => setEditingEntry(null)}
         onSuccess={() => {
-          loadTimeEntries();
-          refreshStats(); // ✅ Обновляем статистику после редактирования
+          loadTimeEntriesWithFilters(currentStartDate, currentEndDate);
+          refreshStats();
         }}
         updateEntry={updateEntry}
       />

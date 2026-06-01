@@ -504,10 +504,10 @@ export function MonitoringTable({
                     toast.success(`Reminder sent successfully to ${selectedUser.email}`);
                     console.log('Reminder sent:', response);
 
-                    onSendReminder(
-                        [selectedUser.userId],
-                        { start: selectedUser.startDate, end: selectedUser.endDate }
-                    );
+                    // onSendReminder(
+                    //     [selectedUser.userId],
+                    //     { start: selectedUser.startDate, end: selectedUser.endDate }
+                    // );
 
                     setDialogOpen(false);
                     setSelectedUser(null);

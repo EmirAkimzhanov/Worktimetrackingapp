@@ -6,7 +6,7 @@ import { TimeEntry } from '../components/TimeTrackerContext';
 import { CalendarEvent } from '../types/calendar';
 
 
-export const sendTimeEntry = async (body: TimeBody, isSingleDate?: boolean) => {
+export const sendTimeEntry = async (body: TimeBody, isSingleDate?: boolean, file?: File) => {
     const token = useUserStore.getState().access_token;
     console.log(token);
 
@@ -20,15 +20,44 @@ export const sendTimeEntry = async (body: TimeBody, isSingleDate?: boolean) => {
         url += `?single_date=true`;
     }
 
-    const res = await axios.post(url, body, {
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
+    let headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+    };
+
+    let requestData: any = body;
+
+    // Если есть файл, используем FormData
+    if (file) {
+        const formData = new FormData();
+
+        // Добавляем файл
+        formData.append('leave_document', file);
+
+        // Добавляем все поля из body в FormData
+        Object.keys(body).forEach(key => {
+            const value = body[key as keyof TimeBody];
+            if (value !== undefined && value !== null) {
+                // Для объектов и массивов нужно преобразовать в JSON строку
+                if (typeof value === 'object') {
+                    formData.append(key, JSON.stringify(value));
+                } else {
+                    formData.append(key, String(value));
+                }
+            }
+        });
+
+        requestData = formData;
+        headers['Content-Type'] = 'multipart/form-data';
+    }
+
+    const res = await axios.post(url, requestData, {
+        headers,
     });
+
     return res.data;
 }
 
-export const getTimeEntry = async () => {
+export const getTimeEntry = async (start_date?: string, end_date?: string) => {
     const token = useUserStore.getState().access_token;
     console.log(token);
 
@@ -36,14 +65,29 @@ export const getTimeEntry = async () => {
         throw new Error("No access token available");
     }
 
-    const res = await axios(`${api}api/calendars/time-entries/`,
+    // Формируем URL с query параметрами
+    let url = `${api}api/calendars/time-entries/`;
+    const params = new URLSearchParams();
 
-        {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        }
-    );
+    if (start_date) {
+        params.append('start_date', start_date);
+    }
+
+    if (end_date) {
+        params.append('end_date', end_date);
+    }
+
+    const queryString = params.toString();
+    if (queryString) {
+        url += `?${queryString}`;
+    }
+
+    const res = await axios(url, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
     return res.data;
 }
 

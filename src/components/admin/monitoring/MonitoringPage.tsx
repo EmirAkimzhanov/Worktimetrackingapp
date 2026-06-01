@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, isBefore, setDate } from 'date-fns';
 import { useSendReminder } from '../../../hooks/useTimeEntry';
 
 export default function MonitoringPage() {
@@ -77,6 +77,47 @@ export default function MonitoringPage() {
             setIsDataLoaded(true);
         }
     }, [monitoringData]);
+
+    // Функции для установки предустановленных периодов
+    const setCurrentMonth = () => {
+        const now = new Date();
+        const start = startOfMonth(now);
+        const end = endOfMonth(now);
+        setStartDate(format(start, 'yyyy-MM-dd'));
+        setEndDate(format(end, 'yyyy-MM-dd'));
+    };
+
+    const setPreviousMonth = () => {
+        const now = new Date();
+        const previous = subMonths(now, 1);
+        const start = startOfMonth(previous);
+        const end = endOfMonth(previous);
+        setStartDate(format(start, 'yyyy-MM-dd'));
+        setEndDate(format(end, 'yyyy-MM-dd'));
+    };
+
+    const setPreviousMonthUntil15th = () => {
+        const now = new Date();
+        const previousMonth = subMonths(now, 1);
+        const start = startOfMonth(previousMonth);
+
+        // Устанавливаем endDate на 15-е число предыдущего месяца
+        const end = setDate(start, 15);
+
+        setStartDate(format(start, 'yyyy-MM-dd'));
+        setEndDate(format(end, 'yyyy-MM-dd'));
+    };
+
+    const setCurrentMonthUntil15th = () => {
+        const now = new Date();
+        const start = startOfMonth(now);
+
+        // Всегда устанавливаем endDate на 15-е число текущего месяца
+        const end = setDate(start, 15);
+
+        setStartDate(format(start, 'yyyy-MM-dd'));
+        setEndDate(format(end, 'yyyy-MM-dd'));
+    };
 
     const handleLoadMonitoring = () => {
         if (!selectedCountry) {
@@ -268,6 +309,42 @@ export default function MonitoringPage() {
                                 )}
                             </Button>
                         </div>
+                    </div>
+
+                    {/* Кнопки быстрых фильтров по датам */}
+                    <div className="flex flex-wrap gap-2 mt-4">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={setCurrentMonth}
+                            className="text-xs"
+                        >
+                            Current Month
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={setPreviousMonth}
+                            className="text-xs"
+                        >
+                            Previous Month
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={setCurrentMonthUntil15th}
+                            className="text-xs"
+                        >
+                            Current Month (until 15th)
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={setPreviousMonthUntil15th}
+                            className="text-xs"
+                        >
+                            Previous Month (until 15th)
+                        </Button>
                     </div>
 
                     {/* Отображение выбранного периода */}

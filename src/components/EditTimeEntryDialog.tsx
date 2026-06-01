@@ -12,6 +12,9 @@ import { useGetCLientProjecs, useGetCountryClients } from '../hooks/useClients';
 import { useGetProjectTasks } from '../hooks/useProject';
 import { useEditTimeEntry, useGetTimeEntriesStats } from '../hooks/useTimeEntry';
 import { useUserStore } from '../store/UsersStore';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
+import { ChevronsUpDown } from 'lucide-react';
 
 interface ProjectOption {
     value: string;
@@ -37,6 +40,7 @@ export function EditTimeEntryDialog({
 }: EditTimeEntryDialogProps) {
     // Состояния для формы редактирования
     const [editProjectId, setEditProjectId] = useState('');
+    const [isEditClientOpen, setIsEditClientOpen] = useState(false);
     const [editDescription, setEditDescription] = useState('');
     const [editDate, setEditDate] = useState('');
     const [editHours, setEditHours] = useState('');
@@ -607,77 +611,56 @@ export function EditTimeEntryDialog({
 
                                 {/* Client */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="edit-client">Client *</Label>
-                                    <div className="relative">
-                                        <Select
-                                            key={editCountry || 'no-country'}
-                                            value={editClient}
-                                            onValueChange={handleEditClientChange}
-                                            disabled={!editCountry || isLoadingEditClients || isSubmitting}
-                                        >
-                                            <SelectTrigger id="edit-client" className="w-full">
-                                                <SelectValue placeholder={
-                                                    !editCountry
-                                                        ? "Select country first"
-                                                        : isLoadingEditClients
-                                                            ? "Loading clients..."
-                                                            : allClientOptions.length === 0
-                                                                ? "No clients available"
-                                                                : "Select client"
-                                                } />
-                                            </SelectTrigger>
-                                            <SelectContent
-                                                className="w-full"
-                                                position="popper"
-                                                sideOffset={5}
-                                                onCloseAutoFocus={(e) => e.preventDefault()}
-                                                onEscapeKeyDown={(e) => e.stopPropagation()}
+                                    <Label>Client *</Label>
+                                    <Popover open={isEditClientOpen} onOpenChange={setIsEditClientOpen}>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                type="button"
+                                                disabled={!editCountry || isLoadingEditClients || isSubmitting}
+                                                style={{ backgroundColor: '#f3f3f5' }}
+                                                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1"
                                             >
-                                                <div className="flex flex-col" style={{ height: '320px' }}>
-                                                    <div className="sticky top-0 bg-white z-20 p-2 border-b shadow-sm flex-shrink-0">
-                                                        <div className="relative">
-                                                            <Input
-                                                                placeholder="Search client..."
-                                                                value={editClientSearch}
-                                                                onChange={(e) => setEditClientSearch(e.target.value)}
-                                                                className="pl-8 pr-8 h-8 text-sm"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                onKeyDown={(e) => e.stopPropagation()}
-
-                                                            />
-                                                            {editClientSearch && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setEditClientSearch('');
-                                                                    }}
-                                                                    className="absolute right-2 top-1/2 transform -translate-y-1/2"
-                                                                >
-                                                                    <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex-1 overflow-y-auto min-h-0">
-                                                        {isLoadingEditClients ? (
-                                                            <div className="p-4 text-center text-gray-500 text-sm">Loading clients...</div>
-                                                        ) : editClientOptions.length === 0 ? (
-                                                            <div className="p-4 text-center text-gray-500 text-sm">
-                                                                {editClientSearch ? `No clients found for "${editClientSearch}"` : "No clients available"}
-                                                            </div>
-                                                        ) : (
-                                                            editClientOptions.map(clientOption => (
-                                                                <SelectItem key={clientOption.value} value={clientOption.value}>
-                                                                    <span className="font-medium">{clientOption.label}</span>
-                                                                </SelectItem>
-                                                            ))
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                                <span className={`truncate text-left ${!editClient ? 'text-muted-foreground' : ''}`}>
+                                                    {editClient
+                                                        ? allClientOptions.find(c => c.value === editClient)?.label ?? 'Select client'
+                                                        : !editCountry
+                                                            ? 'Select country first'
+                                                            : isLoadingEditClients
+                                                                ? 'Loading clients...'
+                                                                : 'Select client'
+                                                    }
+                                                </span>
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            className="w-[--radix-popover-trigger-width] p-0"
+                                            align="start"
+                                            style={{ height: '350px', overflow: 'hidden' }}
+                                        >
+                                            <Command style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                                <CommandInput placeholder="Search client..." />
+                                                <CommandList style={{ flex: 1, overflow: 'auto', maxHeight: 'unset' }}>
+                                                    <CommandEmpty>No clients found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {allClientOptions.map(clientOption => (
+                                                            <CommandItem
+                                                                key={clientOption.value}
+                                                                value={`${clientOption.label}__${clientOption.value}`}
+                                                                onSelect={() => {
+                                                                    handleEditClientChange(clientOption.value);
+                                                                    setIsEditClientOpen(false);
+                                                                }}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                {clientOption.label}
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </div>
 
@@ -710,7 +693,6 @@ export function EditTimeEntryDialog({
                                                                     {projectOption.code}
                                                                 </code>
                                                             )}
-                                                            <span className="font-medium">{projectOption.label}</span>
                                                         </div>
                                                     </div>
                                                 </SelectItem>
