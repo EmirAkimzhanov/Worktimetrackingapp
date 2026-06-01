@@ -106,7 +106,7 @@ export function TimeEntryList() {
     setDownloadingFileId(entryId);
 
     try {
-      const fullUrl = `${api}${documentUrl}`;
+      const fullUrl = `${window.location.origin}${documentUrl}`;
       console.log('Downloading from:', fullUrl);
 
       const response = await fetch(fullUrl, {
