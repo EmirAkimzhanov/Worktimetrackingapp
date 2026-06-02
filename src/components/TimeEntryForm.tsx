@@ -1359,7 +1359,7 @@ export function TimeEntryForm() {
             </div>
 
             {/* Поле для загрузки PDF файла */}
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <Label htmlFor="leaveDocument">Supporting Document (PDF)</Label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -1386,32 +1386,31 @@ export function TimeEntryForm() {
                     }}
                     className="flex-1"
                   />
-                  {/* <Upload className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /> */}
-                </div>
+          </div>
                 {leaveDocument && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setLeaveDocument(null);
-                      const input = document.getElementById('leaveDocument') as HTMLInputElement;
-                      if (input) input.value = '';
-                      toast.info('File removed');
-                    }}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-              {leaveDocument && (
-                <p className="text-sm text-green-600 flex items-center gap-1">
-                  <FileText className="w-3 h-3" />
-                  Selected: {leaveDocument.name} ({(leaveDocument.size / 1024).toFixed(2)} KB)
-                </p>
-              )}
-              <p className="text-xs text-gray-500">Upload a PDF file (max 10MB)</p>
-            </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setLeaveDocument(null);
+              const input = document.getElementById('leaveDocument') as HTMLInputElement;
+              if (input) input.value = '';
+              toast.info('File removed');
+            }}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+      {leaveDocument && (
+        <p className="text-sm text-green-600 flex items-center gap-1">
+          <FileText className="w-3 h-3" />
+          Selected: {leaveDocument.name} ({(leaveDocument.size / 1024).toFixed(2)} KB)
+        </p>
+      )}
+      <p className="text-xs text-gray-500">Upload a PDF file (max 10MB)</p>
+    </div> */}
 
             <div className="flex items-center justify-between pt-2">
               <div className="text-sm text-gray-500">Fields marked with * are required</div>
@@ -1419,9 +1418,9 @@ export function TimeEntryForm() {
                 {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> Add Vacation{inputMode === 'range' ? 's' : ''} </>}
               </Button>
             </div>
-          </form>
+          </form >
         )}
-      </CardContent>
-    </Card>
+      </CardContent >
+    </Card >
   );
 }

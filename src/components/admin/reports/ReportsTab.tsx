@@ -8,6 +8,7 @@ import { Download, Filter, RefreshCw, ChevronLeft, ChevronRight, X } from 'lucid
 import { toast } from 'sonner';
 import { useGetReports, useGetReportsExcel } from '../../../hooks/useReport';
 import { useUserStore } from '../../../store/UsersStore';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, subWeeks, subMonths } from 'date-fns';
 
 interface TimesheetRecord {
     id: number;
@@ -47,8 +48,8 @@ export function ReportsTab() {
     // Состояния для фильтров дат
     const [dateType, setDateType] = useState<string>('today');
     const [customDateRange, setCustomDateRange] = useState<DateRange>({
-        start: new Date().toISOString().split('T')[0],
-        end: new Date().toISOString().split('T')[0]
+        start: format(new Date(), 'yyyy-MM-dd'),
+        end: format(new Date(), 'yyyy-MM-dd')
     });
 
     // Фильтры (select) - изменено: вместо department теперь user_department и project_department
@@ -148,10 +149,9 @@ export function ReportsTab() {
         }
     }, [reportsData]);
 
-    // Получение диапазона дат для API
+    // Получение диапазона дат для API (ИСПРАВЛЕНО)
     const getDateRangeForAPI = useCallback(() => {
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
         let start: Date;
         let end: Date;
 
@@ -161,31 +161,30 @@ export function ReportsTab() {
                 end = new Date(today);
                 break;
             case 'yesterday':
-                const yesterday = new Date(today);
-                yesterday.setDate(yesterday.getDate() - 1);
-                start = yesterday;
-                end = yesterday;
+                start = subDays(today, 1);
+                end = subDays(today, 1);
                 break;
             case 'thisWeek':
-                start = new Date(today);
-                const dayOfWeek = start.getDay();
-                start.setDate(start.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1));
-                end = new Date(start);
-                end.setDate(end.getDate() + 6);
+                // Неделя с понедельника по воскресенье
+                start = startOfWeek(today, { weekStartsOn: 1 });
+                end = endOfWeek(today, { weekStartsOn: 1 });
                 break;
             case 'lastWeek':
-                start = new Date(today);
-                start.setDate(start.getDate() - start.getDay() - 6);
-                end = new Date(start);
-                end.setDate(end.getDate() + 6);
+                // Прошлая неделя с понедельника по воскресенье
+                const lastWeek = subWeeks(today, 1);
+                start = startOfWeek(lastWeek, { weekStartsOn: 1 });
+                end = endOfWeek(lastWeek, { weekStartsOn: 1 });
                 break;
             case 'thisMonth':
-                start = new Date(today.getFullYear(), today.getMonth(), 1);
-                end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                // Текущий месяц с 1 по последнее число
+                start = startOfMonth(today);
+                end = endOfMonth(today);
                 break;
             case 'lastMonth':
-                start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-                end = new Date(today.getFullYear(), today.getMonth(), 0);
+                // Прошлый месяц с 1 по последнее число
+                const lastMonth = subMonths(today, 1);
+                start = startOfMonth(lastMonth);
+                end = endOfMonth(lastMonth);
                 break;
             case 'custom':
                 start = new Date(customDateRange.start);
@@ -196,12 +195,9 @@ export function ReportsTab() {
                 end = new Date(today);
         }
 
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-
         return {
-            start_date: start.toISOString().split('T')[0],
-            end_date: end.toISOString().split('T')[0]
+            start_date: format(start, 'yyyy-MM-dd'),
+            end_date: format(end, 'yyyy-MM-dd')
         };
     }, [dateType, customDateRange]);
 
@@ -253,8 +249,8 @@ export function ReportsTab() {
     const resetFilters = () => {
         setDateType('today');
         setCustomDateRange({
-            start: new Date().toISOString().split('T')[0],
-            end: new Date().toISOString().split('T')[0]
+            start: format(new Date(), 'yyyy-MM-dd'),
+            end: format(new Date(), 'yyyy-MM-dd')
         });
         setSelectedUserDepartment('all');
         setSelectedProjectDepartment('all');

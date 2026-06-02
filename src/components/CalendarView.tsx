@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { useUserStore } from '../store/UsersStore';
 import { useGetGlobalSettings } from '../hooks/useGlobalSettings';
 import { useGetWorkingWeekends, useGetTimeEntrys } from '../hooks/useTimeEntry';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 // Интерфейс для записи времени
 interface TimeEntry {
@@ -133,12 +134,13 @@ export function CalendarView() {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
 
-    // Вычисляем первый и последний день месяца
+    // Вычисляем первый и последний день месяца с правильным форматированием
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
 
-    const startDate = firstDay.toISOString().split('T')[0];
-    const endDate = lastDay.toISOString().split('T')[0];
+    // Используем format из date-fns вместо toISOString
+    const startDate = format(firstDay, 'yyyy-MM-dd');
+    const endDate = format(lastDay, 'yyyy-MM-dd');
 
     console.log(`Loading entries for ${month + 1}/${year}: ${startDate} to ${endDate}`);
 
@@ -249,11 +251,35 @@ export function CalendarView() {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
 
+    // Устанавливаем время в 00:00:00 для корректного сравнения
+    firstDay.setHours(0, 0, 0, 0);
+    lastDay.setHours(23, 59, 59, 999);
+
+    console.log('Current month range:', {
+      year,
+      month,
+      firstDay: format(firstDay, 'yyyy-MM-dd HH:mm:ss'),
+      lastDay: format(lastDay, 'yyyy-MM-dd HH:mm:ss')
+    });
+
     const monthEntries = allEntries.filter(entry => {
       if (!entry?.date) return false;
+
+      // Создаем дату из строки и устанавливаем время в 00:00:00
       const entryDate = new Date(entry.date);
-      return entryDate >= firstDay && entryDate <= lastDay;
+      entryDate.setHours(0, 0, 0, 0);
+
+      console.log(`Checking entry: ${entry.date} -> ${format(entryDate, 'yyyy-MM-dd')}`);
+      console.log(`Entry date: ${format(entryDate, 'yyyy-MM-dd')}, First day: ${format(firstDay, 'yyyy-MM-dd')}, Last day: ${format(lastDay, 'yyyy-MM-dd')}`);
+
+      const isInRange = entryDate >= firstDay && entryDate <= lastDay;
+      console.log(`Is in range: ${isInRange}`);
+
+      return isInRange;
     });
+
+    console.log('Month entries count:', monthEntries.length);
+    console.log('Month entries:', monthEntries.map(e => ({ id: e.id, date: e.date })));
 
     // Затем применяем остальные фильтры
     return monthEntries.filter(entry => {

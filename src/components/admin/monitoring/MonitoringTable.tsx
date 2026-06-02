@@ -1322,12 +1322,14 @@ Administration`;
                                 <div className="p-3 bg-gray-50 rounded-md border border-gray-200 max-h-[120px] overflow-y-auto">
                                     <div className="whitespace-pre-wrap text-sm">
                                         {letterData.body.split('\n').map((line, i) => {
-                                            let formattedLine = line;
-                                            formattedLine = formattedLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-                                            formattedLine = formattedLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
+                                            const formatted = line
+                                                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                                .replace(/\*(.*?)\*/g, '<em>$1</em>');
                                             return (
-                                                <div key={i} dangerouslySetInnerHTML={{ __html: formattedLine || '&nbsp;' }} />
+                                                <p key={i}
+                                                    dangerouslySetInnerHTML={{ __html: formatted || '\u00A0' }}
+                                                    style={{ margin: 0 }}
+                                                />
                                             );
                                         })}
                                     </div>

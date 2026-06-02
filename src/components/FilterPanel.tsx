@@ -11,6 +11,7 @@ import { useTimeTracker } from './TimeTrackerContext';
 import { useUserStore } from '../store/UsersStore';
 import { useGetProjects } from '../hooks/useProject';
 import { toast } from 'sonner';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
 export function FilterPanel() {
   const { filters, setFilters } = useTimeTracker();
@@ -40,24 +41,24 @@ export function FilterPanel() {
 
     switch (value) {
       case 'today':
-        dateRange = [today.toISOString().split('T')[0], today.toISOString().split('T')[0]];
+        dateRange = [format(today, 'yyyy-MM-dd'), format(today, 'yyyy-MM-dd')];
         break;
       case 'week':
-        const weekStart = new Date(today);
-        weekStart.setDate(today.getDate() - today.getDay());
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
+        // Неделя с понедельника по воскресенье
+        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
         dateRange = [
-          weekStart.toISOString().split('T')[0],
-          weekEnd.toISOString().split('T')[0]
+          format(weekStart, 'yyyy-MM-dd'),
+          format(weekEnd, 'yyyy-MM-dd')
         ];
         break;
       case 'month':
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        // Месяц с 1 по последнее число
+        const monthStart = startOfMonth(today);
+        const monthEnd = endOfMonth(today);
         dateRange = [
-          monthStart.toISOString().split('T')[0],
-          monthEnd.toISOString().split('T')[0]
+          format(monthStart, 'yyyy-MM-dd'),
+          format(monthEnd, 'yyyy-MM-dd')
         ];
         break;
       default:
@@ -234,7 +235,8 @@ export function FilterPanel() {
                 type="date"
                 value={filters.dateRange?.[0] || ''}
                 onChange={(e) => setFilters({
-                  dateRange: [e.target.value, filters.dateRange?.[1] || e.target.value]
+                  dateRange: [e.target.value, filters.dateRange?.[1] || e.target.value],
+                  quickFilter: 'all' // Сбрасываем quickFilter при ручном выборе
                 })}
               />
             </div>
@@ -245,7 +247,8 @@ export function FilterPanel() {
                 type="date"
                 value={filters.dateRange?.[1] || ''}
                 onChange={(e) => setFilters({
-                  dateRange: [filters.dateRange?.[0] || e.target.value, e.target.value]
+                  dateRange: [filters.dateRange?.[0] || e.target.value, e.target.value],
+                  quickFilter: 'all' // Сбрасываем quickFilter при ручном выборе
                 })}
               />
             </div>
@@ -307,7 +310,7 @@ export function FilterPanel() {
             )}
 
             {filters.dateRange && (
-              <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ dateRange: null })}>
+              <Badge variant="secondary" className="gap-1 cursor-pointer" onClick={() => setFilters({ dateRange: null, quickFilter: 'all' })}>
                 {filters.dateRange[0]} to {filters.dateRange[1]}
                 <X className="w-3 h-3" />
               </Badge>
