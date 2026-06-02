@@ -183,6 +183,13 @@ export function ProjectDialog({
                 ? findIdByValue(serviceType, editingProject.service_type, 'name')
                 : editingProject.service_type_id;
 
+            // ✅ Добавлено поле country_of_ubo
+            let countryOfUboId = editingProject.country_of_ubo_id;
+            if (editingProject.country_of_ubo && !countryOfUboId) {
+                countryOfUboId = findIdByValue(store_countries, editingProject.country_of_ubo, 'code');
+                if (!countryOfUboId) countryOfUboId = findIdByValue(store_countries, editingProject.country_of_ubo, 'name');
+            }
+
             setProjectForm({
                 ...projectForm,
                 ic: editingProject.name || '',
@@ -200,6 +207,7 @@ export function ProjectDialog({
                 service_type_id: serviceTypeId,
                 entity: editingProject.entity || '',
                 agreement_date: editingProject.agreement_date || '',
+                country_of_ubo_id: countryOfUboId, // ✅ Добавлено
             });
             setErrors({});
         } else if (!open) {
@@ -225,6 +233,7 @@ export function ProjectDialog({
             service_type_id: undefined,
             entity: '',
             agreement_date: '',
+            country_of_ubo_id: undefined, // ✅ Добавлено
         });
         setCustomColor('#1F4E78');
         setErrors({});
@@ -253,8 +262,6 @@ export function ProjectDialog({
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-
-
         if (!projectForm.status_id) {
             newErrors.status = 'Status is required';
         }
@@ -279,7 +286,6 @@ export function ProjectDialog({
         if (!projectForm.service_type_id || projectForm.service_type_id === 0) {
             newErrors.service_type = 'Service type is required';
         }
-
         if (!projectForm.agreement_date) {
             newErrors.agreement_date = 'Agreement date is required';
         }
@@ -288,7 +294,6 @@ export function ProjectDialog({
             if (!projectForm.service_type_id || projectForm.service_type_id === 0) {
                 newErrors.service_type = 'Service type is required';
             }
-
             if (!projectForm.agreement_date) {
                 newErrors.agreement_date = 'Agreement date is required';
             }
@@ -322,6 +327,7 @@ export function ProjectDialog({
             service_type: projectForm.service_type_id ? Number(projectForm.service_type_id) : undefined,
             entity: projectForm.entity || undefined,
             agreement_date: projectForm.agreement_date || undefined,
+            country_of_ubo: projectForm.country_of_ubo_id ? Number(projectForm.country_of_ubo_id) : undefined, // ✅ Добавлено
         };
 
         if (editingProject) {
@@ -706,10 +712,6 @@ export function ProjectDialog({
                                                     }}
                                                     className="cursor-pointer hover:bg-accent"
                                                 >
-                                                    {/* <Check className={cn(
-                                                        'mr-2 h-4 w-4 shrink-0',
-                                                        !projectForm.client_id ? 'opacity-100' : 'opacity-0'
-                                                    )} /> */}
                                                     — Not selected —
                                                 </CommandItem>
                                                 {allActiveClients.map(client => (
@@ -722,10 +724,6 @@ export function ProjectDialog({
                                                         }}
                                                         className="cursor-pointer hover:bg-accent"
                                                     >
-                                                        {/* <Check className={cn(
-                                                            'mr-2 h-4 w-4 shrink-0',
-                                                            Number(projectForm.client_id) === Number(client.id) ? 'opacity-100' : 'opacity-0'
-                                                        )} /> */}
                                                         <span>{client.name}</span>
                                                         {client.client_code && (
                                                             <span className="ml-2 text-xs text-gray-400">({client.client_code})</span>
@@ -773,7 +771,7 @@ export function ProjectDialog({
                         </div>
                     </div>
 
-                    {/* Service Type, Entity, Agreement Date */}
+                    {/* Service Type, Entity, Agreement Date, Country of UBO */}
                     <div className="grid grid-cols-4 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="service-type">Service Type{!editingProject && '*'}</Label>
@@ -826,6 +824,26 @@ export function ProjectDialog({
                                 className={errors.agreement_date ? 'border-red-500' : ''}
                             />
                             {errors.agreement_date && <p className="text-sm text-red-500">{errors.agreement_date}</p>}
+                        </div>
+
+                        {/* ✅ Country of UBO Field */}
+                        <div className="space-y-2">
+                            <Label htmlFor="country-of-ubo">Country of UBO</Label>
+                            <Select
+                                value={projectForm.country_of_ubo_id?.toString() || "none"}
+                                onValueChange={(value) => setProjectForm({
+                                    ...projectForm,
+                                    country_of_ubo_id: value !== "none" ? parseInt(value) : undefined
+                                })}
+                            >
+                                <SelectTrigger id="country-of-ubo">
+                                    <SelectValue placeholder="Select country of UBO" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Select country</SelectItem>
+                                    {renderCountries()}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                 </div>
