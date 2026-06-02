@@ -52,10 +52,11 @@ export function ReportsTab() {
         end: format(new Date(), 'yyyy-MM-dd')
     });
 
-    // Фильтры (select) - изменено: вместо department теперь user_department и project_department
+    // Фильтры (select)
     const [selectedUserDepartment, setSelectedUserDepartment] = useState<string>('all');
     const [selectedProjectDepartment, setSelectedProjectDepartment] = useState<string>('all');
     const [selectedCountryCode, setSelectedCountryCode] = useState<string>('all');
+    const [selectedUserCountryCode, setSelectedUserCountryCode] = useState<string>('all'); // ✅ Новый фильтр
     const [selectedDetailedGrade, setSelectedDetailedGrade] = useState<string>('all');
 
     // Поиски (input) для каждого поля
@@ -102,6 +103,7 @@ export function ReportsTab() {
         user_department?: string;
         project_department?: string;
         country_code?: string;
+        user_country_code?: string; // ✅ Добавлен новый параметр
         detailed_grade?: string;
         user_email?: string;
         client_name?: string;
@@ -149,7 +151,7 @@ export function ReportsTab() {
         }
     }, [reportsData]);
 
-    // Получение диапазона дат для API (ИСПРАВЛЕНО)
+    // Получение диапазона дат для API
     const getDateRangeForAPI = useCallback(() => {
         const today = new Date();
         let start: Date;
@@ -165,23 +167,19 @@ export function ReportsTab() {
                 end = subDays(today, 1);
                 break;
             case 'thisWeek':
-                // Неделя с понедельника по воскресенье
                 start = startOfWeek(today, { weekStartsOn: 1 });
                 end = endOfWeek(today, { weekStartsOn: 1 });
                 break;
             case 'lastWeek':
-                // Прошлая неделя с понедельника по воскресенье
                 const lastWeek = subWeeks(today, 1);
                 start = startOfWeek(lastWeek, { weekStartsOn: 1 });
                 end = endOfWeek(lastWeek, { weekStartsOn: 1 });
                 break;
             case 'thisMonth':
-                // Текущий месяц с 1 по последнее число
                 start = startOfMonth(today);
                 end = endOfMonth(today);
                 break;
             case 'lastMonth':
-                // Прошлый месяц с 1 по последнее число
                 const lastMonth = subMonths(today, 1);
                 start = startOfMonth(lastMonth);
                 end = endOfMonth(lastMonth);
@@ -210,7 +208,7 @@ export function ReportsTab() {
             end_date,
         };
 
-        // Фильтры из select (точное совпадение) - заменено на user_department и project_department
+        // Фильтры из select (точное совпадение)
         if (selectedUserDepartment !== 'all') {
             newFilters.user_department = selectedUserDepartment;
         }
@@ -219,6 +217,10 @@ export function ReportsTab() {
         }
         if (selectedCountryCode !== 'all') {
             newFilters.country_code = selectedCountryCode;
+        }
+        // ✅ Добавлен фильтр user_country_code
+        if (selectedUserCountryCode !== 'all') {
+            newFilters.user_country_code = selectedUserCountryCode;
         }
         if (selectedDetailedGrade !== 'all') {
             newFilters.detailed_grade = selectedDetailedGrade;
@@ -239,7 +241,7 @@ export function ReportsTab() {
         setCurrentPage(1);
     }, [
         getDateRangeForAPI,
-        selectedUserDepartment, selectedProjectDepartment, selectedCountryCode, selectedDetailedGrade,
+        selectedUserDepartment, selectedProjectDepartment, selectedCountryCode, selectedUserCountryCode, selectedDetailedGrade,
         searchUserEmail, searchClientName, searchCode,
         searchUserDepartment, searchProjectDepartment, searchPosition,
         searchProjectServiceLine, searchDescription, searchTaskName
@@ -255,6 +257,7 @@ export function ReportsTab() {
         setSelectedUserDepartment('all');
         setSelectedProjectDepartment('all');
         setSelectedCountryCode('all');
+        setSelectedUserCountryCode('all'); // ✅ Сброс нового фильтра
         setSelectedDetailedGrade('all');
         setSearchUserEmail('');
         setSearchClientName('');
@@ -282,6 +285,7 @@ export function ReportsTab() {
         if (selectedUserDepartment !== 'all') exportParams.user_department = selectedUserDepartment;
         if (selectedProjectDepartment !== 'all') exportParams.project_department = selectedProjectDepartment;
         if (selectedCountryCode !== 'all') exportParams.country_code = selectedCountryCode;
+        if (selectedUserCountryCode !== 'all') exportParams.user_country_code = selectedUserCountryCode; // ✅ Добавлен в экспорт
         if (selectedDetailedGrade !== 'all') exportParams.detailed_grade = selectedDetailedGrade;
         if (searchUserEmail) exportParams.user_email = searchUserEmail;
         if (searchClientName) exportParams.client_name = searchClientName;
@@ -307,7 +311,7 @@ export function ReportsTab() {
 
         return () => clearTimeout(timeoutId);
     }, [
-        selectedUserDepartment, selectedProjectDepartment, selectedCountryCode, selectedDetailedGrade,
+        selectedUserDepartment, selectedProjectDepartment, selectedCountryCode, selectedUserCountryCode, selectedDetailedGrade,
         searchUserEmail, searchClientName, searchCode,
         searchUserDepartment, searchProjectDepartment, searchPosition,
         searchProjectServiceLine, searchDescription, searchTaskName,
@@ -371,7 +375,7 @@ export function ReportsTab() {
                 </Button>
             </div>
 
-            {/* Карточка с фильтрами - сетка 5x3 */}
+            {/* Карточка с фильтрами */}
             <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -382,7 +386,7 @@ export function ReportsTab() {
                 <CardContent>
                     {/* Сетка 5 колонок */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-4">
-                        {/* User Department Filter - НОВЫЙ ФИЛЬТР */}
+                        {/* User Department Filter */}
                         <div>
                             <Select value={selectedUserDepartment} onValueChange={setSelectedUserDepartment}>
                                 <SelectTrigger className="h-9 text-sm">
@@ -399,7 +403,7 @@ export function ReportsTab() {
                             </Select>
                         </div>
 
-                        {/* Project Department Filter - НОВЫЙ ФИЛЬТР */}
+                        {/* Project Department Filter */}
                         <div>
                             <Select value={selectedProjectDepartment} onValueChange={setSelectedProjectDepartment}>
                                 <SelectTrigger className="h-9 text-sm">
@@ -416,14 +420,31 @@ export function ReportsTab() {
                             </Select>
                         </div>
 
-                        {/* Country Filter */}
+                        {/* Country Code Filter (Project Country) */}
                         <div>
                             <Select value={selectedCountryCode} onValueChange={setSelectedCountryCode}>
                                 <SelectTrigger className="h-9 text-sm">
-                                    <SelectValue placeholder="Country" />
+                                    <SelectValue placeholder="Project Country" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Countries</SelectItem>
+                                    {(store_countries || []).map((c: any) => (
+                                        <SelectItem key={c.id} value={c.code}>
+                                            {c.code}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* ✅ User Country Code Filter - НОВЫЙ ФИЛЬТР */}
+                        <div>
+                            <Select value={selectedUserCountryCode} onValueChange={setSelectedUserCountryCode}>
+                                <SelectTrigger className="h-9 text-sm">
+                                    <SelectValue placeholder="User Country" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All User Countries</SelectItem>
                                     {(store_countries || []).map((c: any) => (
                                         <SelectItem key={c.id} value={c.code}>
                                             {c.code}
@@ -578,7 +599,7 @@ export function ReportsTab() {
                     )}
 
                     {/* Actions */}
-                    <div className="flex gap-2 pt-2 ">
+                    <div className="flex gap-2 pt-2">
                         <Button variant="outline" onClick={resetFilters} size="sm" className="h-8" disabled={isExporting}>
                             <X className="w-3 h-3 mr-1" />
                             Reset
@@ -628,6 +649,7 @@ export function ReportsTab() {
                                             <TableHead className="text-xs">User Dept</TableHead>
                                             <TableHead className="text-xs">Project Dept</TableHead>
                                             <TableHead className="text-xs">Country</TableHead>
+                                            <TableHead className="text-xs">User Country</TableHead>
                                             <TableHead className="text-xs">Grade</TableHead>
                                             <TableHead className="text-xs">Service Line</TableHead>
                                             <TableHead className="text-xs">Task</TableHead>
@@ -645,6 +667,7 @@ export function ReportsTab() {
                                                 <TableCell><span className="px-1.5 py-0.5 bg-blue-50 rounded text-xs">{record.user_department}</span></TableCell>
                                                 <TableCell><span className="px-1.5 py-0.5 bg-green-50 rounded text-xs">{record.project_department}</span></TableCell>
                                                 <TableCell><span className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">{record.country_code}</span></TableCell>
+                                                <TableCell><span className="px-1.5 py-0.5 bg-indigo-50 rounded text-xs">{record.user_country_code || record.country_code}</span></TableCell>
                                                 <TableCell><span className="px-1.5 py-0.5 bg-purple-50 rounded text-xs">{record.detailed_grade}</span></TableCell>
                                                 <TableCell><span className="px-1.5 py-0.5 bg-orange-50 rounded text-xs">{record.project_service_line}</span></TableCell>
                                                 <TableCell className="text-xs">{record.task_name}</TableCell>
