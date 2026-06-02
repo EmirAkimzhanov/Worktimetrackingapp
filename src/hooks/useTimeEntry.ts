@@ -83,13 +83,39 @@ const getCachedWorkingWeekends = () => {
 // ========== ХУКИ С КЭШИРОВАНИЕМ ==========
 export const useSendTimeEntrys = () => {
     return useMutation({
-        mutationFn: async ({ body, file }: { body: TimeBody; file?: File }) => {
+        mutationFn: async (params: TimeBody | { body: TimeBody; file?: File }) => {
+            let body: TimeBody;
+            let file: File | undefined;
+
+            // Определяем тип переданного параметра
+            if (params && typeof params === 'object' && 'body' in params) {
+                // Передан объект с полями body и опционально file
+                body = params.body;
+                file = params.file;
+            } else {
+                // Передан直接的 body
+                body = params as TimeBody;
+                file = undefined;
+            }
+
+            // Валидация body
+            if (!body || typeof body !== 'object') {
+                throw new Error('Invalid time entry data: body is required');
+            }
+
+            if (!body.start_date || !body.end_date) {
+                console.error('Missing required fields:', { start_date: body.start_date, end_date: body.end_date });
+                throw new Error('Missing required fields: start_date and end_date are required');
+            }
+
             // Автоматически определяем single_date если start_date равен end_date
             const isSingleDate = body.start_date === body.end_date;
             const result = await sendTimeEntry(body, isSingleDate, file);
+
             // Очищаем кэш при создании новой записи времени
             clearTimeEntriesCache();
-            clearTimeEntriesStatsCache(); // Очищаем кэш статистики
+            clearTimeEntriesStatsCache();
+
             return result;
         },
         onSuccess: (data) => {
