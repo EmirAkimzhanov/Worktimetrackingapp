@@ -25,6 +25,7 @@ interface ClientFormData {
     bvd: string;
     pie: number;
     country: number;
+    country_of_ubo: number; // ✅ Добавлено поле
 }
 
 interface ClientDialogProps {
@@ -147,6 +148,7 @@ export function ClientDialog({
                 bvd: editingClient.bvd || '',
                 pie: getPieId(editingClient.pie),
                 country: getCountryId(editingClient.country),
+                country_of_ubo: getCountryId(editingClient.country_of_ubo), // ✅ Добавлено
             });
         } else if (!open) {
             isInitializedRef.current = false;
@@ -158,7 +160,7 @@ export function ClientDialog({
         const value = clientForm?.[key];
 
         if (value === undefined || value === null) {
-            if (['manager', 'sector', 'country', 'pie'].includes(key)) return 0;
+            if (['manager', 'sector', 'country', 'pie', 'country_of_ubo'].includes(key)) return 0;
             return '';
         }
 
@@ -176,6 +178,7 @@ export function ClientDialog({
             bvd: '',
             pie: 0,
             country: 0,
+            country_of_ubo: 0, // ✅ Добавлено
         });
         setErrors({});
     };
@@ -247,6 +250,12 @@ export function ClientDialog({
                 data.bvd = bvdValue;
             }
 
+            // ✅ Добавляем country_of_ubo только если выбран (не 0)
+            const countryOfUboValue = getFormValue('country_of_ubo');
+            if (countryOfUboValue && countryOfUboValue !== 0) {
+                data.country_of_ubo = countryOfUboValue;
+            }
+
             return data;
         };
 
@@ -257,6 +266,10 @@ export function ClientDialog({
             if (clientData.country) {
                 clientData.country_id = clientData.country;
                 delete clientData.country;
+            }
+            if (clientData.country_of_ubo) {
+                clientData.country_of_ubo_id = clientData.country_of_ubo;
+                delete clientData.country_of_ubo;
             }
 
             editClient(
@@ -535,6 +548,38 @@ export function ClientDialog({
                                 </SelectContent>
                             </Select>
                             {errors.country && <p className="text-sm text-red-500">{errors.country}</p>}
+                        </div>
+                    </div>
+
+                    {/* ✅ Country of UBO Field - новая строка */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="country-of-ubo">Country of UBO</Label>
+                            <Select
+                                value={String(getFormValue('country_of_ubo') ?? 0)}
+                                onValueChange={(value: string) =>
+                                    handleInputChange('country_of_ubo', parseInt(value) || 0)
+                                }
+                                disabled={isLoading}
+                            >
+                                <SelectTrigger id="country-of-ubo" className="w-full">
+                                    <SelectValue placeholder="Select country of UBO" />
+                                </SelectTrigger>
+                                <SelectContent className="w-full">
+                                    {countryOptions.map((country, index) => {
+                                        if (!country || country.value === undefined || country.value === null) return null;
+
+                                        return (
+                                            <SelectItem
+                                                key={`country-of-ubo-${country.value}-${index}`}
+                                                value={String(country.value)}
+                                            >
+                                                {country.label}
+                                            </SelectItem>
+                                        );
+                                    })}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                 </div>

@@ -826,25 +826,7 @@ export function ProjectDialog({
                             {errors.agreement_date && <p className="text-sm text-red-500">{errors.agreement_date}</p>}
                         </div>
 
-                        {/* ✅ Country of UBO Field */}
-                        <div className="space-y-2">
-                            <Label htmlFor="country-of-ubo">Country of UBO</Label>
-                            <Select
-                                value={projectForm.country_of_ubo_id?.toString() || "none"}
-                                onValueChange={(value) => setProjectForm({
-                                    ...projectForm,
-                                    country_of_ubo_id: value !== "none" ? parseInt(value) : undefined
-                                })}
-                            >
-                                <SelectTrigger id="country-of-ubo">
-                                    <SelectValue placeholder="Select country of UBO" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Select country</SelectItem>
-                                    {renderCountries()}
-                                </SelectContent>
-                            </Select>
-                        </div>
+
                     </div>
                 </div>
 
@@ -860,6 +842,6 @@ export function ProjectDialog({
                     </Button>
                 </DialogFooter>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     );
 }
