@@ -1,5 +1,5 @@
 // app/monitoring/page.tsx
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { MonitoringTable } from '../monitoring/MonitoringTable';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { toast } from 'sonner';
-import { format, startOfMonth, endOfMonth, subMonths, isBefore, setDate } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, setDate } from 'date-fns';
 import { useSendReminder } from '../../../hooks/useTimeEntry';
 
 export default function MonitoringPage() {
@@ -36,30 +36,12 @@ export default function MonitoringPage() {
 
     // Флаг, что данные были загружены хотя бы раз
     const [isDataLoaded, setIsDataLoaded] = useState(false);
-    // Флаг, нужно ли загружать данные (включено только после нажатия кнопки)
-    const [shouldLoad, setShouldLoad] = useState(false);
 
-    // Формируем параметры для запроса (только если shouldLoad = true)
-    const queryParams = shouldLoad ? {
-        start_date: startDate,
-        end_date: endDate,
-        country_id: selectedCountry ? parseInt(selectedCountry) : undefined,
-        first_name: filters.first_name,
-        last_name: filters.last_name,
-        user_email: filters.user_email,
-        completion: filters.completion as any,
-        updated_after: filters.updated_after,
-        updated_before: filters.updated_before,
-        page: currentPage,
-        page_size: pageSize,
-    } : undefined;
+    // Сохраняем параметры для запроса
+    const [requestParams, setRequestParams] = useState<any>(null);
 
-    // ХУК - запрос выполняется только когда enabled = true
-    const {
-        data: monitoringData,
-        isLoading: isMonitoringLoading,
-        refetch
-    } = useGetMonitoring(queryParams, { enabled: shouldLoad });
+    // Флаг, что страна выбрана (для активации фильтров)
+    const isCountrySelected = !!selectedCountry;
 
     const { mutate: exportExcel, isPending: isExporting } = useGetMonitoringExcel();
     const { mutate: getCountries } = useGetCountries();
@@ -71,54 +53,106 @@ export default function MonitoringPage() {
         getCountries();
     }, [getCountries]);
 
-    // Обновляем флаг загрузки данных
-    useEffect(() => {
-        if (monitoringData && monitoringData.results && monitoringData.results.length > 0) {
-            setIsDataLoaded(true);
+    // Функция для отправки запроса
+    const sendRequest = useCallback((
+        countryId: string,
+        start: string,
+        end: string,
+        page: number = 1,
+        pageSizeValue: number = 25,
+        currentFilters: any = filters
+    ) => {
+        if (!countryId) {
+            toast.error('Please select a country');
+            return;
         }
-    }, [monitoringData]);
 
-    // Функции для установки предустановленных периодов
+        const params = {
+            start_date: start,
+            end_date: end,
+            country_id: parseInt(countryId),
+            first_name: currentFilters.first_name,
+            last_name: currentFilters.last_name,
+            user_email: currentFilters.user_email,
+            completion: currentFilters.completion as any,
+            updated_after: currentFilters.updated_after,
+            updated_before: currentFilters.updated_before,
+            page: page,
+            page_size: pageSizeValue,
+        };
+
+        setRequestParams(params);
+        setIsDataLoaded(true);
+    }, [filters]);
+
+    // Функции для установки предустановленных периодов с автоматической отправкой
     const setCurrentMonth = () => {
+        if (!isCountrySelected) {
+            toast.error('Please select a country first');
+            return;
+        }
         const now = new Date();
         const start = startOfMonth(now);
         const end = endOfMonth(now);
-        setStartDate(format(start, 'yyyy-MM-dd'));
-        setEndDate(format(end, 'yyyy-MM-dd'));
+        const startStr = format(start, 'yyyy-MM-dd');
+        const endStr = format(end, 'yyyy-MM-dd');
+        setStartDate(startStr);
+        setEndDate(endStr);
+        // Отправляем запрос сразу
+        sendRequest(selectedCountry, startStr, endStr, 1, pageSize, filters);
     };
 
     const setPreviousMonth = () => {
+        if (!isCountrySelected) {
+            toast.error('Please select a country first');
+            return;
+        }
         const now = new Date();
         const previous = subMonths(now, 1);
         const start = startOfMonth(previous);
         const end = endOfMonth(previous);
-        setStartDate(format(start, 'yyyy-MM-dd'));
-        setEndDate(format(end, 'yyyy-MM-dd'));
+        const startStr = format(start, 'yyyy-MM-dd');
+        const endStr = format(end, 'yyyy-MM-dd');
+        setStartDate(startStr);
+        setEndDate(endStr);
+        // Отправляем запрос сразу
+        sendRequest(selectedCountry, startStr, endStr, 1, pageSize, filters);
     };
 
     const setPreviousMonthUntil15th = () => {
+        if (!isCountrySelected) {
+            toast.error('Please select a country first');
+            return;
+        }
         const now = new Date();
         const previousMonth = subMonths(now, 1);
         const start = startOfMonth(previousMonth);
-
-        // Устанавливаем endDate на 15-е число предыдущего месяца
         const end = setDate(start, 15);
-
-        setStartDate(format(start, 'yyyy-MM-dd'));
-        setEndDate(format(end, 'yyyy-MM-dd'));
+        const startStr = format(start, 'yyyy-MM-dd');
+        const endStr = format(end, 'yyyy-MM-dd');
+        setStartDate(startStr);
+        setEndDate(endStr);
+        // Отправляем запрос сразу
+        sendRequest(selectedCountry, startStr, endStr, 1, pageSize, filters);
     };
 
     const setCurrentMonthUntil15th = () => {
+        if (!isCountrySelected) {
+            toast.error('Please select a country first');
+            return;
+        }
         const now = new Date();
         const start = startOfMonth(now);
-
-        // Всегда устанавливаем endDate на 15-е число текущего месяца
         const end = setDate(start, 15);
-
-        setStartDate(format(start, 'yyyy-MM-dd'));
-        setEndDate(format(end, 'yyyy-MM-dd'));
+        const startStr = format(start, 'yyyy-MM-dd');
+        const endStr = format(end, 'yyyy-MM-dd');
+        setStartDate(startStr);
+        setEndDate(endStr);
+        // Отправляем запрос сразу
+        sendRequest(selectedCountry, startStr, endStr, 1, pageSize, filters);
     };
 
+    // Ручная загрузка данных по кнопке Load Data
     const handleLoadMonitoring = () => {
         if (!selectedCountry) {
             toast.error('Please select a country');
@@ -138,24 +172,65 @@ export default function MonitoringPage() {
             return;
         }
 
-        setCurrentPage(1);
-        setShouldLoad(true); // Включаем загрузку данных
+        // Отправляем запрос с текущими датами
+        sendRequest(selectedCountry, startDate, endDate, 1, pageSize, filters);
     };
 
     // Обработчик изменения фильтров из MonitoringTable
     const handleFilterChange = (newFilters: typeof filters) => {
         setFilters(newFilters);
-        if (shouldLoad) {
-            setCurrentPage(1); // Сбрасываем на первую страницу при изменении фильтров, если данные уже загружены
+    };
+
+    // Обработчик изменения страницы
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+        // Если данные уже загружены, отправляем запрос с новыми параметрами страницы
+        if (requestParams) {
+            const updatedParams = {
+                ...requestParams,
+                page: page,
+                page_size: pageSize,
+            };
+            setRequestParams(updatedParams);
         }
     };
 
-    // Обновляем данные при изменении пагинации или фильтров (только если данные уже загружены)
+    // Обработчик изменения размера страницы
+    const handlePageSizeChange = (size: number) => {
+        setPageSize(size);
+        setCurrentPage(1);
+        // Если данные уже загружены, отправляем запрос с новыми параметрами
+        if (requestParams) {
+            const updatedParams = {
+                ...requestParams,
+                page: 1,
+                page_size: size,
+            };
+            setRequestParams(updatedParams);
+        }
+    };
+
+    // Функция для применения фильтров (при изменении фильтров в таблице)
+    const handleApplyFilters = () => {
+        if (requestParams) {
+            // Переотправляем запрос с текущими датами и новыми фильтрами
+            sendRequest(selectedCountry, startDate, endDate, 1, pageSize, filters);
+        }
+    };
+
+    // Используем хук с enabled параметром
+    const {
+        data: monitoringData,
+        isLoading: isMonitoringLoading,
+        refetch
+    } = useGetMonitoring(requestParams, { enabled: !!requestParams });
+
+    // Обновляем данные при изменении requestParams
     useEffect(() => {
-        if (shouldLoad) {
+        if (requestParams) {
             refetch();
         }
-    }, [currentPage, pageSize, filters, shouldLoad, refetch]);
+    }, [requestParams, refetch]);
 
     // Данные для отображения
     const displayData = monitoringData?.results || [];
@@ -180,7 +255,9 @@ export default function MonitoringPage() {
             onSuccess: () => {
                 toast.success(`Reminders sent to ${userIds.length} user(s)`);
                 // Обновляем данные после отправки
-                refetch();
+                if (requestParams) {
+                    refetch();
+                }
             },
             onError: (error) => {
                 toast.error(`Failed to send reminders: ${error.message}`);
@@ -193,7 +270,7 @@ export default function MonitoringPage() {
     };
 
     const handleExportExcel = () => {
-        if (!shouldLoad || !isDataLoaded) {
+        if (!requestParams) {
             toast.error('Please load data first');
             return;
         }
@@ -223,7 +300,7 @@ export default function MonitoringPage() {
                 <Button
                     variant="outline"
                     onClick={handleExportExcel}
-                    disabled={!isDataLoaded || displayData.length === 0 || isExporting}
+                    disabled={!requestParams || displayData.length === 0 || isExporting}
                     className="gap-2"
                 >
                     {isExporting ? (
@@ -273,6 +350,7 @@ export default function MonitoringPage() {
                                 onChange={(e) => setStartDate(e.target.value)}
                                 required
                                 className="h-9"
+                                disabled={!isCountrySelected}
                             />
                         </div>
 
@@ -285,6 +363,7 @@ export default function MonitoringPage() {
                                 onChange={(e) => setEndDate(e.target.value)}
                                 required
                                 className="h-9"
+                                disabled={!isCountrySelected}
                             />
                         </div>
 
@@ -317,6 +396,7 @@ export default function MonitoringPage() {
                             variant="outline"
                             size="sm"
                             onClick={setCurrentMonth}
+                            disabled={!isCountrySelected || isMonitoringLoading}
                             className="text-xs"
                         >
                             Current Month
@@ -325,6 +405,7 @@ export default function MonitoringPage() {
                             variant="outline"
                             size="sm"
                             onClick={setPreviousMonth}
+                            disabled={!isCountrySelected || isMonitoringLoading}
                             className="text-xs"
                         >
                             Previous Month
@@ -333,6 +414,7 @@ export default function MonitoringPage() {
                             variant="outline"
                             size="sm"
                             onClick={setCurrentMonthUntil15th}
+                            disabled={!isCountrySelected || isMonitoringLoading}
                             className="text-xs"
                         >
                             Current Month (until 15th)
@@ -341,6 +423,7 @@ export default function MonitoringPage() {
                             variant="outline"
                             size="sm"
                             onClick={setPreviousMonthUntil15th}
+                            disabled={!isCountrySelected || isMonitoringLoading}
                             className="text-xs"
                         >
                             Previous Month (until 15th)
@@ -348,10 +431,17 @@ export default function MonitoringPage() {
                     </div>
 
                     {/* Отображение выбранного периода */}
-                    {startDate && endDate && (
+                    {startDate && endDate && isCountrySelected && (
                         <div className="text-sm text-gray-600 bg-blue-50 p-2 rounded-md mt-4">
                             <span className="font-medium">Selected period: </span>
                             {getDisplayPeriod()}
+                        </div>
+                    )}
+
+                    {/* Подсказка, если страна не выбрана */}
+                    {!isCountrySelected && (
+                        <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded-md mt-4">
+                            ⚠️ Please select a country first to enable date filters and load data
                         </div>
                     )}
                 </CardContent>
@@ -363,14 +453,15 @@ export default function MonitoringPage() {
                 totalCount={totalCount}
                 currentPage={currentPage}
                 pageSize={pageSize}
-                onPageChange={setCurrentPage}
-                onPageSizeChange={setPageSize}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
                 onSendReminder={handleSendReminder}
                 onViewDetails={handleViewDetails}
                 periodStart={startDate}
                 periodEnd={endDate}
                 isLoading={isMonitoringLoading}
                 onFilterChange={handleFilterChange}
+                onApplyFilters={handleApplyFilters}
             />
         </div>
     );

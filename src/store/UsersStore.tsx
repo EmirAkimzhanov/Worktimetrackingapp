@@ -227,6 +227,8 @@ interface UserState {
 
   managers: Manager[] | null;
 
+  accounts_statuses: Status[] | null;
+
   currentMonth: string | null;
   currentYear: string | null; // 👈 ДОБАВЛЕНО
 
@@ -279,6 +281,8 @@ interface UserState {
   setDepartments: (departments: Department[] | null) => void;
 
   setWorkingWeekends: (workingWeekends: WorkingWeekends[] | null) => void;
+
+  setAccountsStatuses: (accountsStatuses: Status[] | null) => void;
 
   setDepartmentMembers: (
     departmentMembers: DepartmentWithMembers | null,
@@ -375,6 +379,7 @@ export const useUserStore = create<UserState>()(
       time_entries: null,
       time_entry: null,
       time_entries_stats: null,
+      accounts_statuses: null,
 
       managers: null,
       departments: null,
@@ -434,6 +439,8 @@ export const useUserStore = create<UserState>()(
       setWorkingWeekends: (workingWeekends) => set({ workingWeekends }),
 
       setManagers: (managers) => set({ managers }),
+
+      setAccountsStatuses: (accounts_statuses) => set({ accounts_statuses }),
 
       setMonitoring: (monitoring) => set({ monitoring }),
 
@@ -802,6 +809,7 @@ export const useUserStore = create<UserState>()(
           time_entries_stats: null,
           departments: null,
           department_members: null,
+          accounts_statuses: null,
           statuses: null,
           clients: null,
           service_lines: null,
@@ -843,6 +851,7 @@ export const useUserStore = create<UserState>()(
         refresh_token: state.refresh_token,
         user: state.user,
         me: state.me,
+        accounts_statuses: state.accounts_statuses,
         workingWeekends: state.workingWeekends,
         time_entry: state.time_entry,
         time_entries_stats: state.time_entries_stats,

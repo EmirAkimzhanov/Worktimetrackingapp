@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
 import { getProjectTasks, sendProject } from '../services/project';
-import { getStatuses } from '../services/status';
+import { getAccountsStatuses, getStatuses } from '../services/status';
 
 // ========== КЭШ ДЛЯ СТАТУСОВ ==========
 
@@ -24,7 +24,60 @@ const getCachedStatuses = () => {
     return null;
 };
 
-// ========== ХУК С КЭШИРОВАНИЕМ ==========
+// ========== КЭШ ДЛЯ СТАТУСОВ АККАУНТОВ ==========
+
+let accountsStatusesCache: { data: any[]; timestamp: number } | null = null;
+
+// Функция очистки кэша статусов аккаунтов
+const clearAccountsStatusesCache = () => {
+    accountsStatusesCache = null;
+    console.log('Accounts statuses cache cleared');
+};
+
+// Функция получения кэшированных данных статусов аккаунтов
+const getCachedAccountsStatuses = () => {
+    const now = Date.now();
+    if (accountsStatusesCache && (now - accountsStatusesCache.timestamp) < CACHE_DURATION) {
+        console.log('Returning cached accounts statuses data');
+        return accountsStatusesCache.data;
+    }
+    return null;
+};
+
+// ========== ХУК С КЭШИРОВАНИЕМ ДЛЯ СТАТУСОВ АККАУНТОВ ==========
+
+export const useGetAccountsStatuses = () => {
+    const setAccountsStatuses = useUserStore((state) => state.setAccountsStatuses);
+
+    return useMutation({
+        mutationFn: async (forceRefresh?: boolean) => {
+            // Проверяем кэш
+            if (!forceRefresh) {
+                const cached = getCachedAccountsStatuses();
+                if (cached) {
+                    return cached;
+                }
+            }
+
+            // Загружаем новые данные
+            console.log(forceRefresh ? 'Force refreshing accounts statuses' : 'Fetching fresh accounts statuses');
+            const data = await getAccountsStatuses();
+            accountsStatusesCache = { data, timestamp: Date.now() };
+            return data;
+        },
+        onSuccess: (data) => {
+            if (setAccountsStatuses) {
+                setAccountsStatuses(data);
+            }
+            console.log('Accounts statuses loaded:', data);
+        },
+        onError: (error: Error) => {
+            console.error("Get accounts statuses error:", error.message);
+        },
+    });
+};
+
+// ========== ХУК С КЭШИРОВАНИЕМ ДЛЯ ОБЫЧНЫХ СТАТУСОВ ==========
 
 export const useStatus = () => {
     const setStatuses = useUserStore((state) => state.setStatuses);
@@ -118,6 +171,70 @@ export const statusesCacheUtils = {
     // Функция для автоматической очистки при изменениях в связанных модулях
     clearOnMutation: () => {
         clearStatusesCache();
+    }
+};
+
+// ========== УТИЛИТЫ ДЛЯ СТАТУСОВ АККАУНТОВ ==========
+
+export const accountsStatusesCacheUtils = {
+    clearCache: clearAccountsStatusesCache,
+
+    isCacheValid: () => {
+        if (!accountsStatusesCache) return false;
+        const now = Date.now();
+        return (now - accountsStatusesCache.timestamp) < CACHE_DURATION;
+    },
+
+    getCacheAge: () => {
+        if (!accountsStatusesCache) return null;
+        const now = Date.now();
+        return Math.floor((now - accountsStatusesCache.timestamp) / 1000);
+    },
+
+    getCacheAgeInMinutes: () => {
+        if (!accountsStatusesCache) return null;
+        const now = Date.now();
+        return Math.floor((now - accountsStatusesCache.timestamp) / 60000);
+    },
+
+    getCacheSize: () => {
+        return accountsStatusesCache ? accountsStatusesCache.data.length : 0;
+    },
+
+    getCacheData: () => {
+        return accountsStatusesCache ? accountsStatusesCache.data : null;
+    },
+
+    refreshCache: async () => {
+        const data = await getAccountsStatuses();
+        accountsStatusesCache = { data, timestamp: Date.now() };
+        console.log('Accounts statuses cache refreshed');
+        return data;
+    },
+
+    getCacheInfo: () => {
+        if (!accountsStatusesCache) {
+            return { exists: false, isValid: false, age: null, size: 0 };
+        }
+
+        const now = Date.now();
+        const ageInSeconds = Math.floor((now - accountsStatusesCache.timestamp) / 1000);
+        const isValid = ageInSeconds < CACHE_DURATION / 1000;
+
+        return {
+            exists: true,
+            isValid,
+            ageInSeconds,
+            ageInMinutes: Math.floor(ageInSeconds / 60),
+            size: accountsStatusesCache.data.length,
+            remainingSeconds: isValid ? Math.floor((CACHE_DURATION / 1000) - ageInSeconds) : 0,
+            remainingMinutes: isValid ? Math.floor((CACHE_DURATION / 60000) - (ageInSeconds / 60)) : 0,
+            data: accountsStatusesCache.data
+        };
+    },
+
+    clearOnMutation: () => {
+        clearAccountsStatusesCache();
     }
 };
 

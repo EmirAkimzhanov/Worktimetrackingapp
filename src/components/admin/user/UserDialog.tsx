@@ -15,6 +15,7 @@ import { UserFormData, UserBody } from '../../../types/types';
 import { useUserStore } from '../../../store/UsersStore';
 import { useEditUsers, useGetUsers, useSendUsers } from '../../../hooks/useUsers';
 import { useGetRoles } from '../../../hooks/usesRole';
+import { useGetAccountsStatuses } from '../../../hooks/useStatus';
 
 interface UserDialogProps {
     open: boolean;
@@ -23,7 +24,6 @@ interface UserDialogProps {
     userForm: UserFormData;
     setUserForm: (form: UserFormData) => void;
     onSave: () => void;
-    // НОВЫЕ ПРОПЫ для сохранения фильтров и пагинации
     currentFilters?: Record<string, any>;
     currentPage?: number;
 }
@@ -39,6 +39,12 @@ interface Role {
     name: string;
 }
 
+interface AccountStatus {
+    id: number;
+    name: string;
+    status?: string;
+}
+
 export function UserDialog({
     open,
     onOpenChange,
@@ -51,8 +57,19 @@ export function UserDialog({
 }: UserDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const isInitializedRef = useRef(false);
+    const isUserChangingRole = useRef(false);
 
+    const { mutate: getAccountsStatuses } = useGetAccountsStatuses();
+    const accounts_statuses = useUserStore((state) => state.accounts_statuses) as AccountStatus[];
+
+    const { mutate: sendUser, isLoading: isCreating } = useSendUsers();
+    const { mutate: getUsers } = useGetUsers();
+    const { mutate: editUser, isLoading: isEditing } = useEditUsers();
+    const { mutate: getRoles } = useGetRoles();
+
+    const roles = useUserStore((state) => state.roles) as Role[];
     const department_roles = useUserStore((state) => state.department_roles) ?? [];
+    const countriesData = useUserStore((state) => state.countries);
 
     const user_grades = useMemo(() => {
         const grades = useUserStore.getState().user_grades;
@@ -66,7 +83,6 @@ export function UserDialog({
         return [];
     }, []);
 
-    const countriesData = useUserStore((state) => state.countries);
     const store_departments = useMemo(() => {
         const depts = useUserStore.getState().departments;
         if (!depts) return [];
@@ -91,24 +107,6 @@ export function UserDialog({
         return [];
     }, []);
 
-    const { mutate: sendUser, isLoading: isCreating } = useSendUsers();
-    const { mutate: getUsers } = useGetUsers();
-    const { mutate: editUser, isLoading: isEditing } = useEditUsers();
-    const { mutate: getRoles } = useGetRoles();
-    const roles = useUserStore((state) => state.roles) as Role[];
-
-    // Функция для перезагрузки пользователей с сохранением фильтров и пагинации
-    const reloadUsersWithFilters = useCallback(() => {
-        const params = {
-            ...currentFilters,
-            page: currentPage,
-            page_size: 30,
-        };
-        console.log('🔄 Reloading users with params:', params);
-        getUsers(params);
-    }, [currentFilters, currentPage, getUsers]);
-
-    // ✅ Преобразуем countries в массив, если это объект
     const countries = useMemo(() => {
         if (!countriesData) return [];
         if (Array.isArray(countriesData)) {
@@ -120,7 +118,6 @@ export function UserDialog({
         return [];
     }, [countriesData]);
 
-    // ✅ Безопасное преобразование в строку
     const safeToString = useCallback((value: any): string => {
         if (value === null || value === undefined) return '';
         if (typeof value === 'number') return value.toString();
@@ -128,7 +125,6 @@ export function UserDialog({
         return '';
     }, []);
 
-    // ✅ Функция для поиска ID по названию или прямого использования ID
     const findId = useCallback((
         items: any[],
         value: any,
@@ -153,7 +149,6 @@ export function UserDialog({
         return items[0]?.id || 0;
     }, []);
 
-    // ✅ Функция для получения ID роли из editingUser
     const getRoleIdFromEditingUser = useCallback(() => {
         if (!editingUser) return null;
 
@@ -166,7 +161,6 @@ export function UserDialog({
                 (role: Role) => role.name?.toLowerCase() === editingUser.role.toLowerCase()
             );
             if (foundRole) {
-                console.log('Found role by name:', editingUser.role, '-> ID:', foundRole.id);
                 return foundRole.id;
             }
         }
@@ -174,50 +168,49 @@ export function UserDialog({
         return roles && roles.length > 0 ? roles[0].id : null;
     }, [editingUser, roles]);
 
-    // ✅ Загружаем роли при открытии
+    const getAccountStatusIdFromEditingUser = useCallback(() => {
+        if (!editingUser) return null;
+
+        if (editingUser.account_status_id) {
+            return editingUser.account_status_id;
+        }
+
+        const statusValue = editingUser.status || editingUser.account_status;
+
+        if (statusValue && typeof statusValue === 'string' && accounts_statuses && accounts_statuses.length > 0) {
+            const foundStatus = accounts_statuses.find(
+                (status: AccountStatus) =>
+                    status.name?.toLowerCase() === statusValue.toLowerCase() ||
+                    status.status?.toLowerCase() === statusValue.toLowerCase()
+            );
+            if (foundStatus) return foundStatus.id;
+        }
+
+        return accounts_statuses && accounts_statuses.length > 0 ? accounts_statuses[0].id : null;
+    }, [editingUser, accounts_statuses]);
+
+    const reloadUsersWithFilters = useCallback(() => {
+        const params = {
+            ...currentFilters,
+            page: currentPage,
+            page_size: 30,
+        };
+        getUsers(params);
+    }, [currentFilters, currentPage, getUsers]);
+
     useEffect(() => {
         if (open) {
             getRoles();
+            getAccountsStatuses();
         }
-    }, [open, getRoles]);
+    }, [open, getRoles, getAccountsStatuses]);
 
-    // ✅ Инициализация формы при редактировании
     useEffect(() => {
         if (editingUser && open && !isInitializedRef.current) {
             isInitializedRef.current = true;
 
-            const getPositionId = () => {
-                if (editingUser.position_id) return editingUser.position_id;
-                if (editingUser.position) return findId(store_positions, editingUser.position);
-                return store_positions[0]?.id || 1;
-            };
-
-            const getDepartmentId = () => {
-                if (editingUser.department_id) return editingUser.department_id;
-                if (editingUser.department) return findId(store_departments, editingUser.department);
-                return store_departments[0]?.id || 1;
-            };
-
-            const getDepartmentRoleId = () => {
-                if (editingUser.department_role_id) return editingUser.department_role_id;
-                if (editingUser.department_role) return findId(department_roles, editingUser.department_role);
-                return department_roles[0]?.id || 1;
-            };
-
-            const getGradeId = () => {
-                if (editingUser.grade_id) return editingUser.grade_id;
-                if (editingUser.grade) return findId(user_grades, editingUser.grade);
-                return user_grades[0]?.id || 10;
-            };
-
-            const getCountryId = () => {
-                if (editingUser.country_id) return editingUser.country_id;
-                if (editingUser.country) return findId(countries, editingUser.country);
-                return countries[0]?.id || 1;
-            };
-
             const roleId = getRoleIdFromEditingUser();
-            console.log('Setting initial role_id to:', roleId);
+            const accountStatusId = getAccountStatusIdFromEditingUser();
 
             setUserForm({
                 email: editingUser.email || '',
@@ -227,46 +220,41 @@ export function UserDialog({
                 date_joined: editingUser.date_joined?.split('T')[0] || new Date().toISOString().split('T')[0],
                 leave_date: editingUser.leave_date || editingUser.date_left || '',
                 is_active: editingUser.is_active ?? true,
-                position_id: getPositionId(),
-                department_id: getDepartmentId(),
+                position_id: editingUser.position_id || findId(store_positions, editingUser.position) || store_positions[0]?.id || 1,
+                department_id: editingUser.department_id || findId(store_departments, editingUser.department) || store_departments[0]?.id || 1,
                 role_id: roleId || (roles && roles.length > 0 ? roles[0].id : 1),
-                department_role_id: getDepartmentRoleId(),
-                grade_id: getGradeId(),
-                country_id: getCountryId()
+                department_role_id: editingUser.department_role_id || findId(department_roles, editingUser.department_role) || department_roles[0]?.id || 1,
+                grade_id: editingUser.grade_id || findId(user_grades, editingUser.grade) || user_grades[0]?.id || 10,
+                country_id: editingUser.country_id || findId(countries, editingUser.country) || countries[0]?.id || 1,
+                account_status_id: accountStatusId,
+                status_started_at: editingUser.status_started_at?.split('T')[0]
+                    || editingUser.status_start_date?.split('T')[0]
+                    || editingUser.started_at?.split('T')[0]
+                    || ''
             });
         } else if (!open) {
             isInitializedRef.current = false;
             resetForm();
         }
-    }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, roles, setUserForm, findId, getRoleIdFromEditingUser]);
+    }, [editingUser, open, store_positions, store_departments, department_roles, user_grades, countries, roles, accounts_statuses]);
 
     useEffect(() => {
         if (isUserChangingRole.current) return;
 
         if (editingUser && open && roles && roles.length > 0 && userForm.role_id) {
             const expectedRoleId = getRoleIdFromEditingUser();
-
             if (expectedRoleId && expectedRoleId !== userForm.role_id) {
-                setUserForm(prev => ({
-                    ...prev,
-                    role_id: expectedRoleId
-                }));
+                setUserForm(prev => ({ ...prev, role_id: expectedRoleId }));
             }
         }
-    }, [editingUser, open, roles, userForm.role_id, getRoleIdFromEditingUser, setUserForm]);
+    }, [editingUser, open, roles, userForm.role_id]);
 
-    // ✅ Добавьте после всех других useEffect
     useEffect(() => {
-        console.log('Current userForm.role_id:', userForm.role_id);
-        console.log('Available roles:', roles);
-
-        // Если role_id не установлен или не существует в списке ролей, устанавливаем первую роль
         if (roles && roles.length > 0 && (!userForm.role_id || !roles.some(r => r.id === userForm.role_id))) {
-            const defaultRoleId = roles[0].id;
-            console.log('Setting default role_id to:', defaultRoleId);
-            setUserForm(prev => ({ ...prev, role_id: defaultRoleId }));
+            setUserForm(prev => ({ ...prev, role_id: roles[0].id }));
         }
-    }, [roles, userForm.role_id, setUserForm]);
+    }, [roles, userForm.role_id]);
+
     useEffect(() => {
         if (!open) {
             isUserChangingRole.current = false;
@@ -282,12 +270,14 @@ export function UserDialog({
             date_joined: new Date().toISOString().split('T')[0],
             leave_date: '',
             is_active: true,
-            position_id: store_positions.length > 0 ? store_positions[0].id : 1,
-            department_id: store_departments.length > 0 ? store_departments[0].id : 1,
-            role_id: roles && roles.length > 0 ? roles[0].id : 1,
-            department_role_id: department_roles.length > 0 ? department_roles[0].id : 1,
-            grade_id: user_grades.length > 0 ? user_grades[0].id : 10,
-            country_id: countries.length > 0 ? countries[0].id : 1
+            position_id: store_positions[0]?.id || 1,
+            department_id: store_departments[0]?.id || 1,
+            role_id: roles[0]?.id || 1,
+            department_role_id: department_roles[0]?.id || 1,
+            grade_id: user_grades[0]?.id || 10,
+            country_id: countries[0]?.id || 1,
+            account_status_id: accounts_statuses[0]?.id || null,
+            status_started_at: ''
         });
         setErrors({});
     };
@@ -298,9 +288,22 @@ export function UserDialog({
     };
 
     const validateEmail = useCallback((email: string): boolean => {
-        if (!email) return false;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
+    }, []);
+
+    // Функция для проверки даты при редактировании
+    const validateDateForEdit = useCallback((newDate: string, previousDate: string | undefined): boolean => {
+        if (!previousDate) return true; // Если нет предыдущей даты, разрешаем
+
+        const newDateObj = new Date(newDate);
+        const previousDateObj = new Date(previousDate);
+
+        // Сравниваем только даты (без времени)
+        newDateObj.setHours(0, 0, 0, 0);
+        previousDateObj.setHours(0, 0, 0, 0);
+
+        return newDateObj >= previousDateObj;
     }, []);
 
     const validateForm = useCallback((): boolean => {
@@ -320,14 +323,27 @@ export function UserDialog({
             newErrors.last_name = 'Last name is required';
         }
 
+        if (!editingUser && !userForm.status_started_at) {
+            newErrors.status_started_at = 'Status started at is required';
+        }
+
+        // Проверка для редактирования: новая дата не может быть меньше предыдущей
+        if (editingUser && userForm.status_started_at) {
+            const previousDate = editingUser.status_started_at?.split('T')[0]
+                || editingUser.status_start_date?.split('T')[0]
+                || editingUser.started_at?.split('T')[0];
+
+            if (previousDate && !validateDateForEdit(userForm.status_started_at, previousDate)) {
+                newErrors.status_started_at = 'New date cannot be earlier than the previous date';
+            }
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    }, [userForm.email, userForm.first_name, userForm.last_name, validateEmail]);
+    }, [userForm.email, userForm.first_name, userForm.last_name, userForm.status_started_at, editingUser, validateEmail, validateDateForEdit]);
 
     const handleSaveUser = useCallback(() => {
-        if (!validateForm()) {
-            return;
-        }
+        if (!validateForm()) return;
 
         const userBody: UserBody = {
             email: userForm.email,
@@ -338,13 +354,14 @@ export function UserDialog({
             department: userForm.department_id,
             department_role: userForm.department_role_id,
             role: userForm.role_id,
-            country: userForm.country_id
+            country: userForm.country_id,
+            status_started_at: userForm.status_started_at,
+            ...(editingUser && { status: userForm.account_status_id })
         };
 
         if (editingUser) {
             editUser({ body: userBody, user_id: editingUser.id }, {
                 onSuccess: () => {
-                    // Перезагружаем пользователей с сохранением фильтров и пагинации
                     reloadUsersWithFilters();
                     handleClose();
                     if (onSave) onSave();
@@ -356,7 +373,6 @@ export function UserDialog({
         } else {
             sendUser(userBody, {
                 onSuccess: () => {
-                    // Перезагружаем пользователей с сохранением фильтров и пагинации
                     reloadUsersWithFilters();
                     handleClose();
                     if (onSave) onSave();
@@ -366,11 +382,10 @@ export function UserDialog({
                 }
             });
         }
-    }, [validateForm, userForm, editingUser, editUser, reloadUsersWithFilters, handleClose, onSave, sendUser]);
+    }, [validateForm, userForm, editingUser, editUser, sendUser, reloadUsersWithFilters, handleClose, onSave]);
 
     const handleEmailChange = useCallback((value: string) => {
         setUserForm({ ...userForm, email: value });
-
         if (errors.email) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -382,7 +397,6 @@ export function UserDialog({
 
     const handleTextChange = useCallback((field: keyof UserFormData, value: string) => {
         setUserForm({ ...userForm, [field]: value });
-
         if (errors[field]) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -391,6 +405,33 @@ export function UserDialog({
             });
         }
     }, [userForm, setUserForm, errors]);
+
+    const handleDateChange = useCallback((field: keyof UserFormData, value: string) => {
+        setUserForm({ ...userForm, [field]: value });
+
+        // Очищаем ошибку для этого поля
+        if (errors[field]) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
+
+        // Дополнительная проверка при изменении даты в режиме редактирования
+        if (editingUser && field === 'status_started_at' && value) {
+            const previousDate = editingUser.status_started_at?.split('T')[0]
+                || editingUser.status_start_date?.split('T')[0]
+                || editingUser.started_at?.split('T')[0];
+
+            if (previousDate && !validateDateForEdit(value, previousDate)) {
+                setErrors(prev => ({
+                    ...prev,
+                    status_started_at: 'New date cannot be earlier than the previous date'
+                }));
+            }
+        }
+    }, [userForm, setUserForm, errors, editingUser, validateDateForEdit]);
 
     const isLoading = isCreating || isEditing;
 
@@ -405,7 +446,7 @@ export function UserDialog({
             }
 
             const value = item[valueKey];
-            const label = item[labelKey];
+            const label = item[labelKey] || item.status;
 
             if (value === undefined || value === null) {
                 return null;
@@ -419,19 +460,25 @@ export function UserDialog({
         }).filter(Boolean);
     }, [safeToString]);
 
-    const isUserChangingRole = useRef(false);
+    // Получаем предыдущую дату для отображения (только в режиме редактирования)
+    const previousDate = editingUser ? (
+        editingUser.status_started_at?.split('T')[0]
+        || editingUser.status_start_date?.split('T')[0]
+        || editingUser.started_at?.split('T')[0]
+    ) : null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="max-w-3xl" style={{ width: '600px' }}>
                 <DialogHeader>
-                    <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+                    <DialogTitle> {editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
                     <DialogDescription>
                         {editingUser ? 'Update user details' : 'Create a new user account'}
                     </DialogDescription>
                 </DialogHeader>
+
                 <div className="space-y-4 py-4">
-                    {/* Первая строка: First Name и Last Name */}
+                    {/* First Name & Last Name */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="first_name">First Name *</Label>
@@ -463,7 +510,7 @@ export function UserDialog({
                         </div>
                     </div>
 
-                    {/* Вторая строка: Email и Grade */}
+                    {/* Email & Grade */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="email">Email *</Label>
@@ -499,7 +546,7 @@ export function UserDialog({
                         </div>
                     </div>
 
-                    {/* Третья строка: Position и Department */}
+                    {/* Position & Department */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="position">Position *</Label>
@@ -537,7 +584,7 @@ export function UserDialog({
                         </div>
                     </div>
 
-                    {/* Четвертая строка: Department Role и Country */}
+                    {/* Department Role & Country */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="department_role">Department Role *</Label>
@@ -569,27 +616,17 @@ export function UserDialog({
                                     <SelectValue placeholder="Select country" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {countries.length > 0 ? (
-                                        countries.map((country: Country, index: number) => {
-                                            if (!country || country === null || typeof country !== 'object') {
-                                                return null;
-                                            }
-                                            return (
-                                                <SelectItem key={country.id || index} value={safeToString(country.id)}>
-                                                    {country.name} {country.code ? `(${country.code})` : ''}
-                                                </SelectItem>
-                                            );
-                                        }).filter(Boolean)
-                                    ) : (
-                                        <SelectItem value="1" disabled>
-                                            No countries available
+                                    {countries.map((country: Country) => (
+                                        <SelectItem key={country.id} value={safeToString(country.id)}>
+                                            {country.name} {country.code ? `(${country.code})` : ''}
                                         </SelectItem>
-                                    )}
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
-                    {/* Пятая строка: System Role и Active Status */}
+
+                    {/* System Role & Status Started At */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="role">System Role *</Label>
@@ -597,48 +634,78 @@ export function UserDialog({
                                 value={safeToString(userForm.role_id) || ""}
                                 onValueChange={(value: string) => {
                                     isUserChangingRole.current = true;
-
                                     const parsedValue = parseInt(value);
                                     if (!isNaN(parsedValue)) {
-                                        setUserForm(prev => ({
-                                            ...prev,
-                                            role_id: parsedValue
-                                        }));
+                                        setUserForm(prev => ({ ...prev, role_id: parsedValue }));
                                     }
                                 }}
                                 disabled={isLoading || !roles || roles.length === 0}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder={!roles || roles.length === 0 ? "Loading roles..." : "Select system role"} />
+                                    <SelectValue placeholder="Select system role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {roles && roles.length > 0 ? (
-                                        roles.map((role: Role) => (
-                                            <SelectItem key={role.id} value={safeToString(role.id)}>
-                                                {role.name}
-                                            </SelectItem>
-                                        ))
-                                    ) : (
-                                        <SelectItem value="0" disabled>No roles available</SelectItem>
-                                    )}
+                                    {roles.map((role: Role) => (
+                                        <SelectItem key={role.id} value={safeToString(role.id)}>
+                                            {role.name}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <div className="flex items-center gap-2 pt-6">
-                                <div className="flex items-center space-x-2">
-                                    <div
-                                        className={`w-3 h-3 rounded-full ${userForm.is_active ? 'bg-green-500' : 'bg-red-500'}`}
-                                    />
-                                    <Label className="text-sm font-medium">
-                                        {userForm.is_active ? 'Active' : 'Inactive'}
-                                    </Label>
+                            <Label htmlFor="status_started_at">
+                                {editingUser ? 'Assignment date *' : 'Hiring date *'} {!editingUser && '*'}
+                            </Label>
+                            <Input
+                                id="status_started_at"
+                                type="date"
+                                value={userForm.status_started_at || ''}
+                                onChange={(e) => handleDateChange('status_started_at', e.target.value)}
+                                disabled={isLoading}
+                                className={errors.status_started_at ? 'border-red-500' : ''}
+                            />
+                            {errors.status_started_at && (
+                                <div>
+                                    <p className="text-sm text-red-500">{errors.status_started_at}   Previous date: {previousDate}</p>
                                 </div>
-                            </div>
+                            )}
+                            {editingUser && previousDate && !errors.status_started_at && userForm.status_started_at && (
+                                <></>
+                            )}
                         </div>
                     </div>
+
+                    {/* Account Status (only for Edit mode) */}
+                    {editingUser && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="account_status">Account Status</Label>
+                                <Select
+                                    value={safeToString(userForm.account_status_id)}
+                                    onValueChange={(value: string) => {
+                                        const parsedValue = value === 'null' || value === '' ? null : parseInt(value);
+                                        setUserForm({ ...userForm, account_status_id: parsedValue });
+                                    }}
+                                    disabled={isLoading || !accounts_statuses || accounts_statuses.length === 0}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select account status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {accounts_statuses.map((status: AccountStatus) => (
+                                            <SelectItem key={status.id} value={safeToString(status.id)}>
+                                                {status.name || status.status || 'Unknown'}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <DialogFooter className='display-flex pt-4 justify-between'>
+
+                <DialogFooter className="flex justify-between pt-4">
                     <Button variant="outline" onClick={handleClose} disabled={isLoading}>
                         Cancel
                     </Button>
@@ -649,7 +716,9 @@ export function UserDialog({
                             !userForm.email?.trim() ||
                             !userForm.first_name?.trim() ||
                             !userForm.last_name?.trim() ||
-                            isLoading
+                            (!editingUser && !userForm.status_started_at) ||
+                            isLoading ||
+                            (!!errors.status_started_at)
                         }
                     >
                         {isLoading ? 'Saving...' : (editingUser ? 'Save Changes' : 'Add User')}
