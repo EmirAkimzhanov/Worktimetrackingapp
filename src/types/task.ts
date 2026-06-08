@@ -5,3 +5,8 @@ export interface Task {
 }
 
 export type TasksArray = Task[];
+
+export interface LeaveTasks {
+    name: string;
+    task_type: number;
+}

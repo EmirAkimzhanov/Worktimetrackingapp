@@ -4,9 +4,8 @@ import { persist } from "zustand/middleware";
 import { Countries } from "../types/countries";
 import { CountryWithClients, MainEntity, OnlyClient } from "../types/client";
 import { Project, ProjectBody, ProjectTasks } from "../types/project";
-import { Task, TasksArray } from "../types/task";
+import { LeaveTasks, Task, TasksArray } from "../types/task";
 import { LeaveArray } from "../types/leave";
-import { LeaveReportsData } from "../types/leaveReport";
 import { Holidays, TimeEntry, WorkingWeekends } from "../types/timeEntrys";
 import { Department, Position } from "../types/types";
 import { DepartmentWithMembers } from "../types/departments";
@@ -20,6 +19,7 @@ import { GlobalSettings } from "../types/settings";
 import { Me } from "../types/auth";
 import { Manager } from "../types/managers";
 import { getWorkingWeekends } from "../services/timeEntry";
+import { LeaveReportsData } from "../types/reports";
 
 // Определяем тип для роли (можно заменить на импорт из types, если есть)
 export interface Role {
@@ -177,7 +177,8 @@ interface UserState {
   internal_tasks: TasksArray | null;
 
   leaves: LeaveArray | null;
-  leaves_reports: LeaveReportsData | null;
+  leaves_reports: LeaveTasks[] | null;
+  leave_tasks: any[] | null; // 👈 ДОБАВЛЕНО
 
   time_entries: TimeEntry[] | null;
 
@@ -270,7 +271,8 @@ interface UserState {
   getInternalTasksByType: (taskType: string) => Task[];
 
   setLeaves: (leaves: LeaveArray | null) => void;
-  setLeavesReports: (leaves_reports: LeaveReportsData | null) => void;
+  setLeavesReports: (leaves_reports: LeaveReportsData[] | null) => void;
+  setLeaveTasks: (leave_tasks: any[] | null) => void; // 👈 ДОБАВЛЕНО
 
   setCurrentMonth: (currentMonth: string | null) => void;
   setCurrentYear: (currentYear: string | null) => void;
@@ -380,6 +382,7 @@ export const useUserStore = create<UserState>()(
       internal_tasks: null,
       leaves: null,
       leaves_reports: null,
+      leave_tasks: null, // 👈 ДОБАВЛЕНО
       time_entries: null,
       time_entry: null,
       time_entries_stats: null,
@@ -470,6 +473,8 @@ export const useUserStore = create<UserState>()(
       setLeaves: (leaves) => set({ leaves }),
 
       setLeavesReports: (leaves_reports) => set({ leaves_reports }),
+
+      setLeaveTasks: (leave_tasks) => set({ leave_tasks }), // 👈 ДОБАВЛЕНО
 
       setCalendarHolidays: (calendar_holidays) => set({ calendar_holidays }),
 
@@ -811,6 +816,7 @@ export const useUserStore = create<UserState>()(
           internal_tasks: null,
           leaves: null,
           leaves_reports: null,
+          leave_tasks: null, // 👈 ДОБАВЛЕНО
           time_entries: null,
           time_entry: null,
           time_entries_stats: null,
@@ -870,6 +876,7 @@ export const useUserStore = create<UserState>()(
         internal_tasks: state.internal_tasks,
         leaves: state.leaves,
         leaves_reports: state.leaves_reports,
+        leave_tasks: state.leave_tasks, // 👈 ДОБАВЛЕНО
         time_entries: state.time_entries,
         departments: state.departments,
         department_members: state.department_members,

@@ -445,7 +445,7 @@ export function TimesheetReports() {
                                     <SelectItem value="all">All Countries</SelectItem>
                                     {(store_countries || []).map((c: any) => (
                                         <SelectItem key={c.id} value={c.code}>
-                                            {c.code}
+                                            {c.name}({c.code})
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

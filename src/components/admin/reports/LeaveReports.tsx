@@ -10,6 +10,7 @@ import { useGetLeaves } from '../../../hooks/useReport';
 import { useUserStore } from '../../../store/UsersStore';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { api } from '../../../consts/api';
+import { useGetLeaveTasks } from '../../../hooks/useTasks';
 
 interface LeaveDocument {
     id: number;
@@ -56,6 +57,12 @@ interface Country {
     code: string;
 }
 
+interface LeaveTask {
+    id: number;
+    name: string;
+    task_type?: number;
+}
+
 export function LeaveReports() {
     // Состояния для фильтров дат
     const [dateType, setDateType] = useState<string>('thisMonth');
@@ -89,6 +96,8 @@ export function LeaveReports() {
     const countries = useUserStore((state) => state.countries);
     const positions = useUserStore((state) => state.positions);
     const grades = useUserStore((state) => state.user_grades);
+    const leave_tasks = useUserStore((state) => state.leave_tasks);
+    const { mutate: getLeaveTasks } = useGetLeaveTasks();
 
     // Безопасное получение массивов
     const countriesArray = Array.isArray(countries) ? countries : [];
@@ -97,6 +106,11 @@ export function LeaveReports() {
     const departmentsArray = Array.isArray(store_departments)
         ? store_departments
         : (store_departments ? Object.values(store_departments) : []);
+
+    // Загружаем задачи для отпусков при монтировании компонента
+    useEffect(() => {
+        getLeaveTasks();
+    }, [getLeaveTasks]);
 
     // Получение параметров дат для API
     const getDateParamsForAPI = useCallback(() => {
@@ -276,7 +290,8 @@ export function LeaveReports() {
         return Array.from(uniqueGrades);
     };
 
-    const getUniqueTasks = () => {
+    // Получаем уникальные задачи из данных (как запасной вариант)
+    const getUniqueTasksFromData = () => {
         const tasks = new Set<string>();
         leaveData.forEach(record => {
             if (record.task) tasks.add(record.task);
@@ -459,7 +474,7 @@ export function LeaveReports() {
                             </Select>
                         </div>
 
-                        {/* Task Name Select */}
+                        {/* Task Name Select - используем данные из leave_tasks */}
                         <div key="filter-task">
                             <Select value={selectedTaskName || "all"} onValueChange={setSelectedTaskName}>
                                 <SelectTrigger className="h-9 text-sm">
@@ -467,11 +482,20 @@ export function LeaveReports() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Tasks</SelectItem>
-                                    {getUniqueTasks().map((task) => (
-                                        <SelectItem key={`task-${task}`} value={task}>
-                                            {task}
-                                        </SelectItem>
-                                    ))}
+                                    {leave_tasks && leave_tasks.length > 0 ? (
+                                        leave_tasks.map((task: LeaveTask) => (
+                                            <SelectItem key={`task-${task.id}`} value={task.name}>
+                                                {task.name}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        // Запасной вариант из данных, если leave_tasks пуст
+                                        getUniqueTasksFromData().map((task) => (
+                                            <SelectItem key={`task-data-${task}`} value={task}>
+                                                {task}
+                                            </SelectItem>
+                                        ))
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>

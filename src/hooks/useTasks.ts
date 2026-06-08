@@ -6,6 +6,7 @@ import {
     DeleteTask,
     EditTask,
     getInternalTasks,
+    getLeaveTasks,
     getTasks,
     getTaskTypes,
 } from "../services/task";
@@ -15,6 +16,7 @@ import {
 let internalTasksCache: { data: any[]; timestamp: number } | null = null;
 let tasksCache: { data: any[]; timestamp: number } | null = null;
 let taskTypesCache: { data: any[]; timestamp: number } | null = null;
+let leaveTasksCache: { data: any[]; timestamp: number } | null = null;
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
 
@@ -22,6 +24,10 @@ const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
 const clearInternalTasksCache = () => {
     internalTasksCache = null;
     console.log('Internal tasks cache cleared');
+};
+const clearLeaveTasksCache = () => {
+    leaveTasksCache = null;
+    console.log('Leave tasks cache cleared');
 };
 
 const clearTasksCache = () => {
@@ -47,6 +53,14 @@ const getCachedInternalTasks = () => {
     if (internalTasksCache && (now - internalTasksCache.timestamp) < CACHE_DURATION) {
         console.log('Returning cached internal tasks data');
         return internalTasksCache.data;
+    }
+    return null;
+};
+const getCachedLeaveTasks = () => {
+    const now = Date.now();
+    if (leaveTasksCache && (now - leaveTasksCache.timestamp) < CACHE_DURATION) {
+        console.log('Returning cached leave tasks data');
+        return leaveTasksCache.data;
     }
     return null;
 };
@@ -94,6 +108,34 @@ export const useGetInterbalTasks = () => {
         },
         onError: (error: Error) => {
             console.error("Get internal tasks error:", error.message);
+        },
+    });
+};
+export const useGetLeaveTasks = () => {
+    const setLeaveTasks = useUserStore((state) => state.setLeaveTasks);
+
+    return useMutation({
+        mutationFn: async (forceRefresh?: boolean) => {
+            if (!forceRefresh) {
+                const cached = getCachedLeaveTasks();
+                if (cached) {
+                    return cached;
+                }
+            }
+
+            console.log(forceRefresh ? 'Force refreshing leave tasks' : 'Fetching fresh leave tasks');
+            const data = await getLeaveTasks();
+            leaveTasksCache = { data, timestamp: Date.now() };
+            return data;
+        },
+        onSuccess: (data) => {
+            if (setLeaveTasks) {
+                setLeaveTasks(data);
+            }
+            console.log("Leave tasks loaded:", data);
+        },
+        onError: (error: Error) => {
+            console.error("Get leave tasks error:", error.message);
         },
     });
 };

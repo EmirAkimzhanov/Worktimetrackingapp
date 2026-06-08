@@ -112,3 +112,19 @@ export const createTask = async (body: { name: string; task_type: number }) => {
   });
   return res.data;
 };
+
+export const getLeaveTasks = async () => {
+  const token = useUserStore.getState().access_token;
+
+  if (!token) {
+    throw new Error("No access token available");
+  }
+
+  const res = await axios(`${api}api/projects/tasks/leave/`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
+};
+
