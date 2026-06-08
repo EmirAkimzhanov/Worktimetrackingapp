@@ -18,7 +18,7 @@ export interface GetUsersParams {
     role_name?: string;
     joined_after?: string;
     joined_before?: string;
-    is_active?: string;
+    status_name?: string;
     ordering?: string;
 }
 
@@ -35,7 +35,7 @@ export interface GetUsersExcelParams {
     role_name?: string;
     joined_after?: string;
     joined_before?: string;
-    is_active?: string;
+    status_name?: string;
     ordering?: string;
 }
 
@@ -64,7 +64,7 @@ export const getUsers = async (params?: GetUsersParams) => {
     if (params?.role_name) queryParams.append('role_name', params.role_name);
     if (params?.joined_after) queryParams.append('joined_after', params.joined_after);
     if (params?.joined_before) queryParams.append('joined_before', params.joined_before);
-    if (params?.is_active) queryParams.append('is_active', params.is_active);
+    if (params?.status_name) queryParams.append('status_name', params.status_name);
 
     // Сортировка
     if (params?.ordering) queryParams.append('ordering', params.ordering);
@@ -106,7 +106,7 @@ export const getUsersExcel = async (params?: GetUsersExcelParams): Promise<Blob>
     if (params?.role_name) queryParams.append('role_name', params.role_name);
     if (params?.joined_after) queryParams.append('joined_after', params.joined_after);
     if (params?.joined_before) queryParams.append('joined_before', params.joined_before);
-    if (params?.is_active) queryParams.append('is_active', params.is_active);
+    if (params?.status_name) queryParams.append('status_name', params.status_name);
     if (params?.ordering) queryParams.append('ordering', params.ordering);
 
     try {

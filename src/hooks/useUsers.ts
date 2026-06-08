@@ -20,7 +20,7 @@ interface GetUsersParams {
     role_name?: string;
     joined_after?: string;
     joined_before?: string;
-    is_active?: string;
+    status_name?: string;
     ordering?: string;
 }
 
@@ -54,7 +54,7 @@ const getCacheKey = (params?: GetUsersParams) => {
         role_name,
         joined_after,
         joined_before,
-        is_active,
+        status_name,
         ordering
     } = params;
     return JSON.stringify({
@@ -71,7 +71,7 @@ const getCacheKey = (params?: GetUsersParams) => {
         role_name: role_name || '',
         joined_after: joined_after || '',
         joined_before: joined_before || '',
-        is_active: is_active || '',
+        status_name: status_name || '',
         ordering: ordering || ''
     });
 };
@@ -142,7 +142,7 @@ export const useGetUsers = () => {
                 role_name,
                 joined_after,
                 joined_before,
-                is_active,
+                status_name,
                 ordering
             } = params || {};
 
@@ -160,7 +160,7 @@ export const useGetUsers = () => {
                 ...(role_name && { role_name }),
                 ...(joined_after && { joined_after }),
                 ...(joined_before && { joined_before }),
-                ...(is_active && { is_active }),
+                ...(status_name && { status_name }),
                 ...(ordering && { ordering })
             };
 
@@ -378,7 +378,7 @@ export const usersCacheUtils = {
             role_name,
             joined_after,
             joined_before,
-            is_active,
+            status_name,
             ordering
         } = params || {};
 
@@ -396,7 +396,7 @@ export const usersCacheUtils = {
             ...(role_name && { role_name }),
             ...(joined_after && { joined_after }),
             ...(joined_before && { joined_before }),
-            ...(is_active && { is_active }),
+            ...(status_name && { status_name }),
             ...(ordering && { ordering })
         };
 

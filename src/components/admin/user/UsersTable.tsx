@@ -63,7 +63,7 @@ interface Filters {
     grade_name: string;
     country_code: string;
     role_name: string;
-    is_active: string;
+    status_name: string;
 }
 
 type SortOption = {
@@ -92,8 +92,8 @@ const sortOptions: SortOption[] = [
     { value: '-role_name', label: 'Role (Z-A)' },
     { value: 'date_joined', label: 'Date Joined (Oldest first)' },
     { value: '-date_joined', label: 'Date Joined (Newest first)' },
-    { value: 'is_active', label: 'Status (Active first)' },
-    { value: '-is_active', label: 'Status (Inactive first)' },
+    { value: 'status_name', label: 'Status (Active first)' },
+    { value: '-status_name', label: 'Status (Inactive first)' },
 ];
 
 export function UsersTable({
@@ -108,6 +108,7 @@ export function UsersTable({
     const { mutate: getPositions } = useGetPositions();
     const { mutate: deleteUser } = useDeleteUsers();
     const { mutate: exportUsers, isPending: isExporting } = useExportUsersExcel();
+    const statuses = useUserStore((state) => state.accounts_statuses);
 
     const store_users = useUserStore((state) => state.users);
     const usersPagination = useUserStore((state) => state.usersPagination);
@@ -129,7 +130,7 @@ export function UsersTable({
         grade_id: undefined,
         country_id: undefined,
         role: 'user',
-        is_active: true,
+        status_name: true,
         date_joined: new Date().toISOString().split('T')[0],
         date_left: '',
     });
@@ -211,7 +212,7 @@ export function UsersTable({
         grade_name: '',
         country_code: '',
         role_name: '',
-        is_active: '',
+        status_name: '',
     });
 
     const debouncedFirstName = useDebounce(localFilters.first_name, 500);
@@ -250,7 +251,7 @@ export function UsersTable({
         if (debouncedGrade && debouncedGrade.trim()) params.grade_name = debouncedGrade;
         if (debouncedCountry && debouncedCountry.trim()) params.country_code = debouncedCountry;
         if (debouncedRole && debouncedRole.trim()) params.role_name = debouncedRole;
-        if (localFilters.is_active && localFilters.is_active !== 'all') params.is_active = localFilters.is_active;
+        if (localFilters.status_name && localFilters.status_name !== 'all') params.status_name = localFilters.status_name;
 
         if (includePagination) {
             params.page = currentPage;
@@ -258,7 +259,7 @@ export function UsersTable({
         }
 
         return params;
-    }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.is_active, ordering, currentPage, pageSize]);
+    }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.status_name, ordering, currentPage, pageSize]);
 
     const loadUsers = useCallback((page: number) => {
         const params = getCurrentFilterParams(true);
@@ -276,7 +277,7 @@ export function UsersTable({
             setIsInitialLoad(false);
             loadUsers(1);
         }
-    }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.is_active, ordering]);
+    }, [debouncedFirstName, debouncedLastName, debouncedEmail, debouncedPosition, debouncedDepartment, debouncedDepartmentRole, debouncedGrade, debouncedCountry, debouncedRole, localFilters.status_name, ordering]);
 
     // Функция для экспорта в Excel
     const handleExportExcel = () => {
@@ -300,7 +301,7 @@ export function UsersTable({
             grade_name: '',
             country_code: '',
             role_name: '',
-            is_active: '',
+            status_name: '',
         });
         setCurrentPage(1);
     };
@@ -318,7 +319,7 @@ export function UsersTable({
             grade_id: undefined,
             country_id: undefined,
             role: 'user',
-            is_active: true,
+            status_name: true,
             date_joined: new Date().toISOString().split('T')[0],
             date_left: '',
         });
@@ -479,6 +480,29 @@ export function UsersTable({
     };
 
     const activeFiltersCount = Object.values(localFilters).filter(v => v && v !== '' && v !== 'all').length;
+
+    // Функция для получения отображаемого статуса
+    const getDisplayStatus = (user: any) => {
+        if (user.account_status || user.status) {
+            return user.account_status || user.status;
+        }
+        return user.status_name ? 'Active' : 'Inactive';
+    };
+
+    // Функция для получения цвета статуса
+    const getStatusColor = (status: string) => {
+        const lowerStatus = status?.toLowerCase() || '';
+        if (lowerStatus === 'active' || lowerStatus === 'активен') {
+            return 'bg-green-100 text-green-800';
+        }
+        if (lowerStatus === 'inactive' || lowerStatus === 'неактивен') {
+            return 'bg-gray-100 text-gray-800';
+        }
+        if (lowerStatus === 'pending' || lowerStatus === 'ожидание') {
+            return 'bg-yellow-100 text-yellow-800';
+        }
+        return 'bg-blue-100 text-blue-800';
+    };
 
     if (isLoadingUsers && users.length === 0 && isInitialLoad) {
         return (
@@ -685,18 +709,31 @@ export function UsersTable({
                             </SelectContent>
                         </Select>
 
-                        {/* Status */}
+                        {/* Status - используем данные из store statuses */}
                         <Select
-                            value={localFilters.is_active || "all"}
-                            onValueChange={(value) => handleFilterChange('is_active', value === "all" ? "" : value)}
+                            value={localFilters.status_name || "all"}
+                            onValueChange={(value) => handleFilterChange('status_name', value === "all" ? "" : value)}
                         >
-                            <SelectTrigger className="h-7 w-[90px] text-xs">
+                            <SelectTrigger className="h-7 w-[110px] text-xs">
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="true">Active</SelectItem>
-                                <SelectItem value="false">Inactive</SelectItem>
+                                {statuses && statuses.length > 0 ? (
+                                    statuses.map((status: any) => (
+                                        <SelectItem
+                                            key={status.id}
+                                            value={status.name || status.status || ''}
+                                        >
+                                            {status.name || status.status || 'Unknown'}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <>
+                                        <SelectItem value="true">Active</SelectItem>
+                                        <SelectItem value="false">Inactive</SelectItem>
+                                    </>
+                                )}
                             </SelectContent>
                         </Select>
 
@@ -773,100 +810,100 @@ export function UsersTable({
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                users.map((user: any) => (
-                                    <TableRow key={user.id} className="hover:bg-slate-50">
-                                        <TableCell className="font-medium">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <User className="w-3 h-3 text-slate-500 flex-shrink-0" />
-                                                <span className="truncate text-xs">
-                                                    {user.first_name || '-'}
-                                                </span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="font-medium">
-                                            <span className="truncate block text-xs">
-                                                {user.last_name || '-'}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className="font-medium">
-                                            <span className="truncate block text-xs">
-                                                {user.phone_number || '-'}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-xs truncate block max-w-[180px]">
-                                                {user.email}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-xs truncate block max-w-[90px]">
-                                                {user.position_name || user.position || '-'}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-xs truncate block max-w-[90px]">
-                                                {user.department_name || user.department || '-'}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge
-                                                variant={getDeptRoleBadgeVariant(user.department_role)}
-                                                className="text-xs truncate max-w-[110px]"
-                                            >
-                                                {user.department_role === 'manager' ? 'Manager' : user.department_role === 'member' ? 'Member' : user.department_role || '-'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-xs">{user.grade_name || user.grade || '-'}</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-xs">{user.country_code || user.country || '-'}</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
-                                                {user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'User' : user.role || '-'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="text-xs">{formatDate(user.date_joined)}</div>
-                                            {user.date_left && (
-                                                <div className="text-xs text-red-600">
-                                                    Left: {formatDate(user.date_left)}
+                                users.map((user: any) => {
+                                    const displayStatus = getDisplayStatus(user);
+                                    const statusColor = getStatusColor(displayStatus);
+
+                                    return (
+                                        <TableRow key={user.id} className="hover:bg-slate-50">
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <User className="w-3 h-3 text-slate-500 flex-shrink-0" />
+                                                    <span className="truncate text-xs">
+                                                        {user.first_name || '-'}
+                                                    </span>
                                                 </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge
-                                                variant={user.is_active ? 'default' : 'default'}
-                                                className={`text-xs ${user.is_active
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : 'bg-gray-100 text-gray-800'}`}
-                                            >
-                                                {user.status ? `${user.status}` : 'no status'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    onClick={() => handleEditUser(user)}
+                                            </TableCell>
+                                            <TableCell className="font-medium">
+                                                <span className="truncate block text-xs">
+                                                    {user.last_name || '-'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="font-medium">
+                                                <span className="truncate block text-xs">
+                                                    {user.phone_number || '-'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs truncate block max-w-[180px]">
+                                                    {user.email}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs truncate block max-w-[90px]">
+                                                    {user.position_name || user.position || '-'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs truncate block max-w-[90px]">
+                                                    {user.department_name || user.department || '-'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge
+                                                    variant={getDeptRoleBadgeVariant(user.department_role)}
+                                                    className="text-xs truncate max-w-[110px]"
                                                 >
-                                                    <Edit className="w-3 h-3" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-6 w-6"
-                                                    onClick={() => handleDeleteClick(user)}
-                                                >
-                                                    <Trash2 className="w-3 h-3 text-red-500" />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                                    {user.department_role === 'manager' ? 'Manager' : user.department_role === 'member' ? 'Member' : user.department_role || '-'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs">{user.grade_name || user.grade || '-'}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-xs">{user.country_code || user.country || '-'}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
+                                                    {user.role === 'admin' ? 'Admin' : user.role === 'user' ? 'User' : user.role || '-'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-xs">{formatDate(user.date_joined)}</div>
+                                                {user.date_left && (
+                                                    <div className="text-xs text-red-600">
+                                                        Left: {formatDate(user.date_left)}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge className={`text-xs ${statusColor}`}>
+                                                    {displayStatus}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => handleEditUser(user)}
+                                                    >
+                                                        <Edit className="w-3 h-3" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        onClick={() => handleDeleteClick(user)}
+                                                    >
+                                                        <Trash2 className="w-3 h-3 text-red-500" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             )}
                         </TableBody>
                     </Table>

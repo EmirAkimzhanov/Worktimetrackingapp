@@ -198,7 +198,7 @@ export function LeaveReports() {
 
         try {
             const token = useUserStore.getState().access_token;
-            const baseUrl = api;
+            const baseUrl = window.location.origin;
 
             let fileUrl = leaveDoc.url;
             if (!fileUrl.startsWith('http')) {
@@ -241,7 +241,7 @@ export function LeaveReports() {
         }
 
         const token = useUserStore.getState().access_token;
-        const baseUrl = api;
+        const baseUrl = window.location.origin;
 
         let fileUrl = leaveDoc.url;
         if (!fileUrl.startsWith('http')) {
