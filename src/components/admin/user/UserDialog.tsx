@@ -645,11 +645,15 @@ export function UserDialog({
                                     <SelectValue placeholder="Select system role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {roles.map((role: Role) => (
-                                        <SelectItem key={role.id} value={safeToString(role.id)}>
-                                            {role.name}
-                                        </SelectItem>
-                                    ))}
+                                    {roles && roles.length > 0 ? (
+                                        roles.map((role: Role) => (
+                                            <SelectItem key={role.id} value={safeToString(role.id)}>
+                                                {role.name}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <SelectItem value="no-roles" disabled>No roles available</SelectItem>
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>
