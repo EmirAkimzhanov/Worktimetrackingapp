@@ -837,12 +837,12 @@ export function UsersTable({
                                         </TableCell>
                                         <TableCell>
                                             <Badge
-                                                variant={user.is_active ? 'default' : 'outline'}
+                                                variant={user.is_active ? 'default' : 'default'}
                                                 className={`text-xs ${user.is_active
                                                     ? 'bg-green-100 text-green-800'
                                                     : 'bg-gray-100 text-gray-800'}`}
                                             >
-                                                {user.is_active ? 'Active' : 'Inactive'}
+                                                {user.status ? `${user.status}` : 'no status'}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>

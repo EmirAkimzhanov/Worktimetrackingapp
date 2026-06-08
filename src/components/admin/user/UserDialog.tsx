@@ -648,7 +648,7 @@ export function UserDialog({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="status_started_at">
-                                {editingUser ? 'Assignment date *' : 'Hiring date *'} {!editingUser && '*'}
+                                {editingUser ? 'Assignment date *' : 'Hiring date *'} {!editingUser && ''}
                             </Label>
                             <Input
                                 id="status_started_at"
