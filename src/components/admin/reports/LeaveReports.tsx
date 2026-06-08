@@ -348,7 +348,7 @@ export function LeaveReports() {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-4">
                         {/* Date Range */}
                         <div key="filter-date-range">
-                            <Select value={dateType} onValueChange={setDateType}>
+                            <Select value={dateType || "all"} onValueChange={setDateType}>
                                 <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Date Range" />
                                 </SelectTrigger>
@@ -365,7 +365,7 @@ export function LeaveReports() {
 
                         {/* User Department */}
                         <div key="filter-department">
-                            <Select value={selectedUserDepartment} onValueChange={setSelectedUserDepartment}>
+                            <Select value={selectedUserDepartment || "all"} onValueChange={setSelectedUserDepartment}>
                                 <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Department" />
                                 </SelectTrigger>
@@ -382,7 +382,7 @@ export function LeaveReports() {
 
                         {/* User Country - используем данные из store */}
                         <div key="filter-country">
-                            <Select value={selectedUserCountryCode} onValueChange={setSelectedUserCountryCode}>
+                            <Select value={selectedUserCountryCode || "all"} onValueChange={setSelectedUserCountryCode}>
                                 <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Country" />
                                 </SelectTrigger>
@@ -399,7 +399,7 @@ export function LeaveReports() {
 
                         {/* Position - используем данные из store */}
                         <div key="filter-position">
-                            <Select value={selectedPosition} onValueChange={setSelectedPosition}>
+                            <Select value={selectedPosition || "all"} onValueChange={setSelectedPosition}>
                                 <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Position" />
                                 </SelectTrigger>
@@ -422,7 +422,7 @@ export function LeaveReports() {
 
                         {/* Grade - используем данные из store */}
                         <div key="filter-grade">
-                            <Select value={selectedDetailedGrade} onValueChange={setSelectedDetailedGrade}>
+                            <Select value={selectedDetailedGrade || "all"} onValueChange={setSelectedDetailedGrade}>
                                 <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Grade" />
                                 </SelectTrigger>
@@ -445,7 +445,7 @@ export function LeaveReports() {
 
                         {/* Leave Type */}
                         <div key="filter-leave-type">
-                            <Select value={selectedLeaveType} onValueChange={setSelectedLeaveType}>
+                            <Select value={selectedLeaveType || "all"} onValueChange={setSelectedLeaveType}>
                                 <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Leave Type" />
                                 </SelectTrigger>
@@ -461,7 +461,7 @@ export function LeaveReports() {
 
                         {/* Task Name Select */}
                         <div key="filter-task">
-                            <Select value={selectedTaskName} onValueChange={setSelectedTaskName}>
+                            <Select value={selectedTaskName || "all"} onValueChange={setSelectedTaskName}>
                                 <SelectTrigger className="h-9 text-sm">
                                     <SelectValue placeholder="Task" />
                                 </SelectTrigger>
