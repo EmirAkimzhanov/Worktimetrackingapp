@@ -458,21 +458,7 @@ export function LeaveReports() {
                             </Select>
                         </div>
 
-                        {/* Leave Type */}
-                        <div key="filter-leave-type">
-                            <Select value={selectedLeaveType || "all"} onValueChange={setSelectedLeaveType}>
-                                <SelectTrigger className="h-9 text-sm">
-                                    <SelectValue placeholder="Leave Type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Types</SelectItem>
-                                    <SelectItem value="Leave">Leave</SelectItem>
-                                    <SelectItem value="Sick Leave">Sick Leave</SelectItem>
-                                    <SelectItem value="Annual Leave">Annual Leave</SelectItem>
-                                    <SelectItem value="Unpaid Leave">Unpaid Leave</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+
 
                         {/* Task Name Select - используем данные из leave_tasks */}
                         <div key="filter-task">
@@ -500,15 +486,7 @@ export function LeaveReports() {
                             </Select>
                         </div>
 
-                        {/* Task Name Search */}
-                        <div key="filter-task-search">
-                            <Input
-                                className="h-9 text-sm"
-                                placeholder="Task name search"
-                                value={searchTaskName}
-                                onChange={(e) => setSearchTaskName(e.target.value)}
-                            />
-                        </div>
+
 
                         {/* User Email Search */}
                         <div key="filter-email">
