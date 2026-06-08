@@ -220,12 +220,12 @@ export function UserDialog({
                 date_joined: editingUser.date_joined?.split('T')[0] || new Date().toISOString().split('T')[0],
                 leave_date: editingUser.leave_date || editingUser.date_left || '',
                 is_active: editingUser.is_active ?? true,
-                position_id: editingUser.position_id || findId(store_positions, editingUser.position) || store_positions[0]?.id || 1,
-                department_id: editingUser.department_id || findId(store_departments, editingUser.department) || store_departments[0]?.id || 1,
+                position_id: editingUser.position_id || findId(store_positions, editingUser.position) || (store_positions && store_positions.length > 0 ? store_positions[0]?.id : 1),
+                department_id: editingUser.department_id || findId(store_departments, editingUser.department) || (store_departments && store_departments.length > 0 ? store_departments[0]?.id : 1),
                 role_id: roleId || (roles && roles.length > 0 ? roles[0].id : 1),
-                department_role_id: editingUser.department_role_id || findId(department_roles, editingUser.department_role) || department_roles[0]?.id || 1,
-                grade_id: editingUser.grade_id || findId(user_grades, editingUser.grade) || user_grades[0]?.id || 10,
-                country_id: editingUser.country_id || findId(countries, editingUser.country) || countries[0]?.id || 1,
+                department_role_id: editingUser.department_role_id || findId(department_roles, editingUser.department_role) || (department_roles && department_roles.length > 0 ? department_roles[0]?.id : 1),
+                grade_id: editingUser.grade_id || findId(user_grades, editingUser.grade) || (user_grades && user_grades.length > 0 ? user_grades[0]?.id : 10),
+                country_id: editingUser.country_id || findId(countries, editingUser.country) || (countries && countries.length > 0 ? countries[0]?.id : 1),
                 account_status_id: accountStatusId,
                 status_started_at: editingUser.status_started_at?.split('T')[0]
                     || editingUser.status_start_date?.split('T')[0]
@@ -270,13 +270,13 @@ export function UserDialog({
             date_joined: new Date().toISOString().split('T')[0],
             leave_date: '',
             is_active: true,
-            position_id: store_positions[0]?.id || 1,
-            department_id: store_departments[0]?.id || 1,
-            role_id: roles[0]?.id || 1,
-            department_role_id: department_roles[0]?.id || 1,
-            grade_id: user_grades[0]?.id || 10,
-            country_id: countries[0]?.id || 1,
-            account_status_id: accounts_statuses[0]?.id || null,
+            position_id: store_positions && store_positions.length > 0 ? store_positions[0]?.id : 1,
+            department_id: store_departments && store_departments.length > 0 ? store_departments[0]?.id : 1,
+            role_id: roles && roles.length > 0 ? roles[0]?.id : 1,
+            department_role_id: department_roles && department_roles.length > 0 ? department_roles[0]?.id : 1,
+            grade_id: user_grades && user_grades.length > 0 ? user_grades[0]?.id : 10,
+            country_id: countries && countries.length > 0 ? countries[0]?.id : 1,
+            account_status_id: accounts_statuses && accounts_statuses.length > 0 ? accounts_statuses[0]?.id : null,
             status_started_at: ''
         });
         setErrors({});
@@ -292,14 +292,12 @@ export function UserDialog({
         return emailRegex.test(email);
     }, []);
 
-    // Функция для проверки даты при редактировании
     const validateDateForEdit = useCallback((newDate: string, previousDate: string | undefined): boolean => {
-        if (!previousDate) return true; // Если нет предыдущей даты, разрешаем
+        if (!previousDate) return true;
 
         const newDateObj = new Date(newDate);
         const previousDateObj = new Date(previousDate);
 
-        // Сравниваем только даты (без времени)
         newDateObj.setHours(0, 0, 0, 0);
         previousDateObj.setHours(0, 0, 0, 0);
 
@@ -327,7 +325,6 @@ export function UserDialog({
             newErrors.status_started_at = 'Status started at is required';
         }
 
-        // Проверка для редактирования: новая дата не может быть меньше предыдущей
         if (editingUser && userForm.status_started_at) {
             const previousDate = editingUser.status_started_at?.split('T')[0]
                 || editingUser.status_start_date?.split('T')[0]
@@ -409,7 +406,6 @@ export function UserDialog({
     const handleDateChange = useCallback((field: keyof UserFormData, value: string) => {
         setUserForm({ ...userForm, [field]: value });
 
-        // Очищаем ошибку для этого поля
         if (errors[field]) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -418,7 +414,6 @@ export function UserDialog({
             });
         }
 
-        // Дополнительная проверка при изменении даты в режиме редактирования
         if (editingUser && field === 'status_started_at' && value) {
             const previousDate = editingUser.status_started_at?.split('T')[0]
                 || editingUser.status_start_date?.split('T')[0]
@@ -460,7 +455,6 @@ export function UserDialog({
         }).filter(Boolean);
     }, [safeToString]);
 
-    // Получаем предыдущую дату для отображения (только в режиме редактирования)
     const previousDate = editingUser ? (
         editingUser.status_started_at?.split('T')[0]
         || editingUser.status_start_date?.split('T')[0]
@@ -478,7 +472,6 @@ export function UserDialog({
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-                    {/* First Name & Last Name */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="first_name">First Name *</Label>
@@ -510,7 +503,6 @@ export function UserDialog({
                         </div>
                     </div>
 
-                    {/* Email & Grade */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="email">Email *</Label>
@@ -546,7 +538,6 @@ export function UserDialog({
                         </div>
                     </div>
 
-                    {/* Position & Department */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="position">Position *</Label>
@@ -584,7 +575,6 @@ export function UserDialog({
                         </div>
                     </div>
 
-                    {/* Department Role & Country */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="department_role">Department Role *</Label>
@@ -626,7 +616,6 @@ export function UserDialog({
                         </div>
                     </div>
 
-                    {/* System Role & Status Started At */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="role">System Role *</Label>
@@ -674,13 +663,9 @@ export function UserDialog({
                                     <p className="text-sm text-red-500">{errors.status_started_at}   Previous date: {previousDate}</p>
                                 </div>
                             )}
-                            {editingUser && previousDate && !errors.status_started_at && userForm.status_started_at && (
-                                <></>
-                            )}
                         </div>
                     </div>
 
-                    {/* Account Status (only for Edit mode) */}
                     {editingUser && (
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -697,11 +682,15 @@ export function UserDialog({
                                         <SelectValue placeholder="Select account status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {accounts_statuses.map((status: AccountStatus) => (
-                                            <SelectItem key={status.id} value={safeToString(status.id)}>
-                                                {status.name || status.status || 'Unknown'}
-                                            </SelectItem>
-                                        ))}
+                                        {accounts_statuses && accounts_statuses.length > 0 ? (
+                                            accounts_statuses.map((status: AccountStatus) => (
+                                                <SelectItem key={status.id} value={safeToString(status.id)}>
+                                                    {status.name || status.status || 'Unknown'}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <SelectItem value="no-status" disabled>No statuses available</SelectItem>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
