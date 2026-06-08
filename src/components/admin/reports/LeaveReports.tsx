@@ -65,7 +65,7 @@ export function LeaveReports() {
     });
     const [specificDate, setSpecificDate] = useState<string>('');
 
-    // Фильтры
+    // Фильтры (select)
     const [selectedUserDepartment, setSelectedUserDepartment] = useState<string>('all');
     const [selectedUserCountryCode, setSelectedUserCountryCode] = useState<string>('all');
     const [selectedPosition, setSelectedPosition] = useState<string>('all');
@@ -73,9 +73,10 @@ export function LeaveReports() {
     const [selectedLeaveType, setSelectedLeaveType] = useState<string>('all');
     const [selectedTaskName, setSelectedTaskName] = useState<string>('all');
 
-    // Поиски
+    // Поиски (input)
     const [searchUserEmail, setSearchUserEmail] = useState<string>('');
     const [searchDescription, setSearchDescription] = useState<string>('');
+    const [searchTaskName, setSearchTaskName] = useState<string>('');
 
     // Пагинация
     const [rowsPerPage] = useState<number>(30);
@@ -84,10 +85,18 @@ export function LeaveReports() {
     const store_departments = useUserStore((state) => state.departments);
     const leaves_reports = useUserStore((state) => state.leaves_reports);
 
-    // Данные из store для фильтров
-    const countries = useUserStore((state) => state.countries) as Country[] | null;
-    const positions = useUserStore((state) => state.positions) as Position[] | null;
-    const grades = useUserStore((state) => state.user_grades) as Grade[] | null;
+    // Данные из store для фильтров с безопасной проверкой на null
+    const countries = useUserStore((state) => state.countries);
+    const positions = useUserStore((state) => state.positions);
+    const grades = useUserStore((state) => state.user_grades);
+
+    // Безопасное получение массивов
+    const countriesArray = Array.isArray(countries) ? countries : [];
+    const positionsArray = Array.isArray(positions) ? positions : [];
+    const gradesArray = Array.isArray(grades) ? grades : [];
+    const departmentsArray = Array.isArray(store_departments)
+        ? store_departments
+        : (store_departments ? Object.values(store_departments) : []);
 
     // Получение параметров дат для API
     const getDateParamsForAPI = useCallback(() => {
@@ -150,6 +159,7 @@ export function LeaveReports() {
         task_name: selectedTaskName !== 'all' ? selectedTaskName : undefined,
         user_email: searchUserEmail || undefined,
         description: searchDescription || undefined,
+        task_name_search: searchTaskName || undefined,
     });
 
     // Сброс всех фильтров
@@ -168,6 +178,7 @@ export function LeaveReports() {
         setSelectedTaskName('all');
         setSearchUserEmail('');
         setSearchDescription('');
+        setSearchTaskName('');
         setCurrentPage(1);
         toast.success('All filters reset');
     };
@@ -187,7 +198,7 @@ export function LeaveReports() {
 
         try {
             const token = useUserStore.getState().access_token;
-            const baseUrl = window.location.origin;
+            const baseUrl = api;
 
             let fileUrl = leaveDoc.url;
             if (!fileUrl.startsWith('http')) {
@@ -230,7 +241,7 @@ export function LeaveReports() {
         }
 
         const token = useUserStore.getState().access_token;
-        const baseUrl = window.location.origin;
+        const baseUrl = api;
 
         let fileUrl = leaveDoc.url;
         if (!fileUrl.startsWith('http')) {
@@ -360,7 +371,7 @@ export function LeaveReports() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Departments</SelectItem>
-                                    {(Array.isArray(store_departments) ? store_departments : Object.values(store_departments || {})).map((dept: any) => (
+                                    {departmentsArray.map((dept: any) => (
                                         <SelectItem key={`dept-${dept.id}`} value={dept.name}>
                                             {dept.name}
                                         </SelectItem>
@@ -377,7 +388,7 @@ export function LeaveReports() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Countries</SelectItem>
-                                    {countries && countries.map((country: Country) => (
+                                    {countriesArray.map((country: Country) => (
                                         <SelectItem key={`country-${country.id}`} value={country.code}>
                                             {country.name} ({country.code})
                                         </SelectItem>
@@ -394,13 +405,13 @@ export function LeaveReports() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Positions</SelectItem>
-                                    {positions && positions.map((pos: Position) => (
+                                    {positionsArray.map((pos: Position) => (
                                         <SelectItem key={`pos-${pos.id}`} value={pos.name}>
                                             {pos.name}
                                         </SelectItem>
                                     ))}
                                     {/* Запасной вариант из данных, если в store пусто */}
-                                    {(!positions || positions.length === 0) && getUniquePositionsFromData().map((pos) => (
+                                    {positionsArray.length === 0 && getUniquePositionsFromData().map((pos) => (
                                         <SelectItem key={`pos-data-${pos}`} value={pos}>
                                             {pos}
                                         </SelectItem>
@@ -417,13 +428,13 @@ export function LeaveReports() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Grades</SelectItem>
-                                    {grades && grades.map((grade: Grade) => (
+                                    {gradesArray.map((grade: Grade) => (
                                         <SelectItem key={`grade-${grade.id}`} value={grade.name}>
                                             {grade.name}
                                         </SelectItem>
                                     ))}
                                     {/* Запасной вариант из данных, если в store пусто */}
-                                    {(!grades || grades.length === 0) && getUniqueGradesFromData().map((grade) => (
+                                    {gradesArray.length === 0 && getUniqueGradesFromData().map((grade) => (
                                         <SelectItem key={`grade-data-${grade}`} value={grade}>
                                             {grade}
                                         </SelectItem>
@@ -448,7 +459,7 @@ export function LeaveReports() {
                             </Select>
                         </div>
 
-                        {/* Task Name */}
+                        {/* Task Name Select */}
                         <div key="filter-task">
                             <Select value={selectedTaskName} onValueChange={setSelectedTaskName}>
                                 <SelectTrigger className="h-9 text-sm">
@@ -463,6 +474,16 @@ export function LeaveReports() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        {/* Task Name Search */}
+                        <div key="filter-task-search">
+                            <Input
+                                className="h-9 text-sm"
+                                placeholder="Task name search"
+                                value={searchTaskName}
+                                onChange={(e) => setSearchTaskName(e.target.value)}
+                            />
                         </div>
 
                         {/* User Email Search */}
@@ -507,7 +528,7 @@ export function LeaveReports() {
                     {showCustomDates && (
                         <div className="mb-4 mt-2" key="custom-dates-container" style={{ display: 'flex' }}>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div >
+                                <div>
                                     <label className="text-xs text-muted-foreground mb-1 block">Start Date</label>
                                     <Input
                                         type="date"
@@ -516,7 +537,7 @@ export function LeaveReports() {
                                         onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
                                     />
                                 </div>
-                                <div >
+                                <div>
                                     <label className="text-xs text-muted-foreground mb-1 block">End Date</label>
                                     <Input
                                         type="date"
