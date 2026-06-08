@@ -1,16 +1,17 @@
 import { useMutation, useQuery, UseQueryOptions } from '@tanstack/react-query';
 import { useUserStore } from '../store/UsersStore';
 import { getReports, getReportsExcel, GetReportsParams, ReportsResponse, ReportItem } from '../services/reprot';
+import { getLeaves } from '../services/timeEntry';
 import { useEffect, useCallback } from 'react';
 
 // ========== КЛЮЧИ ДЛЯ REACT QUERY ==========
 const REPORTS_QUERY_KEY = 'reports';
 const REPORTS_EXCEL_QUERY_KEY = 'reports-excel';
+const LEAVES_QUERY_KEY = 'leaves';
 
 // ========== ХУК ДЛЯ ПОЛУЧЕНИЯ ОТЧЕТОВ С ПАГИНАЦИЕЙ ==========
 export const useGetReports = (params?: GetReportsParams, options?: UseQueryOptions<ReportsResponse>) => {
     const setReports = useUserStore((state) => state.setReports);
-    const storeReports = useUserStore((state) => state.reports);
     const me = useUserStore((state) => state.me);
 
     // Очищаем параметры от undefined и пустых значений
@@ -21,6 +22,11 @@ export const useGetReports = (params?: GetReportsParams, options?: UseQueryOptio
     // Если передан user_country_code, логируем это
     if (cleanParams?.user_country_code) {
         console.log('Filtering reports by user_country_code:', cleanParams.user_country_code);
+    }
+
+    // Если передан status_name, логируем это
+    if (cleanParams?.status_name) {
+        console.log('Filtering reports by status_name:', cleanParams.status_name);
     }
 
     const query = useQuery<ReportsResponse>({
@@ -58,8 +64,9 @@ export const useGetReports = (params?: GetReportsParams, options?: UseQueryOptio
                 totalCount: query.data.count,
                 currentPage: cleanParams?.page || 1,
                 pageSize: cleanParams?.page_size || 30,
-                params: cleanParams, // Сохраняем параметры запроса
+                params: cleanParams,
                 user_country_code: cleanParams?.user_country_code || me?.country_code,
+                status_name: cleanParams?.status_name,
             };
             setReports(reportsData as any);
             console.log('Reports loaded:', query.data?.count, 'records');
@@ -69,8 +76,13 @@ export const useGetReports = (params?: GetReportsParams, options?: UseQueryOptio
                 const uniqueUsers = new Set(query.data.results.map(r => r.user_email));
                 console.log(`Filtered by ${cleanParams.user_country_code}: ${uniqueUsers.size} users, ${query.data.results.length} entries`);
             }
+
+            // Логируем статистику по status_name если есть
+            if (cleanParams?.status_name && query.data.results) {
+                console.log(`Filtered by status_name ${cleanParams.status_name}: ${query.data.results.length} entries`);
+            }
         }
-    }, [query.data, setReports, cleanParams?.page, cleanParams?.page_size, cleanParams?.user_country_code, me?.country_code]);
+    }, [query.data, setReports, cleanParams?.page, cleanParams?.page_size, cleanParams?.user_country_code, cleanParams?.status_name, me?.country_code]);
 
     // Добавляем метод для обновления с новым user_country_code
     const refetchWithCountryCode = useCallback((user_country_code: string) => {
@@ -86,10 +98,26 @@ export const useGetReports = (params?: GetReportsParams, options?: UseQueryOptio
         return query.refetch(restParams as any);
     }, [query, cleanParams]);
 
+    // Добавляем метод для обновления с новым status_name
+    const refetchWithStatusName = useCallback((status_name: string) => {
+        return query.refetch({
+            ...cleanParams,
+            status_name,
+        } as any);
+    }, [query, cleanParams]);
+
+    // Добавляем метод для обновления без status_name
+    const refetchWithoutStatusName = useCallback(() => {
+        const { status_name, ...restParams } = cleanParams || {};
+        return query.refetch(restParams as any);
+    }, [query, cleanParams]);
+
     return {
         ...query,
         refetchWithCountryCode,
         refetchWithoutCountryCode,
+        refetchWithStatusName,
+        refetchWithoutStatusName,
     };
 };
 
@@ -106,14 +134,12 @@ export const useGetReportsExcel = () => {
                 Object.entries(params).filter(([_, value]) => value !== undefined && value !== null && value !== '')
             ) : undefined;
 
-            // Если user_country_code не передан, но есть текущий пользователь, используем его страну
-            let exportParams = cleanParams;
-            // if (!cleanParams?.user_country_code && me?.country_code) {
-            //     console.log('Using current user country code for export:', me.country_code);
-            //     exportParams = { ...cleanParams, user_country_code: me.country_code };
-            // }
+            // Если передан status_name, логируем это
+            if (cleanParams?.status_name) {
+                console.log('Exporting reports filtered by status_name:', cleanParams.status_name);
+            }
 
-            const data = await getReportsExcel(exportParams as GetReportsParams);
+            const data = await getReportsExcel(cleanParams as GetReportsParams);
             return data;
         },
         onSuccess: (data, params) => {
@@ -149,6 +175,9 @@ export const useGetReportsExcel = () => {
                 if (params?.user_country_code) {
                     filename = filename.replace('.xlsx', `_country_${params.user_country_code}.xlsx`);
                 }
+                if (params?.status_name) {
+                    filename = filename.replace('.xlsx', `_status_${params.status_name}.xlsx`);
+                }
 
                 link.setAttribute('download', filename);
                 document.body.appendChild(link);
@@ -165,6 +194,59 @@ export const useGetReportsExcel = () => {
     });
 };
 
+// ========== ХУК ДЛЯ ПОЛУЧЕНИЯ LEAVES С ПАГИНАЦИЕЙ ==========
+export const useGetLeaves = (params?: GetLeavesParams, options?: UseQueryOptions<LeavesResponse>) => {
+    const setLeavesReports = useUserStore((state) => state.setLeavesReports);
+
+    // Очищаем параметры от undefined и пустых значений
+    const cleanParams = params ? Object.fromEntries(
+        Object.entries(params).filter(([_, value]) => value !== undefined && value !== null && value !== '')
+    ) : undefined;
+
+    const query = useQuery<LeavesResponse>({
+        queryKey: [LEAVES_QUERY_KEY, cleanParams],
+        queryFn: async () => {
+            console.log('Fetching leaves with params:', cleanParams);
+            const data = await getLeaves(cleanParams as GetLeavesParams);
+            return data;
+        },
+        staleTime: 5 * 60 * 1000, // 5 минут данные считаются свежими
+        gcTime: 10 * 60 * 1000, // 10 минут кэш хранится в памяти
+        refetchOnWindowFocus: false,
+        refetchOnMount: true,
+        ...options,
+    });
+
+    // Сохраняем данные в store при их получении
+    useEffect(() => {
+        if (query.data) {
+            setLeavesReports({
+                leaves: query.data.results || [],
+                total_count: query.data.count || 0,
+                total_days: query.data.total_days || 0,
+                approved_days: query.data.approved_days || 0,
+                pending_days: query.data.pending_days || 0,
+                rejected_days: query.data.rejected_days || 0,
+                cancelled_days: query.data.cancelled_days || 0,
+                currentPage: cleanParams?.page || 1,
+                pageSize: cleanParams?.page_size || 30,
+                totalPages: Math.ceil((query.data.count || 0) / (cleanParams?.page_size || 30)),
+            });
+            console.log('Leaves loaded:', query.data?.count, 'records');
+        }
+    }, [query.data, setLeavesReports, cleanParams?.page, cleanParams?.page_size]);
+
+    // Метод для принудительного обновления с новыми параметрами
+    const refetchWithParams = useCallback((newParams?: GetLeavesParams) => {
+        return query.refetch();
+    }, [query]);
+
+    return {
+        ...query,
+        refetchWithParams,
+    };
+};
+
 // ========== ХУК ДЛЯ ЗАГРУЗКИ ВСЕХ ОТЧЕТОВ (БЕЗ ПАГИНАЦИИ) ==========
 export const useGetAllReports = () => {
     const me = useUserStore((state) => state.me);
@@ -178,12 +260,12 @@ export const useGetAllReports = () => {
 
             console.log('Fetching all reports with params:', params);
 
-            // Если user_country_code не передан, но есть текущий пользователь, используем его страну
+            // Если передан status_name, логируем это
+            if (params?.status_name) {
+                console.log('Fetching all reports filtered by status_name:', params.status_name);
+            }
+
             let requestParams = params;
-            // if (!params?.user_country_code && me?.country_code) {
-            //     console.log('Using current user country code for all reports:', me.country_code);
-            //     requestParams = { ...params, user_country_code: me.country_code };
-            // }
 
             while (hasNext) {
                 const response = await getReports({
@@ -211,6 +293,7 @@ export const useGetAllReports = () => {
                 currentPage: 1,
                 pageSize: allResults.length,
                 params: requestParams,
+                status_name: params?.status_name,
             };
 
             return reportsData;
@@ -230,13 +313,10 @@ export const useGetReportsResults = (params?: GetReportsParams, options?: UseQue
         queryFn: async () => {
             console.log('Fetching reports results with params:', params);
 
-            // Если user_country_code не передан, но есть текущий пользователь, используем его страну
-            // if (!params?.user_country_code && me?.country_code) {
-            //     console.log('Using current user country code:', me.country_code);
-            //     const paramsWithCountry = { ...params, user_country_code: me.country_code };
-            //     const data = await getReports(paramsWithCountry);
-            //     return data;
-            // }
+            // Если передан status_name, логируем это
+            if (params?.status_name) {
+                console.log('Fetching reports results filtered by status_name:', params.status_name);
+            }
 
             const data = await getReports(params);
             return data;
@@ -309,5 +389,58 @@ export const reportsCacheUtils = {
             queryClient.setQueryData([REPORTS_QUERY_KEY], data);
         }
         console.log('Reports cached');
+    },
+};
+
+// ========== УТИЛИТЫ ДЛЯ РАБОТЫ С КЭШЕМ LEAVES ==========
+export const leavesCacheUtils = {
+    // Очистка кэша конкретного запроса
+    clearLeavesCache: (queryClient: any, params?: GetLeavesParams) => {
+        if (params) {
+            const cleanParams = Object.fromEntries(
+                Object.entries(params).filter(([_, value]) => value !== undefined && value !== null && value !== '')
+            );
+            queryClient.removeQueries({ queryKey: [LEAVES_QUERY_KEY, cleanParams] });
+        } else {
+            queryClient.removeQueries({ queryKey: [LEAVES_QUERY_KEY] });
+        }
+        console.log('Leaves cache cleared');
+    },
+
+    // Инвалидация (помечает данные как устаревшие)
+    invalidateLeaves: (queryClient: any, params?: GetLeavesParams) => {
+        if (params) {
+            const cleanParams = Object.fromEntries(
+                Object.entries(params).filter(([_, value]) => value !== undefined && value !== null && value !== '')
+            );
+            queryClient.invalidateQueries({ queryKey: [LEAVES_QUERY_KEY, cleanParams] });
+        } else {
+            queryClient.invalidateQueries({ queryKey: [LEAVES_QUERY_KEY] });
+        }
+        console.log('Leaves invalidated');
+    },
+
+    // Получение кэшированных данных
+    getCachedLeaves: (queryClient: any, params?: GetLeavesParams) => {
+        if (params) {
+            const cleanParams = Object.fromEntries(
+                Object.entries(params).filter(([_, value]) => value !== undefined && value !== null && value !== '')
+            );
+            return queryClient.getQueryData([LEAVES_QUERY_KEY, cleanParams]);
+        }
+        return queryClient.getQueryData([LEAVES_QUERY_KEY]);
+    },
+
+    // Установка данных в кэш
+    setCachedLeaves: (queryClient: any, data: any, params?: GetLeavesParams) => {
+        if (params) {
+            const cleanParams = Object.fromEntries(
+                Object.entries(params).filter(([_, value]) => value !== undefined && value !== null && value !== '')
+            );
+            queryClient.setQueryData([LEAVES_QUERY_KEY, cleanParams], data);
+        } else {
+            queryClient.setQueryData([LEAVES_QUERY_KEY], data);
+        }
+        console.log('Leaves cached');
     },
 };

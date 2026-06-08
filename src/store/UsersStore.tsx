@@ -6,6 +6,7 @@ import { CountryWithClients, MainEntity, OnlyClient } from "../types/client";
 import { Project, ProjectBody, ProjectTasks } from "../types/project";
 import { Task, TasksArray } from "../types/task";
 import { LeaveArray } from "../types/leave";
+import { LeaveReportsData } from "../types/leaveReport";
 import { Holidays, TimeEntry, WorkingWeekends } from "../types/timeEntrys";
 import { Department, Position } from "../types/types";
 import { DepartmentWithMembers } from "../types/departments";
@@ -176,6 +177,7 @@ interface UserState {
   internal_tasks: TasksArray | null;
 
   leaves: LeaveArray | null;
+  leaves_reports: LeaveReportsData | null;
 
   time_entries: TimeEntry[] | null;
 
@@ -230,7 +232,7 @@ interface UserState {
   accounts_statuses: Status[] | null;
 
   currentMonth: string | null;
-  currentYear: string | null; // 👈 ДОБАВЛЕНО
+  currentYear: string | null;
 
   workingWeekends: WorkingWeekends[] | null;
 
@@ -268,9 +270,10 @@ interface UserState {
   getInternalTasksByType: (taskType: string) => Task[];
 
   setLeaves: (leaves: LeaveArray | null) => void;
+  setLeavesReports: (leaves_reports: LeaveReportsData | null) => void;
 
   setCurrentMonth: (currentMonth: string | null) => void;
-  setCurrentYear: (currentYear: string | null) => void; // 👈 ДОБАВЛЕНО
+  setCurrentYear: (currentYear: string | null) => void;
 
   setProjectsPagination: (pagination: ProjectsPagination | null) => void;
   setUsersPagination: (pagination: UsersPagination | null) => void;
@@ -376,6 +379,7 @@ export const useUserStore = create<UserState>()(
       project_tasks: null,
       internal_tasks: null,
       leaves: null,
+      leaves_reports: null,
       time_entries: null,
       time_entry: null,
       time_entries_stats: null,
@@ -406,7 +410,7 @@ export const useUserStore = create<UserState>()(
       usersPagination: null,
       clientsPagination: null,
       currentMonth: null,
-      currentYear: null, // 👈 ДОБАВЛЕНО
+      currentYear: null,
       reports: {
         timeReports: null,
         projectReports: null,
@@ -450,7 +454,7 @@ export const useUserStore = create<UserState>()(
 
       setCurrentMonth: (currentMonth) => set({ currentMonth }),
 
-      setCurrentYear: (currentYear) => set({ currentYear }), // 👈 ДОБАВЛЕНО
+      setCurrentYear: (currentYear) => set({ currentYear }),
 
       setClientProjects: (clientProjects) =>
         set({ client_projects: clientProjects }),
@@ -464,6 +468,8 @@ export const useUserStore = create<UserState>()(
       clearInternalTasks: () => set({ internal_tasks: null }),
 
       setLeaves: (leaves) => set({ leaves }),
+
+      setLeavesReports: (leaves_reports) => set({ leaves_reports }),
 
       setCalendarHolidays: (calendar_holidays) => set({ calendar_holidays }),
 
@@ -804,6 +810,7 @@ export const useUserStore = create<UserState>()(
           workingWeekends: null,
           internal_tasks: null,
           leaves: null,
+          leaves_reports: null,
           time_entries: null,
           time_entry: null,
           time_entries_stats: null,
@@ -832,7 +839,7 @@ export const useUserStore = create<UserState>()(
           usersPagination: null,
           clientsPagination: null,
           currentMonth: null,
-          currentYear: null, // 👈 ДОБАВЛЕНО
+          currentYear: null,
           reports: {
             timeReports: null,
             projectReports: null,
@@ -862,6 +869,7 @@ export const useUserStore = create<UserState>()(
         project_tasks: state.project_tasks,
         internal_tasks: state.internal_tasks,
         leaves: state.leaves,
+        leaves_reports: state.leaves_reports,
         time_entries: state.time_entries,
         departments: state.departments,
         department_members: state.department_members,
@@ -883,7 +891,7 @@ export const useUserStore = create<UserState>()(
         globalSettings: state.globalSettings,
         calendar_holidays: state.calendar_holidays,
         currentMonth: state.currentMonth,
-        currentYear: state.currentYear, // 👈 ДОБАВЛЕНО
+        currentYear: state.currentYear,
       }),
     },
   ),

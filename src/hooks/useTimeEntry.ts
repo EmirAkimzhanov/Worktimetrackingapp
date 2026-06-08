@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, getWorkingWeekends, sendCalendar, sendLetter, sendReminder, sendTimeEntry, getTimeEntriesStats } from "../services/timeEntry";
+import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, getWorkingWeekends, sendCalendar, sendLetter, sendReminder, sendTimeEntry, getTimeEntriesStats, getLeaves } from "../services/timeEntry";
 import { EditDate, LetterBody, ReminderBody, TimeBody } from '../types/timeEntrys';
 import { useUserStore } from '../store/UsersStore';
 import { CalendarEvent } from '../types/calendar';
@@ -13,6 +13,8 @@ let calendarCache: { data: any; timestamp: number } | null = null;
 let holidayCalendarCache: { data: any; timestamp: number } | null = null;
 let timeEntriesStatsCache: { data: any; timestamp: number; year: string; month: string } | null = null;
 let workingWeekendsCache: { data: any; timestamp: number } | null = null;
+let leavesCache: { data: any; timestamp: number } | null = null;
+
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
 const STATS_CACHE_DURATION = 5 * 60 * 1000; // 5 минут для статистики
@@ -43,12 +45,18 @@ const clearWorkingWeekendsCache = () => {
     console.log('Working weekends cache cleared');
 };
 
+const clearLeavesCache = () => {
+    leavesCache = null;
+    console.log('Leaves cache cleared');
+};
+
 const clearAllTimeCaches = () => {
     clearTimeEntriesCache();
     clearCalendarCache();
     clearHolidayCalendarCache();
     clearTimeEntriesStatsCache();
     clearWorkingWeekendsCache();
+    clearLeavesCache();
     console.log('All time-related caches cleared');
 };
 
@@ -76,6 +84,15 @@ const getCachedWorkingWeekends = () => {
     if (workingWeekendsCache && (now - workingWeekendsCache.timestamp) < CACHE_DURATION) {
         console.log('Returning cached working weekends data');
         return workingWeekendsCache.data;
+    }
+    return null;
+};
+
+const getCachedLeaves = () => {
+    const now = Date.now();
+    if (leavesCache && (now - leavesCache.timestamp) < CACHE_DURATION) {
+        console.log('Returning cached leaves data');
+        return leavesCache.data;
     }
     return null;
 };
@@ -386,7 +403,72 @@ export const useSendLetter = () => {
     });
 };
 
-// ========== НОВЫЙ ХУК ДЛЯ СТАТИСТИКИ TIME ENTRIES ==========
+// ========== ХУК ДЛЯ LEAVES ==========
+
+export const useGetLeaves = () => {
+    const setLeavesReports = useUserStore((state) => state.setLeavesReports);
+
+    return useMutation({
+        mutationFn: async (params?: {
+            page?: number;
+            page_size?: number;
+            start_date?: string;
+            end_date?: string;
+            date?: string;
+            user_email?: string;
+            user_country_code?: string;
+            user_department?: string;
+            position?: string;
+            detailed_grade?: string;
+            description?: string;
+            task_name?: string;
+            country_code?: string;
+            leave_type?: string;
+            status?: string;
+            forceRefresh?: boolean;
+        }) => {
+            const forceRefresh = params?.forceRefresh;
+
+            // Создаем ключ кэша на основе параметров
+            const cacheKey = JSON.stringify(params);
+
+            // Проверяем кэш
+            if (!forceRefresh && leavesCache && leavesCache.data) {
+                const isCacheValid = Date.now() - leavesCache.timestamp < CACHE_DURATION;
+                if (isCacheValid) {
+                    console.log('Returning cached leaves data');
+                    return leavesCache.data;
+                }
+            }
+
+            console.log(forceRefresh ? 'Force refreshing leaves' : 'Fetching fresh leaves', params);
+
+            const data = await getLeaves(params);
+            leavesCache = { data, timestamp: Date.now() };
+            return data;
+        },
+        onSuccess: (data) => {
+            if (setLeavesReports && data) {
+                setLeavesReports({
+                    leaves: data.results || [],
+                    total_count: data.count || 0,
+                    total_days: data.total_days || 0,
+                    approved_days: data.approved_days || 0,
+                    pending_days: data.pending_days || 0,
+                    rejected_days: data.rejected_days || 0,
+                    cancelled_days: data.cancelled_days || 0,
+                });
+            }
+            console.log('Leaves loaded:', data);
+        },
+        onError: (error) => {
+            console.error("Get leaves error:", error);
+            toast.error(error.message);
+        },
+    });
+};
+
+// ========== ХУК ДЛЯ СТАТИСТИКИ TIME ENTRIES ==========
 
 export const useGetTimeEntriesStats = () => {
     const setTimeEntriesStats = useUserStore((state) => state.setTimeEntriesStats);
@@ -428,6 +510,7 @@ export const timeCacheUtils = {
     clearHolidayCalendarCache,
     clearTimeEntriesStatsCache,
     clearWorkingWeekendsCache,
+    clearLeavesCache,
     clearAll: clearAllTimeCaches,
 
     isTimeEntriesCacheValid: (cacheKey?: string) => {
@@ -456,6 +539,12 @@ export const timeCacheUtils = {
         if (!workingWeekendsCache) return false;
         const now = Date.now();
         return (now - workingWeekendsCache.timestamp) < CACHE_DURATION;
+    },
+
+    isLeavesCacheValid: () => {
+        if (!leavesCache) return false;
+        const now = Date.now();
+        return (now - leavesCache.timestamp) < CACHE_DURATION;
     },
 
     isTimeEntriesStatsCacheValid: (year?: string, month?: string) => {
@@ -495,6 +584,12 @@ export const timeCacheUtils = {
         return Math.floor((now - workingWeekendsCache.timestamp) / 1000);
     },
 
+    getLeavesCacheAge: () => {
+        if (!leavesCache) return null;
+        const now = Date.now();
+        return Math.floor((now - leavesCache.timestamp) / 1000);
+    },
+
     getTimeEntriesStatsCacheAge: () => {
         if (!timeEntriesStatsCache) return null;
         const now = Date.now();
@@ -529,6 +624,12 @@ export const timeCacheUtils = {
         return Math.floor((now - workingWeekendsCache.timestamp) / 60000);
     },
 
+    getLeavesCacheAgeInMinutes: () => {
+        if (!leavesCache) return null;
+        const now = Date.now();
+        return Math.floor((now - leavesCache.timestamp) / 60000);
+    },
+
     getTimeEntriesStatsCacheAgeInMinutes: () => {
         if (!timeEntriesStatsCache) return null;
         const now = Date.now();
@@ -552,6 +653,10 @@ export const timeCacheUtils = {
 
     getWorkingWeekendsCacheData: () => {
         return workingWeekendsCache ? workingWeekendsCache.data : null;
+    },
+
+    getLeavesCacheData: () => {
+        return leavesCache ? leavesCache.data : null;
     },
 
     getTimeEntriesStatsCacheData: () => {
@@ -584,6 +689,13 @@ export const timeCacheUtils = {
         const data = await getWorkingWeekends();
         workingWeekendsCache = { data, timestamp: Date.now() };
         console.log('Working weekends cache refreshed');
+        return data;
+    },
+
+    refreshLeavesCache: async () => {
+        const data = await getLeaves();
+        leavesCache = { data, timestamp: Date.now() };
+        console.log('Leaves cache refreshed');
         return data;
     },
 
@@ -629,6 +741,13 @@ export const timeCacheUtils = {
             ageInMinutes: Math.floor((now - workingWeekendsCache.timestamp) / 60000)
         };
 
+        const leavesInfo = !leavesCache ? { exists: false } : {
+            exists: true,
+            isValid: (now - leavesCache.timestamp) < CACHE_DURATION,
+            ageInSeconds: Math.floor((now - leavesCache.timestamp) / 1000),
+            ageInMinutes: Math.floor((now - leavesCache.timestamp) / 60000)
+        };
+
         const statsInfo = !timeEntriesStatsCache ? { exists: false } : {
             exists: true,
             year: timeEntriesStatsCache.year,
@@ -643,6 +762,7 @@ export const timeCacheUtils = {
             calendar: calendarInfo,
             holidayCalendar: holidayInfo,
             workingWeekends: workingWeekendsInfo,
+            leaves: leavesInfo,
             timeEntriesStats: statsInfo,
             cacheDurationMinutes: CACHE_DURATION / 60000,
             statsCacheDurationMinutes: STATS_CACHE_DURATION / 60000

@@ -296,3 +296,68 @@ export const getTimeEntriesStats = async (year: string | number, month: string |
     );
     return res.data;
 }
+
+
+// В services/timeEntry.ts
+export const getLeaves = async (params?: {
+    page?: number;
+    page_size?: number;
+    start_date?: string;
+    end_date?: string;
+    date?: string;
+    user_email?: string;
+    user_country_code?: string;
+    user_department?: string;
+    position?: string;
+    detailed_grade?: string;
+    description?: string;
+    task_name?: string;
+    country_code?: string;
+    leave_type?: string;
+    status?: string;
+}) => {
+    const token = useUserStore.getState().access_token;
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const queryParams = new URLSearchParams();
+
+    // Пагинация
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
+
+    // Фильтры по датам
+    if (params?.start_date) queryParams.append('start_date', params.start_date);
+    if (params?.end_date) queryParams.append('end_date', params.end_date);
+    if (params?.date) queryParams.append('date', params.date);
+
+    // Фильтры по пользователю
+    if (params?.user_email) queryParams.append('user_email', params.user_email);
+    if (params?.user_country_code) queryParams.append('user_country_code', params.user_country_code);
+    if (params?.user_department) queryParams.append('user_department', params.user_department);
+
+    // Фильтры по должности и грейду
+    if (params?.position) queryParams.append('position', params.position);
+    if (params?.detailed_grade) queryParams.append('detailed_grade', params.detailed_grade);
+
+    // Фильтры по описанию и задаче
+    if (params?.description) queryParams.append('description', params.description);
+    if (params?.task_name) queryParams.append('task_name', params.task_name);
+
+    // Дополнительные фильтры
+    if (params?.country_code) queryParams.append('country_code', params.country_code);
+    if (params?.leave_type) queryParams.append('leave_type', params.leave_type);
+    if (params?.status) queryParams.append('status', params.status);
+
+    const url = `${api}/api/calendars/time-entries/leaves/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
+    const res = await axios(url, {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    return res.data;
+};

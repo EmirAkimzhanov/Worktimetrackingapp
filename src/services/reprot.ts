@@ -19,6 +19,7 @@ export interface GetReportsParams {
     detailed_grade?: string;       // detailed_grade
     country_code?: string;         // Код страны
     position?: string;             // Позиция/должность
+    status_name?: string;          // Статус (НОВЫЙ ПАРАМЕТР)
 
     // Поиск (частичное совпадение) - ДОБАВЛЕНЫ НОВЫЕ ПОЛЯ
     search?: string;               // Общий поиск по всем текстовым полям
@@ -28,6 +29,7 @@ export interface GetReportsParams {
     description?: string;          // Поиск по описанию
     task_name?: string;            // Поиск по названию задачи
 
+    user_country_code?: string;
     // Сортировка
     ordering?: string;             // Например: "-date", "user_email"
 
@@ -55,6 +57,7 @@ export interface ReportItem {
     position?: string;               // Позиция
     project_id?: number;
     user_id?: number;
+    status_name?: string;            // Статус (НОВОЕ ПОЛЕ)
     [key: string]: any;              // Для дополнительных полей
 }
 
@@ -173,6 +176,9 @@ export const downloadExcelReport = async (params?: GetReportsParams, filename?: 
         if (params?.project_department) {
             defaultFilename = defaultFilename.replace('.xlsx', `_project_dept_${params.project_department}.xlsx`);
         }
+        if (params?.status_name) {
+            defaultFilename = defaultFilename.replace('.xlsx', `_status_${params.status_name}.xlsx`);
+        }
         if (params?.start_date && params?.end_date) {
             defaultFilename = `report_${params.start_date}_to_${params.end_date}${defaultFilename.includes('_user_dept') ? '' : '.xlsx'}`;
             if (defaultFilename.includes('_user_dept')) {
@@ -242,6 +248,35 @@ export const getReportsByDepartments = async (
     return getReports(params);
 }
 
+// НОВАЯ: Вспомогательная функция для фильтрации по статусу
+export const getReportsByStatus = async (
+    statusName?: string,
+    additionalParams?: Omit<GetReportsParams, 'status_name'>
+): Promise<ReportsResponse> => {
+    const params: GetReportsParams = { ...additionalParams };
+
+    if (statusName) {
+        params.status_name = statusName;
+    }
+
+    return getReports(params);
+}
+
+// НОВАЯ: Вспомогательная функция для экспорта по статусу
+export const downloadExcelByStatus = async (
+    statusName?: string,
+    additionalParams?: Omit<GetReportsParams, 'status_name'>,
+    filename?: string
+) => {
+    const params: GetReportsParams = { ...additionalParams };
+
+    if (statusName) {
+        params.status_name = statusName;
+    }
+
+    return downloadExcelReport(params, filename);
+}
+
 // НОВАЯ: Вспомогательная функция для экспорта по отделам
 export const downloadExcelByDepartments = async (
     userDepartment?: string,
@@ -263,7 +298,7 @@ export const downloadExcelByDepartments = async (
 
 // НОВАЯ: Вспомогательная функция для получения уникальных значений полей
 export const getUniqueFieldValues = async (
-    field: 'user_department' | 'project_department' | 'country_code' | 'detailed_grade' | 'client_name'
+    field: 'user_department' | 'project_department' | 'country_code' | 'detailed_grade' | 'client_name' | 'status_name'
 ): Promise<string[]> => {
     try {
         // Получаем все записи без пагинации (максимум 10000)
