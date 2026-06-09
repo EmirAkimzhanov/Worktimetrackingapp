@@ -26,7 +26,6 @@ import { useGetClients } from '../../../hooks/useClients';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
-import { cn } from '../../ui/utils';
 
 const VisuallyHidden = ({ children }: { children: React.ReactNode }) => {
     return (
