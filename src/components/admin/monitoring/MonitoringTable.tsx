@@ -446,6 +446,7 @@ export function MonitoringTable({
     };
 
     const confirmBulkSendReminder = () => {
+        console.log('CONFIRM CLICK');
         const emailsArray = Array.from(selectedEmails);
 
         sendReminder({
@@ -457,14 +458,7 @@ export function MonitoringTable({
                 toast.success(`Reminders sent successfully to ${emailsArray.length} user(s)`);
                 console.log('Bulk reminders sent:', response);
 
-                const selectedUserIds = data
-                    .filter(item => selectedEmails.has(item.user_email))
-                    .map(item => item.user_id);
 
-                onSendReminder(
-                    selectedUserIds,
-                    { start: periodStart!, end: periodEnd! }
-                );
 
                 setBulkDialogOpen(false);
                 setSelectedEmails(new Set());
