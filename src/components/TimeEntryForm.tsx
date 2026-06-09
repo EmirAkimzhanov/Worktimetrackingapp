@@ -1220,7 +1220,6 @@ export function TimeEntryForm() {
         )}
 
         {/* Vacations Tab */}
-        {/* Vacations Tab */}
         {activeTab === 'vacations' && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -1359,72 +1358,59 @@ export function TimeEntryForm() {
               />
             </div>
 
-            {/* Поле для загрузки PDF файла - показываем только для sick leave или vacations */}
-            {selectedLeaveType && (() => {
-              const selectedLeave = leaveOptions.find(l => l.value === selectedLeaveType);
-              const leaveLabel = selectedLeave?.label?.toLowerCase() || '';
-              const shouldShowDocument = leaveLabel.includes('sick') ||
-                leaveLabel.includes('illness') ||
-                leaveLabel.includes('бол') ||
-                leaveLabel === 'vacations' ||
-                leaveLabel === 'vacation' ||
-                leaveLabel.includes('отпуск');
-
-              return shouldShowDocument ? (
-                <div className="space-y-2">
-                  <Label htmlFor="leaveDocument">Supporting Document (PDF)</Label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        id="leaveDocument"
-                        type="file"
-                        accept=".pdf,application/pdf"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            if (file.type === 'application/pdf') {
-                              if (file.size <= 10 * 1024 * 1024) {
-                                setLeaveDocument(file);
-                                toast.success(`File "${file.name}" selected`);
-                              } else {
-                                toast.error('File size must be less than 10MB');
-                                e.target.value = '';
-                              }
-                            } else {
-                              toast.error('Please select a PDF file');
-                              e.target.value = '';
-                            }
+            {/* Поле для загрузки PDF файла */}
+            <div className="space-y-2">
+              <Label htmlFor="leaveDocument">Supporting Document (PDF)</Label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="leaveDocument"
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.type === 'application/pdf') {
+                          if (file.size <= 10 * 1024 * 1024) { // 10MB limit
+                            setLeaveDocument(file);
+                            toast.success(`File "${file.name}" selected`);
+                          } else {
+                            toast.error('File size must be less than 10MB');
+                            e.target.value = '';
                           }
-                        }}
-                        className="flex-1"
-                      />
-                    </div>
-                    {leaveDocument && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setLeaveDocument(null);
-                          const input = document.getElementById('leaveDocument') as HTMLInputElement;
-                          if (input) input.value = '';
-                          toast.info('File removed');
-                        }}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                  {leaveDocument && (
-                    <p className="text-sm text-green-600 flex items-center gap-1">
-                      <FileText className="w-3 h-3" />
-                      Selected: {leaveDocument.name} ({(leaveDocument.size / 1024).toFixed(2)} KB)
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-500">Upload a PDF file (max 10MB) - required for sick leave</p>
+                        } else {
+                          toast.error('Please select a PDF file');
+                          e.target.value = '';
+                        }
+                      }
+                    }}
+                    className="flex-1"
+                  />
                 </div>
-              ) : null;
-            })()}
+                {leaveDocument && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setLeaveDocument(null);
+                      const input = document.getElementById('leaveDocument') as HTMLInputElement;
+                      if (input) input.value = '';
+                      toast.info('File removed');
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              {leaveDocument && (
+                <p className="text-sm text-green-600 flex items-center gap-1">
+                  <FileText className="w-3 h-3" />
+                  Selected: {leaveDocument.name} ({(leaveDocument.size / 1024).toFixed(2)} KB)
+                </p>
+              )}
+              <p className="text-xs text-gray-500">Upload a PDF file (max 10MB)</p>
+            </div>
 
             <div className="flex items-center justify-between pt-2">
               <div className="text-sm text-gray-500">Fields marked with * are required</div>
@@ -1432,7 +1418,7 @@ export function TimeEntryForm() {
                 {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> Add Vacation{inputMode === 'range' ? 's' : ''} </>}
               </Button>
             </div>
-          </form>
+          </form >
         )}
       </CardContent >
     </Card >
