@@ -17,7 +17,6 @@ export function FilterPanel() {
   const { filters, setFilters } = useTimeTracker();
   const { mutate: getProjects } = useGetProjects();
   const store_projects = useUserStore((state) => state.projects);
-  console.log(store_projects)
 
   // Загружаем проекты при монтировании компонента
   useEffect(() => {
@@ -166,7 +165,7 @@ export function FilterPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Projects</SelectItem>
-                {store_projects?.map(project => {
+                {Array.isArray(store_projects) && store_projects.map(project => {
                   const isSelected = filters.projects.includes(project.id.toString());
                   const mainCode = project.codes?.[0]?.code;
                   const hasMultipleCodes = project.codes?.length > 1;

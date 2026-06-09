@@ -1,4 +1,3 @@
 // export const api = `https://time-tracker-api-elxa.onrender.com/`;
-// src/consts/api.ts
-export const api = '';
+export const api = `http://10.196.17.246:8000/`;
 
