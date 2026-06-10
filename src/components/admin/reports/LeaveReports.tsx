@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -30,6 +30,23 @@ interface LeaveRecord {
     hours: number;
     description: string;
     leave_document: LeaveDocument | null;
+}
+
+// Группированная запись
+interface GroupedLeaveRecord {
+    id: string; // Уникальный ключ для группировки
+    user_email: string;
+    user_country_code: string;
+    user_department: string;
+    position: string;
+    detailed_grade: string;
+    task_type: string;
+    task: string;
+    description: string;
+    leave_document: LeaveDocument | null;
+    dates: string[]; // Массив дат
+    total_hours: number; // Суммарное количество часов
+    records: LeaveRecord[]; // Исходные записи для детализации
 }
 
 interface DateRange {
@@ -71,6 +88,10 @@ export function LeaveReports() {
         end: format(new Date(), 'yyyy-MM-dd')
     });
     const [specificDate, setSpecificDate] = useState<string>('');
+
+    // Состояние для управления группировкой
+    const [groupByDocument, setGroupByDocument] = useState<boolean>(true);
+    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
     // Фильтры (select)
     const [selectedUserDepartment, setSelectedUserDepartment] = useState<string>('all');
@@ -176,6 +197,76 @@ export function LeaveReports() {
         task_name_search: searchTaskName || undefined,
     });
 
+    // Функция группировки записей
+    const groupRecordsByDocument = useCallback((records: LeaveRecord[]): GroupedLeaveRecord[] => {
+        const groups = new Map<string, GroupedLeaveRecord>();
+
+        records.forEach((record) => {
+            // Определяем ключ для группировки
+            let groupKey: string;
+
+            if (record.leave_document && groupByDocument) {
+                // Если есть документ и включена группировка - группируем по ID документа
+                groupKey = `doc_${record.leave_document.id}`;
+            } else {
+                // Если нет документа или группировка выключена - создаем уникальный ключ для каждой записи
+                groupKey = `record_${record.date}_${record.user_email}_${Math.random()}`;
+            }
+
+            if (groups.has(groupKey)) {
+                // Обновляем существующую группу
+                const existing = groups.get(groupKey)!;
+                existing.dates.push(record.date);
+                existing.total_hours += record.hours;
+                existing.records.push(record);
+                // Сортируем даты
+                existing.dates.sort();
+            } else {
+                // Создаем новую группу
+                groups.set(groupKey, {
+                    id: groupKey,
+                    user_email: record.user_email,
+                    user_country_code: record.user_country_code,
+                    user_department: record.user_department,
+                    position: record.position,
+                    detailed_grade: record.detailed_grade,
+                    task_type: record.task_type,
+                    task: record.task,
+                    description: record.description,
+                    leave_document: record.leave_document,
+                    dates: [record.date],
+                    total_hours: record.hours,
+                    records: [record]
+                });
+            }
+        });
+
+        return Array.from(groups.values());
+    }, [groupByDocument]);
+
+    // Получаем сырые данные
+    const rawLeaveData = leaves_reports?.leaves || [];
+    const totalCount = leaves_reports?.total_count || 0;
+    const totalPages = Math.ceil(totalCount / rowsPerPage);
+
+    // Группируем данные
+    const groupedData = useMemo(() => {
+        return groupRecordsByDocument(rawLeaveData);
+    }, [rawLeaveData, groupRecordsByDocument]);
+
+    // Переключение разворачивания группы
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(groupId)) {
+                newSet.delete(groupId);
+            } else {
+                newSet.add(groupId);
+            }
+            return newSet;
+        });
+    };
+
     // Сброс всех фильтров
     const resetFilters = () => {
         setDateType('thisMonth');
@@ -194,6 +285,7 @@ export function LeaveReports() {
         setSearchDescription('');
         setSearchTaskName('');
         setCurrentPage(1);
+        setExpandedGroups(new Set());
         toast.success('All filters reset');
     };
 
@@ -269,14 +361,22 @@ export function LeaveReports() {
 
     const showCustomDates = dateType === 'custom';
     const showSpecificDate = dateType === 'specificDate';
-    const leaveData = leaves_reports?.leaves || [];
-    const totalCount = leaves_reports?.total_count || 0;
-    const totalPages = Math.ceil(totalCount / rowsPerPage);
+
+    // Форматирование списка дат для отображения
+    const formatDatesList = (dates: string[]): string => {
+        if (dates.length === 1) {
+            return new Date(dates[0]).toLocaleDateString('en-GB');
+        }
+        if (dates.length <= 3) {
+            return dates.map(d => new Date(d).toLocaleDateString('en-GB')).join(', ');
+        }
+        return `${new Date(dates[0]).toLocaleDateString('en-GB')} ... ${new Date(dates[dates.length - 1]).toLocaleDateString('en-GB')} (${dates.length} days)`;
+    };
 
     // Получаем уникальные значения для фильтров из данных (как запасной вариант)
     const getUniquePositionsFromData = () => {
         const uniquePositions = new Set<string>();
-        leaveData.forEach(record => {
+        rawLeaveData.forEach(record => {
             if (record.position) uniquePositions.add(record.position);
         });
         return Array.from(uniquePositions);
@@ -284,7 +384,7 @@ export function LeaveReports() {
 
     const getUniqueGradesFromData = () => {
         const uniqueGrades = new Set<string>();
-        leaveData.forEach(record => {
+        rawLeaveData.forEach(record => {
             if (record.detailed_grade) uniqueGrades.add(record.detailed_grade);
         });
         return Array.from(uniqueGrades);
@@ -293,7 +393,7 @@ export function LeaveReports() {
     // Получаем уникальные задачи из данных (как запасной вариант)
     const getUniqueTasksFromData = () => {
         const tasks = new Set<string>();
-        leaveData.forEach(record => {
+        rawLeaveData.forEach(record => {
             if (record.task) tasks.add(record.task);
         });
         return Array.from(tasks);
@@ -344,13 +444,23 @@ export function LeaveReports() {
                     <h2 className="text-2xl font-bold tracking-tight">Leave Reports</h2>
                     <p className="text-muted-foreground">Generate and export detailed leave reports</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant={groupByDocument ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setGroupByDocument(!groupByDocument)}
+                        disabled={isLoading}
+                    >
+                        {groupByDocument ? "✓ Group by Document" : "Group by Document"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
-            {/* Карточка с фильтрами */}
+            {/* Карточка с фильтрами (без изменений) */}
             <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -570,10 +680,16 @@ export function LeaveReports() {
             <Card>
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">Leave Reports Results</CardTitle>
+                        <CardTitle className="text-lg">
+                            Leave Reports Results
+                            {groupByDocument && groupedData.length !== rawLeaveData.length && (
+                                <span className="text-sm font-normal text-muted-foreground ml-2">
+                                    (Grouped: {groupedData.length} groups from {rawLeaveData.length} records)
+                                </span>
+                            )}
+                        </CardTitle>
                         <div className="text-xs text-muted-foreground">
-                            Showing {totalCount > 0 ? ((currentPage - 1) * rowsPerPage) + 1 : 0}-
-                            {Math.min(currentPage * rowsPerPage, totalCount)} of {totalCount} records
+                            Showing {groupByDocument ? groupedData.length : rawLeaveData.length} items
                         </div>
                     </div>
                 </CardHeader>
@@ -583,7 +699,7 @@ export function LeaveReports() {
                             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
                             <span className="ml-2 text-sm">Loading...</span>
                         </div>
-                    ) : leaveData.length === 0 ? (
+                    ) : (groupByDocument ? groupedData.length === 0 : rawLeaveData.length === 0) ? (
                         <div className="text-center py-8 text-sm text-muted-foreground" key="no-data">
                             No leave records found.
                         </div>
@@ -593,7 +709,8 @@ export function LeaveReports() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-gray-50" key="table-header">
-                                            <TableHead className="text-xs">Date</TableHead>
+                                            <TableHead className="text-xs w-8"></TableHead>
+                                            <TableHead className="text-xs">Dates</TableHead>
                                             <TableHead className="text-xs">User Email</TableHead>
                                             <TableHead className="text-xs">Country</TableHead>
                                             <TableHead className="text-xs">Department</TableHead>
@@ -601,76 +718,149 @@ export function LeaveReports() {
                                             <TableHead className="text-xs">Grade</TableHead>
                                             <TableHead className="text-xs">Leave Type</TableHead>
                                             <TableHead className="text-xs">Task</TableHead>
-                                            <TableHead className="text-xs">Hours</TableHead>
+                                            <TableHead className="text-xs">Total Hours</TableHead>
                                             <TableHead className="text-xs">Description</TableHead>
                                             <TableHead className="text-xs">Document</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {leaveData.map((record: LeaveRecord, index: number) => (
-                                            <TableRow key={`leave-record-${record.date}-${record.user_email}-${index}`} className="text-sm">
-                                                <TableCell className="text-xs">
-                                                    {record.date ? new Date(record.date).toLocaleDateString('en-GB') : '-'}
-                                                </TableCell>
-                                                <TableCell className="text-xs">{record.user_email || '-'}</TableCell>
-                                                <TableCell className="text-xs">{record.user_country_code || '-'}</TableCell>
-                                                <TableCell className="text-xs">
-                                                    <span className="px-1.5 py-0.5 bg-blue-50 rounded text-xs">
-                                                        {record.user_department || '-'}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="text-xs">{record.position || '-'}</TableCell>
-                                                <TableCell className="text-xs">
-                                                    <span className="px-1.5 py-0.5 bg-purple-50 rounded text-xs">
-                                                        {record.detailed_grade || '-'}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="text-xs">
-                                                    <span className="px-1.5 py-0.5 bg-green-50 rounded text-xs">
-                                                        {record.task_type || '-'}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="text-xs">{record.task || '-'}</TableCell>
-                                                <TableCell className="font-mono text-xs font-semibold">
-                                                    {record.hours || 0}h
-                                                </TableCell>
-                                                <TableCell className="text-xs max-w-[200px] truncate" title={record.description}>
-                                                    {record.description || '-'}
-                                                </TableCell>
-                                                <TableCell className="text-xs">
-                                                    {record.leave_document ? (
-                                                        <div className="flex gap-1">
+                                        {(groupByDocument ? groupedData : rawLeaveData.map(r => ({
+                                            ...r,
+                                            id: `single_${r.date}_${r.user_email}`,
+                                            dates: [r.date],
+                                            total_hours: r.hours,
+                                            records: [r]
+                                        } as GroupedLeaveRecord))).map((item: GroupedLeaveRecord) => (
+                                            <React.Fragment key={item.id}>
+                                                <TableRow
+                                                    className={`text-sm ${item.records.length > 1 ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                                                    onClick={() => item.records.length > 1 && toggleGroup(item.id)}
+                                                >
+                                                    <TableCell className="text-xs">
+                                                        {item.records.length > 1 && (
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                className="h-7 w-7 p-0"
-                                                                onClick={() => handleDownloadDocument(record.leave_document!)}
-                                                                title="Download document"
+                                                                className="h-6 w-6 p-0"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleGroup(item.id);
+                                                                }}
                                                             >
-                                                                <Download className="w-3 h-3" />
+                                                                {expandedGroups.has(item.id) ? '▼' : '▶'}
                                                             </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-7 w-7 p-0"
-                                                                onClick={() => handleViewDocument(record.leave_document!)}
-                                                                title="View document"
-                                                            >
-                                                                <ExternalLink className="w-3 h-3" />
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-gray-400">No file</span>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs font-mono">
+                                                        {formatDatesList(item.dates)}
+                                                        {item.records.length > 1 && (
+                                                            <span className="ml-1 text-xs text-muted-foreground">
+                                                                ({item.records.length} days)
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">{item.user_email || '-'}</TableCell>
+                                                    <TableCell className="text-xs">{item.user_country_code || '-'}</TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <span className="px-1.5 py-0.5 bg-blue-50 rounded text-xs">
+                                                            {item.user_department || '-'}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">{item.position || '-'}</TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <span className="px-1.5 py-0.5 bg-purple-50 rounded text-xs">
+                                                            {item.detailed_grade || '-'}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <span className="px-1.5 py-0.5 bg-green-50 rounded text-xs">
+                                                            {item.task_type || '-'}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">{item.task || '-'}</TableCell>
+                                                    <TableCell className="font-mono text-xs font-semibold">
+                                                        {item.total_hours || 0}h
+                                                        {item.records.length > 1 && (
+                                                            <span className="text-xs text-muted-foreground ml-1">
+                                                                (avg: {(item.total_hours / item.records.length).toFixed(1)}h)
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs max-w-[200px] truncate" title={item.description}>
+                                                        {item.description || '-'}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                        {item.leave_document ? (
+                                                            <div className="flex gap-1">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 w-7 p-0"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDownloadDocument(item.leave_document!);
+                                                                    }}
+                                                                    title="Download document"
+                                                                >
+                                                                    <Download className="w-3 h-3" />
+                                                                </Button>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 w-7 p-0"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleViewDocument(item.leave_document!);
+                                                                    }}
+                                                                    title="View document"
+                                                                >
+                                                                    <ExternalLink className="w-3 h-3" />
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400">No file</span>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+
+                                                {/* Детали для развернутой группы */}
+                                                {expandedGroups.has(item.id) && item.records.length > 1 && (
+                                                    <TableRow className="bg-gray-50">
+                                                        <TableCell colSpan={12} className="p-0">
+                                                            <div className="p-3 pl-8">
+                                                                <div className="text-sm font-medium mb-2">Detailed records:</div>
+                                                                <Table>
+                                                                    <TableHeader>
+                                                                        <TableRow className="bg-gray-100">
+                                                                            <TableHead className="text-xs">Date</TableHead>
+                                                                            <TableHead className="text-xs">Hours</TableHead>
+                                                                            <TableHead className="text-xs">Description</TableHead>
+                                                                        </TableRow>
+                                                                    </TableHeader>
+                                                                    <TableBody>
+                                                                        {item.records.map((record, idx) => (
+                                                                            <TableRow key={`detail-${idx}`}>
+                                                                                <TableCell className="text-xs">
+                                                                                    {new Date(record.date).toLocaleDateString('en-GB')}
+                                                                                </TableCell>
+                                                                                <TableCell className="text-xs font-mono">{record.hours}h</TableCell>
+                                                                                <TableCell className="text-xs">{record.description || '-'}</TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </React.Fragment>
                                         ))}
                                     </TableBody>
                                 </Table>
                             </div>
 
                             {/* Пагинация */}
-                            {totalPages > 1 && (
+                            {totalPages > 1 && !groupByDocument && (
                                 <div className="flex justify-between items-center mt-4" key="pagination">
                                     <div className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</div>
                                     <div className="flex gap-1">
@@ -712,6 +902,13 @@ export function LeaveReports() {
                                             disabled={isLoading}
                                         />
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Информация для сгруппированного режима */}
+                            {groupByDocument && groupedData.length > 0 && (
+                                <div className="mt-4 text-xs text-muted-foreground text-center">
+                                    * Records with the same document ID are grouped together. Click on a grouped row to see details.
                                 </div>
                             )}
                         </React.Fragment>
