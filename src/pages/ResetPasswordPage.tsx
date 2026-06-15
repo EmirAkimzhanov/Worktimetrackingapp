@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { useResetPassword } from '../hooks/UseAuth';
+import { useResetPassword } from '../hooks/useAuth';
 
 const LoginContainer = styled.div`
   min-height: 100vh;
