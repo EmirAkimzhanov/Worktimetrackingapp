@@ -5,6 +5,19 @@ import { useTimeTracker } from './TimeTrackerContext';
 import { useUserStore } from '../store/UsersStore';
 import { useGetTimeEntriesStats, useGetTimeEntrys } from '../hooks/useTimeEntry';
 
+// Функция для безопасного преобразования в число
+const safeToNumber = (value: any): number => {
+  if (value === null || value === undefined) return 0;
+  const num = Number(value);
+  return isNaN(num) ? 0 : num;
+};
+
+// Функция для безопасного форматирования с toFixed
+const safeToFixed = (value: any, digits: number = 1): string => {
+  const num = safeToNumber(value);
+  return num.toFixed(digits);
+};
+
 export function StatisticsPanel() {
   const { filters } = useTimeTracker();
   const time_entries = useUserStore((state) => state.time_entries);
@@ -111,17 +124,25 @@ export function StatisticsPanel() {
         'July', 'August', 'September', 'October', 'November', 'December'];
       const monthName = selectedMonth >= 0 && selectedMonth <= 11 ? monthNames[selectedMonth] : '';
 
+      // ИСПРАВЛЕНО: безопасное преобразование чисел
+      const totalHours = safeToNumber(timeEntriesStats.total_hours);
+      const workedDays = safeToNumber(timeEntriesStats.worked_days);
+      const totalWorkingDays = safeToNumber(timeEntriesStats.total_working_days);
+      const expectedHours = safeToNumber(timeEntriesStats.expected_hours);
+      const completionRate = safeToNumber(timeEntriesStats.completion_rate);
+      const totalRecords = safeToNumber(timeEntriesStats.total_records);
+
       return {
-        totalHours: timeEntriesStats.total_hours?.toFixed(1) || '0.0',
-        avgHoursPerDay: (timeEntriesStats.total_hours / (timeEntriesStats.worked_days || 1)).toFixed(1),
-        uniqueDays: timeEntriesStats.worked_days || 0,
-        recordCount: timeEntriesStats.total_records || 0,
+        totalHours: safeToFixed(totalHours, 1),
+        avgHoursPerDay: workedDays > 0 ? safeToFixed(totalHours / workedDays, 1) : '0.0',
+        uniqueDays: workedDays,
+        recordCount: totalRecords,
         isFiltered: filters.projects.length > 0 ||
           filters.searchText !== '' ||
           filters.hoursRange !== 'all',
-        totalWorkingDays: timeEntriesStats.total_working_days || 0,
-        expectedHours: timeEntriesStats.expected_hours || 0,
-        completionRate: timeEntriesStats.completion_rate?.toFixed(1) || '0.0',
+        totalWorkingDays: totalWorkingDays,
+        expectedHours: expectedHours,
+        completionRate: safeToFixed(completionRate, 1),
         monthName,
         year: selectedYear,
       };
@@ -153,7 +174,7 @@ export function StatisticsPanel() {
     const transformedEntries = entries.map(entry => ({
       id: entry.id,
       date: entry.date || entry.start_date,
-      hours: entry.hours || 0,
+      hours: safeToNumber(entry.hours || 0),
       description: entry.description || '',
       projectId: entry.project?.toString() || '',
       projectCode: entry.project_code || '',
@@ -189,7 +210,7 @@ export function StatisticsPanel() {
       return true;
     });
 
-    const totalHours = filteredEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+    const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.hours, 0);
     const uniqueDays = new Set(filteredEntries.map(entry => entry.date)).size;
     const avgHoursPerDay = uniqueDays > 0 ? totalHours / uniqueDays : 0;
     const recordCount = filteredEntries.length;
@@ -217,8 +238,8 @@ export function StatisticsPanel() {
     const monthName = selectedMonth >= 0 && selectedMonth <= 11 ? monthNames[selectedMonth] : '';
 
     return {
-      totalHours: totalHours.toFixed(1),
-      avgHoursPerDay: avgHoursPerDay.toFixed(1),
+      totalHours: safeToFixed(totalHours, 1),
+      avgHoursPerDay: safeToFixed(avgHoursPerDay, 1),
       uniqueDays,
       recordCount,
       isFiltered: filters.projects.length > 0 ||
@@ -226,7 +247,7 @@ export function StatisticsPanel() {
         filters.hoursRange !== 'all',
       totalWorkingDays,
       expectedHours,
-      completionRate: completionRate.toFixed(1),
+      completionRate: safeToFixed(completionRate, 1),
       monthName,
       year: selectedYear,
     };
@@ -240,7 +261,7 @@ export function StatisticsPanel() {
       icon: Clock,
       color: '#1F4E78',
       bgColor: '#EFF6FF',
-      description: `Expected: ${statistics.expectedHours}h`
+      description: `Expected: ${safeToFixed(statistics.expectedHours, 0)}h`
     },
     {
       title: 'Working Days',
@@ -258,7 +279,7 @@ export function StatisticsPanel() {
       icon: TrendingUp,
       color: '#10B981',
       bgColor: '#F0FDF4',
-      description: `of ${statistics.expectedHours}h target`
+      description: `of ${safeToFixed(statistics.expectedHours, 0)}h target`
     },
     {
       title: 'Total Records',

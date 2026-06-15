@@ -423,7 +423,7 @@ export function TimeEntryList() {
   }, [groupedEntries, filters.projects, filters.searchText, filters.hoursRange]);
 
   const totalHours = useMemo(() => {
-    return filteredGroups.reduce((sum, group) => sum + group.totalHours, 0);
+    return filteredGroups.reduce((sum, group) => sum + Number(group.totalHours || 0), 0);
   }, [filteredGroups]);
 
   const selectedTotalHours = useMemo(() => {
@@ -606,7 +606,7 @@ export function TimeEntryList() {
                 Time Entries
               </CardTitle>
               <CardDescription>
-                {filteredGroups.length} groups · {totalHours.toFixed(1)} total hours
+                {filteredGroups.length} groups · {Number(totalHours).toFixed(1)} total hours
                 {safeTimeEntries && ` · ${safeTimeEntries.length} total entries`}
                 {(isLoadingEntries || isSubmitting || isDeleting || isBulkDeleting) && ' · Loading...'}
                 {currentStartDate && currentEndDate && ` · Filtered: ${currentStartDate} to ${currentEndDate}`}

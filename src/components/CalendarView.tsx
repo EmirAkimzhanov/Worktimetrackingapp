@@ -387,7 +387,7 @@ export function CalendarView() {
 
   const getTotalHoursForDate = (day: number) => {
     const dayEntries = getEntriesForDate(day);
-    return dayEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+    return dayEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
   };
 
   const formatDate = (dateStr: string) => {
@@ -565,7 +565,7 @@ export function CalendarView() {
                               'text-blue-600 bg-blue-50'
                           }`}>
                           {totalHours > 0 && (
-                            <div className="-mt-0.5">{`${totalHours.toFixed(1)}h`}</div>
+                            <div className="-mt-0.5">{`${Number(totalHours).toFixed(1)}h`}</div>
                           )}
                           {regularEntriesCount > 0 && (
                             <div className="text-[10px] opacity-75 -mt-0.5">

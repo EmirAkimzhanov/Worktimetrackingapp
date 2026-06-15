@@ -1,7 +1,7 @@
 // services/auth.ts
 import { api } from '../consts/api';
 import axios from 'axios';
-import { Activate } from '../types/auth';
+import { Activate, Reset } from '../types/auth';
 import { useUserStore } from '../store/UsersStore';
 
 interface LoginCredentials {
@@ -171,6 +171,24 @@ export const checkMe = async () => {
                 Authorization: `Bearer ${token}`,
             },
         }
+    );
+    return res.data;
+}
+
+
+export const forgotPassword = async (email: string) => {
+
+
+    const res = await axios.post(`${api}api/accounts/forgot-password/`, email,
+
+    );
+    return res.data;
+}
+
+export const resetPassword = async (body: Reset) => {
+
+    const res = await axios.post(`${api}api/accounts/reset-password/`, body,
+
     );
     return res.data;
 }

@@ -19,6 +19,8 @@ import { setupInterceptors } from './axios/axiosConfig';
 import MobileBlocker from './MobileBlocker';
 import { useMobileDetect } from './hooks/useMobileDetected';
 import { NotFoundPage } from './pages/NotFoundPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Создаем QueryClient
 const queryClient = new QueryClient({
@@ -229,6 +231,8 @@ function AppRoutes() {
       {/* Маршрут для логина без навбара */}
       <Route element={<LoginLayout />}>
         <Route path="/login" element={<TimeTrackerLogin />} />
+        <Route path="/forgot" element={<ForgotPasswordPage />} />
+        <Route path="/reset" element={<ResetPasswordPage />} />
       </Route>
 
       {/* Защищенные маршруты с навбаром */}

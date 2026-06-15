@@ -543,7 +543,7 @@ const TimeTrackerLogin = () => {
             </LoginButton>
 
             <FooterLinks>
-              <FooterLink href="#forgot">Forgot Password?</FooterLink>
+              <FooterLink href="/forgot">Forgot Password?</FooterLink>
               <span style={{ margin: '0 12px', color: '#d1d5db' }}>•</span>
               <FooterLink href="#support">Need Help?</FooterLink>
             </FooterLinks>
