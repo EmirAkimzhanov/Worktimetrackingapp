@@ -280,7 +280,6 @@ export const useCreateClients = () => {
             // Очищаем все кэши при создании нового клиента
             clearAllCaches();
             console.log('Client created:', data);
-            toast.success('Клиенты успешно экспортированы в Excel');
 
         },
         onError: (error: Error) => {
@@ -343,7 +342,7 @@ export const useExportClientsExcel = () => {
             window.URL.revokeObjectURL(url);
 
             console.log(`Clients exported successfully with params:`, params);
-            toast.success('Клиенты успешно экспортированы в Excel');
+            toast.success('Clients exported successfully');
         },
         onError: (error: Error) => {
             console.error("Export clients to Excel error:", error.message);
