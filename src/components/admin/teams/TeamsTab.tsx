@@ -1551,9 +1551,7 @@ export function TeamsTab() {
                               <TableHead className="w-[15%] py-2">
                                 Department Role
                               </TableHead>
-                              <TableHead className="w-[15%] py-2 text-center">
-                                Status
-                              </TableHead>
+
                               <TableHead className="w-[10%] py-2 text-right">
                                 Actions
                               </TableHead>
@@ -1599,26 +1597,7 @@ export function TeamsTab() {
                                       )}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="py-2 text-center">
-                                    <div className="text-center">
-                                      {isEmployeeManager(department, member) ? (
-                                        <Badge
-                                          variant="outline"
-                                          className="flex items-center justify-center gap-1 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300"
-                                        >
-                                          <Crown className="h-3 w-3" />
-                                          Manager
-                                        </Badge>
-                                      ) : (
-                                        <Badge
-                                          variant="outline"
-                                          className="flex items-center justify-center gap-1"
-                                        >
-                                          {member.department_role || "Member"}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </TableCell>
+
                                   <TableCell className="py-2 text-right">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>

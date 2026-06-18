@@ -280,10 +280,10 @@ export const useCreateClients = () => {
             // Очищаем все кэши при создании нового клиента
             clearAllCaches();
             console.log('Client created:', data);
+            toast.success('client created successfully');
 
         },
         onError: (error: Error) => {
-            console.error("Create client error:", error.message);
             toast.success(error.message);
         },
     });
@@ -296,6 +296,7 @@ export const useEditClients = () => {
             // Очищаем кэши при редактировании
             clearAllCaches();
             console.log('Client edited:', data);
+            toast.success('client edited successfully');
         },
         onError: (error: Error) => {
             console.error("Edit client error:", error.message);
