@@ -799,7 +799,7 @@ export function UsersTable({
                                 <TableHead>Role</TableHead>
                                 <TableHead>Date Joined</TableHead>
                                 <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
+                                <TableHead>Edit</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -891,14 +891,7 @@ export function UsersTable({
                                                     >
                                                         <Edit className="w-3 h-3" />
                                                     </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        onClick={() => handleDeleteClick(user)}
-                                                    >
-                                                        <Trash2 className="w-3 h-3 text-red-500" />
-                                                    </Button>
+
                                                 </div>
                                             </TableCell>
                                         </TableRow>
