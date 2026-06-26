@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Plus, Trash2, Edit2, Search, AlertTriangle, Settings } from "lucide-react";
+import { Plus, Trash2, Edit2, Search, AlertTriangle, Settings, CheckCircle, XCircle, Download, Upload, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,11 +31,13 @@ import {
 import { useGetTaskTypes, useCreateTaskType, useDeleteTaskType, useUpdateTaskType } from "../../../hooks/useRefBooks";
 import { useUserStore } from "../../../store/UsersStore";
 import { toast } from "sonner@2.0.3";
+import { downloadTaskTypeExcel, importTaskTypeExcel } from "../../../services/task";
 
 interface Task {
   id: number;
   name: string;
   task_type?: number;
+  is_active: boolean;
 }
 
 interface TaskType {
@@ -49,6 +51,8 @@ const SimpleDepartmentsTables = () => {
   const [editTaskDialogOpen, setEditTaskDialogOpen] = useState(false);
   const [deleteTaskDialogOpen, setDeleteTaskDialogOpen] = useState(false);
   const [selectedTaskType, setSelectedTaskType] = useState<number | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [importingTaskTypeId, setImportingTaskTypeId] = useState<number | null>(null);
   const [newTask, setNewTask] = useState<Partial<Task>>({
     name: "",
     task_type: undefined,
@@ -57,6 +61,7 @@ const SimpleDepartmentsTables = () => {
   const [editTaskData, setEditTaskData] = useState<Partial<Task>>({});
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showInactive, setShowInactive] = useState<Record<number, boolean>>({});
 
   // Состояния для управления типами задач
   const [taskTypeDialogOpen, setTaskTypeDialogOpen] = useState(false);
@@ -119,7 +124,20 @@ const SimpleDepartmentsTables = () => {
 
   const getTypeStats = (typeId: number) => {
     const tasks = tasksByType.get(typeId) || [];
-    return { total: tasks.length };
+    const activeTasks = tasks.filter((task) => task.is_active === true);
+    const inactiveTasks = tasks.filter((task) => task.is_active === false);
+    return {
+      total: tasks.length,
+      active: activeTasks.length,
+      inactive: inactiveTasks.length
+    };
+  };
+
+  const toggleInactive = (typeId: number) => {
+    setShowInactive(prev => ({
+      ...prev,
+      [typeId]: !prev[typeId]
+    }));
   };
 
   // Обработчики задач
@@ -130,7 +148,7 @@ const SimpleDepartmentsTables = () => {
       {
         onSuccess: () => {
           toast.success("Task created successfully");
-          getTasks();
+          getTasks(true);
           setNewTask({ name: "", task_type: undefined });
           setSelectedTaskType(null);
           setNewTaskDialogOpen(false);
@@ -169,6 +187,29 @@ const SimpleDepartmentsTables = () => {
     );
   };
 
+  const handleToggleTaskStatus = (task: Task) => {
+    const newStatus = !task.is_active;
+    editTask(
+      {
+        task_id: task.id.toString(),
+        body: {
+          name: task.name,
+          is_active: newStatus
+        }
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Task ${newStatus ? 'activated' : 'deactivated'} successfully`);
+          getTasks(true);
+        },
+        onError: (error) => {
+          console.error(error);
+          toast.error("Failed to update task status");
+        },
+      }
+    );
+  };
+
   const handleStartDeleteTask = (task: Task) => {
     setTaskToDelete(task);
     setDeleteTaskDialogOpen(true);
@@ -179,7 +220,7 @@ const SimpleDepartmentsTables = () => {
     deleteTask(taskToDelete.id.toString(), {
       onSuccess: () => {
         toast.success("Task deleted successfully");
-        getTasks();
+        getTasks(true);
         setDeleteTaskDialogOpen(false);
         setTaskToDelete(null);
       },
@@ -263,6 +304,40 @@ const SimpleDepartmentsTables = () => {
         toast.error("Failed to delete task type");
       },
     });
+  };
+
+  // Функция скачивания Excel
+  const handleExportExcel = async (taskTypeId: number) => {
+    try {
+      const taskTypeName = taskTypeMap.get(taskTypeId) || 'tasks';
+      await downloadTaskTypeExcel(taskTypeId, taskTypeName);
+      toast.success('Excel file downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading Excel:', error);
+      toast.error('Failed to download Excel file');
+    }
+  };
+
+  const handleImportClick = (taskTypeId: number) => {
+    setImportingTaskTypeId(taskTypeId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !importingTaskTypeId) return;
+
+    try {
+      await importTaskTypeExcel(importingTaskTypeId, file);
+      toast.success('Excel file imported successfully');
+      getTasks(true);
+    } catch (error) {
+      console.error('Error importing Excel:', error);
+      toast.error('Failed to import Excel file');
+    } finally {
+      setImportingTaskTypeId(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const visibleTaskTypes = React.useMemo(() => {
@@ -496,23 +571,7 @@ const SimpleDepartmentsTables = () => {
                 onChange={(e) => setEditTaskData({ ...editTaskData, name: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="editTaskType">Task Type</Label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={editTaskData.task_type || ""}
-                onChange={(e) =>
-                  setEditTaskData({ ...editTaskData, task_type: Number(e.target.value) })
-                }
-              >
-                <option value="">Select task type</option>
-                {task_types?.map((type: TaskType) => (
-                  <option key={type.id} value={type.id}>
-                    {type.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+
             {editingTask && (
               <div className="text-sm text-gray-500">
                 <p>
@@ -545,12 +604,22 @@ const SimpleDepartmentsTables = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".xlsx,.xls"
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
 
       {/* Таблицы по типам задач */}
       <div className="space-y-8">
         {visibleTaskTypes.map((taskType: TaskType) => {
-          const typeTasks = getTasksByTypeWithSearch(taskType.id);
+          const allTasks = getTasksByTypeWithSearch(taskType.id);
+          const activeTasks = allTasks.filter(task => task.is_active === true);
+          const inactiveTasks = allTasks.filter(task => task.is_active === false);
           const typeStats = getTypeStats(taskType.id);
+          const isInactiveOpen = showInactive[taskType.id] || false;
 
           return (
             <div key={taskType.id} className="mb-8 last:mb-0" style={{ margin: "30px 0" }}>
@@ -565,10 +634,36 @@ const SimpleDepartmentsTables = () => {
                           <span className="text-sm text-gray-600">
                             {typeStats.total} task{typeStats.total !== 1 ? "s" : ""}
                           </span>
+                          <span className="text-sm text-green-600">
+                            ● {typeStats.active} active
+                          </span>
+                          {typeStats.inactive > 0 && (
+                            <span className="text-sm text-red-600">
+                              ● {typeStats.inactive} inactive
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleExportExcel(taskType.id)}
+                        className="h-7 px-2 text-blue-600 hover:text-blue-700"
+                        title="Export to Excel"
+                      >
+                        <Download className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleImportClick(taskType.id)}
+                        className="h-7 px-2 text-green-600 hover:text-green-700"
+                        title="Upload Excel"
+                      >
+                        <Upload className="w-3 h-3" />
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -589,21 +684,23 @@ const SimpleDepartmentsTables = () => {
                   </div>
                 </div>
 
-                {typeTasks.length > 0 ? (
+                {allTasks.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table style={{ tableLayout: 'fixed', width: '100%' }}>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-12">#</TableHead>
+                          <TableHead style={{ width: '48px' }}>#</TableHead>
                           <TableHead>Task Description</TableHead>
-                          <TableHead className="w-24">Actions</TableHead>
+                          <TableHead style={{ width: '96px' }}>Status</TableHead>
+                          <TableHead style={{ width: '128px' }}>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {typeTasks.map((task, index) => (
+                        {/* Активные задачи */}
+                        {activeTasks.map((task, index) => (
                           <TableRow key={task.id} className="hover:bg-gray-50/50">
                             <TableCell>
-                              <div className="flex items-center justify-center w-8 h-8 bg-gray-100 text-gray-700 rounded-full text-sm font-semibold">
+                              <div className="flex items-center justify-center w-8 h-8 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
                                 {index + 1}
                               </div>
                             </TableCell>
@@ -611,7 +708,21 @@ const SimpleDepartmentsTables = () => {
                               <div className="font-medium text-gray-900">{task.name}</div>
                             </TableCell>
                             <TableCell>
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                Active
+                              </span>
+                            </TableCell>
+                            <TableCell>
                               <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleToggleTaskStatus(task)}
+                                  className="h-7 px-2 text-red-600 hover:text-red-700"
+                                  title="Deactivate"
+                                >
+                                  <XCircle className="w-3 h-3" />
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -620,13 +731,63 @@ const SimpleDepartmentsTables = () => {
                                 >
                                   <Edit2 className="w-3 h-3" />
                                 </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+
+                        {/* Кнопка для открытия/закрытия неактивных задач */}
+                        {inactiveTasks.length > 0 && (
+                          <TableRow className="cursor-pointer hover:bg-gray-100" onClick={() => toggleInactive(taskType.id)}>
+                            <TableCell colSpan={4} className="text-center text-sm font-medium text-gray-500 py-2">
+                              <div className="flex items-center justify-center gap-2">
+                                {isInactiveOpen ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                                <span>
+                                  {isInactiveOpen ? 'Hide' : 'Show'} {inactiveTasks.length} inactive task{inactiveTasks.length > 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+
+                        {/* Неактивные задачи (показываются только если шторка открыта) */}
+                        {isInactiveOpen && inactiveTasks.map((task, index) => (
+                          <TableRow key={task.id} className="bg-gray-50/50 opacity-75 hover:bg-gray-100/50">
+                            <TableCell>
+                              <div className="flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-500 rounded-full text-sm font-semibold">
+                                {activeTasks.length + index + 1}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium text-gray-500 line-through">{task.name}</div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                Inactive
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => handleStartDeleteTask(task)}
-                                  className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => handleToggleTaskStatus(task)}
+                                  className="h-7 px-2 text-green-600 hover:text-green-700"
+                                  title="Activate"
                                 >
-                                  <Trash2 className="w-3 h-3" />
+                                  <CheckCircle className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleStartEditTask(task)}
+                                  className="h-7 px-2"
+                                >
+                                  <Edit2 className="w-3 h-3" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -642,11 +803,14 @@ const SimpleDepartmentsTables = () => {
                   </div>
                 )}
 
-                {typeTasks.length > 0 && (
+                {allTasks.length > 0 && (
                   <div className="p-3 border-t bg-white/30">
                     <div className="flex items-center justify-between text-sm text-gray-600">
                       <span>
-                        {typeTasks.length} task{typeTasks.length !== 1 ? "s" : ""}
+                        {allTasks.length} task{allTasks.length !== 1 ? "s" : ""}
+                        {activeTasks.length > 0 && ` (${activeTasks.length} active`}
+                        {inactiveTasks.length > 0 && `, ${inactiveTasks.length} inactive`}
+                        {activeTasks.length > 0 && ")"}
                       </span>
                       {searchQuery && (
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
