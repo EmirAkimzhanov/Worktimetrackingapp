@@ -123,22 +123,13 @@ const getCachedProjectTasks = (projectId: string) => {
 };
 
 // ========== ХУКИ С КЭШИРОВАНИЕМ ==========
-
 export const useGetProjectTasks = () => {
     const setProjectTasks = useUserStore((state) => state.setProjectTasks);
 
     return useMutation({
         mutationFn: async (project_id: string) => {
-            // Проверяем кэш
-            const cached = getCachedProjectTasks(project_id);
-            if (cached) {
-                return cached;
-            }
-
-            // Загружаем новые данные
             console.log(`Fetching fresh tasks for project: ${project_id}`);
             const data = await getProjectTasks(project_id);
-            projectTasksCache.set(project_id, { data, timestamp: Date.now() });
             return data;
         },
         onSuccess: (data, project_id) => {
@@ -150,7 +141,6 @@ export const useGetProjectTasks = () => {
         },
     });
 };
-
 export const useSendProject = () => {
     return useMutation({
         mutationFn: async (project_data: ProjectBody) => {

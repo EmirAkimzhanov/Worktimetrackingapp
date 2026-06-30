@@ -516,7 +516,7 @@ export function UserDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl" style={{ width: '600px' }}>
+            <DialogContent className="max-w-5xl" style={{ width: '900px' }}>
                 <DialogHeader>
                     <DialogTitle> {editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
                     <DialogDescription>
@@ -524,256 +524,263 @@ export function UserDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="first_name">First Name *</Label>
-                            <Input
-                                id="first_name"
-                                value={userForm.first_name || ''}
-                                onChange={(e) => handleTextChange('first_name', e.target.value)}
-                                placeholder="Enter first name"
-                                className={errors.first_name ? 'border-red-500' : ''}
-                                disabled={isLoading}
-                            />
-                            {errors.first_name && (
-                                <p className="text-sm text-red-500">{errors.first_name}</p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="last_name">Last Name *</Label>
-                            <Input
-                                id="last_name"
-                                value={userForm.last_name || ''}
-                                onChange={(e) => handleTextChange('last_name', e.target.value)}
-                                placeholder="Enter last name"
-                                className={errors.last_name ? 'border-red-500' : ''}
-                                disabled={isLoading}
-                            />
-                            {errors.last_name && (
-                                <p className="text-sm text-red-500">{errors.last_name}</p>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email *</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                value={userForm.email || ''}
-                                onChange={(e) => handleEmailChange(e.target.value)}
-                                placeholder="Enter email address"
-                                className={errors.email ? 'border-red-500' : ''}
-                                disabled={isLoading}
-                            />
-                            {errors.email && (
-                                <p className="text-sm text-red-500">{errors.email}</p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="position">Position *</Label>
-                            <Select
-                                value={safeToString(userForm.position_id)}
-                                onValueChange={(value: string) => {
-                                    const positionId = parseInt(value);
-                                    setUserForm({ ...userForm, position_id: positionId });
-                                }}
-                                disabled={isLoading || store_positions.length === 0}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select position" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {store_positions.map((position: Position) => (
-                                        <SelectItem key={position.id} value={safeToString(position.id)}>
-                                            {position.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="grade">Grade *</Label>
-                            <Select
-                                value={safeToString(userForm.grade_id)}
-                                onValueChange={(value: string) =>
-                                    setUserForm({ ...userForm, grade_id: parseInt(value) })
-                                }
-                                disabled={isLoading || filteredGrades.length === 0}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder={filteredGrades.length === 0 ? "Select position first" : "Select grade"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {filteredGrades.length > 0 ? (
-                                        filteredGrades.map((grade: Grade) => (
-                                            <SelectItem key={grade.id} value={safeToString(grade.id)}>
-                                                {grade.name}
-                                            </SelectItem>
-                                        ))
-                                    ) : (
-                                        <SelectItem value="no-grades" disabled>No grades available for this position</SelectItem>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="grade_started_at">Grade Start Date</Label>
-                            <Input
-                                id="grade_started_at"
-                                type="date"
-                                value={userForm.grade_started_at || ''}
-                                onChange={(e) => handleDateChange('grade_started_at', e.target.value)}
-                                disabled={isLoading}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="department">Department *</Label>
-                            <Select
-                                value={safeToString(userForm.department_id)}
-                                onValueChange={(value: string) =>
-                                    setUserForm({ ...userForm, department_id: parseInt(value) })
-                                }
-                                disabled={isLoading || store_departments.length === 0}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {renderSelectOptions(store_departments)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="department_role">Department Role *</Label>
-                            <Select
-                                value={safeToString(userForm.department_role_id)}
-                                onValueChange={(value: string) =>
-                                    setUserForm({ ...userForm, department_role_id: parseInt(value) })
-                                }
-                                disabled={isLoading || department_roles.length === 0}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {renderSelectOptions(department_roles)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="country">Country *</Label>
-                            <Select
-                                value={safeToString(userForm.country_id)}
-                                onValueChange={(value: string) =>
-                                    setUserForm({ ...userForm, country_id: parseInt(value) })
-                                }
-                                disabled={isLoading || countries.length === 0}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select country" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {countries.map((country: Country) => (
-                                        <SelectItem key={country.id} value={safeToString(country.id)}>
-                                            {country.name} {country.code ? `(${country.code})` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="role">System Role *</Label>
-                            <Select
-                                value={safeToString(userForm.role_id) || ""}
-                                onValueChange={(value: string) => {
-                                    isUserChangingRole.current = true;
-                                    const parsedValue = parseInt(value);
-                                    if (!isNaN(parsedValue)) {
-                                        setUserForm(prev => ({ ...prev, role_id: parsedValue }));
-                                    }
-                                }}
-                                disabled={isLoading || !roles || roles.length === 0}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select system role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {roles && roles.length > 0 ? (
-                                        roles.map((role: Role) => (
-                                            <SelectItem key={role.id} value={safeToString(role.id)}>
-                                                {role.name}
-                                            </SelectItem>
-                                        ))
-                                    ) : (
-                                        <SelectItem value="no-roles" disabled>No roles available</SelectItem>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="status_started_at">
-                                {editingUser ? 'Assignment date *' : 'Hiring date *'}
-                            </Label>
-                            <Input
-                                id="status_started_at"
-                                type="date"
-                                value={userForm.status_started_at || ''}
-                                onChange={(e) => handleDateChange('status_started_at', e.target.value)}
-                                disabled={isLoading}
-                                className={errors.status_started_at ? 'border-red-500' : ''}
-                            />
-                            {errors.status_started_at && (
-                                <div>
-                                    <p className="text-sm text-red-500">{errors.status_started_at}</p>
-                                    {previousDate && (
-                                        <p className="text-xs text-gray-500">Previous date: {previousDate}</p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                        {editingUser && (
+                <div className="grid grid-cols-2 gap-6 py-4">
+                    {/* Personal Information Group */}
+                    <div className="space-y-3 p-4 border-2 border-gray-200 rounded-lg bg-gray-50">
+                        <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="account_status">Account Status</Label>
+                                <Label htmlFor="first_name" className="text-sm font-medium">First Name *</Label>
+                                <Input
+                                    id="first_name"
+                                    value={userForm.first_name || ''}
+                                    onChange={(e) => handleTextChange('first_name', e.target.value)}
+                                    placeholder="Enter first name"
+                                    className={`mt-1.5 ${errors.first_name ? 'border-red-500' : ''}`}
+                                    disabled={isLoading}
+                                />
+                                {errors.first_name && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.first_name}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="last_name" className="text-sm font-medium">Last Name *</Label>
+                                <Input
+                                    id="last_name"
+                                    value={userForm.last_name || ''}
+                                    onChange={(e) => handleTextChange('last_name', e.target.value)}
+                                    placeholder="Enter last name"
+                                    className={`mt-1.5 ${errors.last_name ? 'border-red-500' : ''}`}
+                                    disabled={isLoading}
+                                />
+                                {errors.last_name && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.last_name}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="email" className="text-sm font-medium">Email *</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    value={userForm.email || ''}
+                                    onChange={(e) => handleEmailChange(e.target.value)}
+                                    placeholder="Enter email address"
+                                    className={`mt-1.5 ${errors.email ? 'border-red-500' : ''}`}
+                                    disabled={isLoading}
+                                />
+                                {errors.email && (
+                                    <p className="text-sm text-red-500 mt-1">{errors.email}</p>
+                                )}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="country" className="text-sm font-medium">Country *</Label>
                                 <Select
-                                    value={safeToString(userForm.account_status_id)}
-                                    onValueChange={(value: string) => {
-                                        const parsedValue = value === 'null' || value === '' ? null : parseInt(value);
-                                        setUserForm({ ...userForm, account_status_id: parsedValue });
-                                    }}
-                                    disabled={isLoading || !accounts_statuses || accounts_statuses.length === 0}
+                                    value={safeToString(userForm.country_id)}
+                                    onValueChange={(value: string) =>
+                                        setUserForm({ ...userForm, country_id: parseInt(value) })
+                                    }
+                                    disabled={isLoading || countries.length === 0}
                                 >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select account status" />
+                                    <SelectTrigger className="mt-1.5">
+                                        <SelectValue placeholder="Select country" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {accounts_statuses && accounts_statuses.length > 0 ? (
-                                            accounts_statuses.map((status: AccountStatus) => (
-                                                <SelectItem key={status.id} value={safeToString(status.id)}>
-                                                    {status.name || status.status || 'Unknown'}
+                                        {countries.map((country: Country) => (
+                                            <SelectItem key={country.id} value={safeToString(country.id)}>
+                                                {country.name} {country.code ? `(${country.code})` : ''}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Position & Grade Group */}
+                    <div className="space-y-3 p-4 border-2 border-blue-200 rounded-lg bg-blue-50">
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="position" className="text-sm font-medium">Position *</Label>
+                                <Select
+                                    value={safeToString(userForm.position_id)}
+                                    onValueChange={(value: string) => {
+                                        const positionId = parseInt(value);
+                                        setUserForm({ ...userForm, position_id: positionId });
+                                    }}
+                                    disabled={isLoading || store_positions.length === 0}
+                                >
+                                    <SelectTrigger className="mt-1.5">
+                                        <SelectValue placeholder="Select position" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {store_positions.map((position: Position) => (
+                                            <SelectItem key={position.id} value={safeToString(position.id)}>
+                                                {position.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="grade" className="text-sm font-medium">Grade *</Label>
+                                <Select
+                                    value={safeToString(userForm.grade_id)}
+                                    onValueChange={(value: string) =>
+                                        setUserForm({ ...userForm, grade_id: parseInt(value) })
+                                    }
+                                    disabled={isLoading || filteredGrades.length === 0}
+                                >
+                                    <SelectTrigger className="mt-1.5">
+                                        <SelectValue placeholder={filteredGrades.length === 0 ? "Select position first" : "Select grade"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {filteredGrades.length > 0 ? (
+                                            filteredGrades.map((grade: Grade) => (
+                                                <SelectItem key={grade.id} value={safeToString(grade.id)}>
+                                                    {grade.name}
                                                 </SelectItem>
                                             ))
                                         ) : (
-                                            <SelectItem value="no-status" disabled>No statuses available</SelectItem>
+                                            <SelectItem value="no-grades" disabled>No grades available</SelectItem>
                                         )}
                                     </SelectContent>
                                 </Select>
                             </div>
-                        )}
+                            <div className="space-y-2">
+                                <Label htmlFor="grade_started_at" className="text-sm font-medium">Grade Start Date</Label>
+                                <Input
+                                    id="grade_started_at"
+                                    type="date"
+                                    value={userForm.grade_started_at || ''}
+                                    onChange={(e) => handleDateChange('grade_started_at', e.target.value)}
+                                    className="mt-1.5"
+                                    disabled={isLoading}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Department & Roles Group */}
+                    <div className="space-y-3 p-4 border-2 border-purple-200 rounded-lg bg-purple-50">
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="department" className="text-sm font-medium">Department *</Label>
+                                <Select
+                                    value={safeToString(userForm.department_id)}
+                                    onValueChange={(value: string) =>
+                                        setUserForm({ ...userForm, department_id: parseInt(value) })
+                                    }
+                                    disabled={isLoading || store_departments.length === 0}
+                                >
+                                    <SelectTrigger className="mt-1.5">
+                                        <SelectValue placeholder="Select department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {renderSelectOptions(store_departments)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="department_role" className="text-sm font-medium">Department Role *</Label>
+                                <Select
+                                    value={safeToString(userForm.department_role_id)}
+                                    onValueChange={(value: string) =>
+                                        setUserForm({ ...userForm, department_role_id: parseInt(value) })
+                                    }
+                                    disabled={isLoading || department_roles.length === 0}
+                                >
+                                    <SelectTrigger className="mt-1.5">
+                                        <SelectValue placeholder="Select role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {renderSelectOptions(department_roles)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="role" className="text-sm font-medium">System Role *</Label>
+                                <Select
+                                    value={safeToString(userForm.role_id) || ""}
+                                    onValueChange={(value: string) => {
+                                        isUserChangingRole.current = true;
+                                        const parsedValue = parseInt(value);
+                                        if (!isNaN(parsedValue)) {
+                                            setUserForm(prev => ({ ...prev, role_id: parsedValue }));
+                                        }
+                                    }}
+                                    disabled={isLoading || !roles || roles.length === 0}
+                                >
+                                    <SelectTrigger className="mt-1.5">
+                                        <SelectValue placeholder="Select system role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {roles && roles.length > 0 ? (
+                                            roles.map((role: Role) => (
+                                                <SelectItem key={role.id} value={safeToString(role.id)}>
+                                                    {role.name}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <SelectItem value="no-roles" disabled>No roles available</SelectItem>
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Assignment & Status Group */}
+                    <div className="space-y-3 p-4 border-2 border-green-200 rounded-lg bg-green-50">
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="status_started_at" className="text-sm font-medium">
+                                    {editingUser ? 'Assignment date *' : 'Hiring date *'}
+                                </Label>
+                                <Input
+                                    id="status_started_at"
+                                    type="date"
+                                    value={userForm.status_started_at || ''}
+                                    onChange={(e) => handleDateChange('status_started_at', e.target.value)}
+                                    disabled={isLoading}
+                                    className={`mt-1.5 ${errors.status_started_at ? 'border-red-500' : ''}`}
+                                />
+                                {errors.status_started_at && (
+                                    <div className="mt-1">
+                                        <p className="text-sm text-red-500">{errors.status_started_at}</p>
+                                        {previousDate && (
+                                            <p className="text-xs text-gray-500 mt-0.5">Previous: {previousDate}</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            {editingUser && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="account_status" className="text-sm font-medium">Account Status</Label>
+                                    <Select
+                                        value={safeToString(userForm.account_status_id)}
+                                        onValueChange={(value: string) => {
+                                            const parsedValue = value === 'null' || value === '' ? null : parseInt(value);
+                                            setUserForm({ ...userForm, account_status_id: parsedValue });
+                                        }}
+                                        disabled={isLoading || !accounts_statuses || accounts_statuses.length === 0}
+                                    >
+                                        <SelectTrigger className="mt-1.5">
+                                            <SelectValue placeholder="Select account status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {accounts_statuses && accounts_statuses.length > 0 ? (
+                                                accounts_statuses.map((status: AccountStatus) => (
+                                                    <SelectItem key={status.id} value={safeToString(status.id)}>
+                                                        {status.name || status.status || 'Unknown'}
+                                                    </SelectItem>
+                                                ))
+                                            ) : (
+                                                <SelectItem value="no-status" disabled>No statuses available</SelectItem>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

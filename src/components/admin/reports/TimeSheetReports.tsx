@@ -442,10 +442,10 @@ export function TimesheetReports() {
                                     <SelectValue placeholder="Project Country" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Countries</SelectItem>
+                                    <SelectItem value="all">All Project Countries</SelectItem>
                                     {(store_countries || []).map((c: any) => (
                                         <SelectItem key={c.id} value={c.code}>
-                                            {c.name}({c.code})
+                                            {c.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -461,7 +461,7 @@ export function TimesheetReports() {
                                     <SelectItem value="all">All User Countries</SelectItem>
                                     {(store_countries || []).map((c: any) => (
                                         <SelectItem key={c.id} value={c.code}>
-                                            {c.code}
+                                            {c.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
