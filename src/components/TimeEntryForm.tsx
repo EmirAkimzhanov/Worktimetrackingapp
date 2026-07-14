@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 import { Switch } from './ui/switch';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
-import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane, Search, X, FileText, Upload } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, CalendarRange, ListTodo, Briefcase, Plane, Search, X, FileText, Upload, AlertTriangle } from 'lucide-react';
 import { useTimeTracker } from './TimeTrackerContext';
 import { toast } from 'sonner';
 import { useGetHolidayTimeEntrys, useGetTimeEntriesStats, useGetTimeEntrys, useSendTimeEntrys } from '../hooks/useTimeEntry';
@@ -71,6 +71,7 @@ interface ProjectOption {
 export function TimeEntryForm() {
   const { addMultipleEntries } = useTimeTracker();
   const [inputMode, setInputMode] = useState<InputMode>('single');
+  const [leaveDocumentError, setLeaveDocumentError] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabType>('internal');
   const [projectId, setProjectId] = useState('');
   const [selectedTask, setSelectedTask] = useState('');
@@ -489,6 +490,7 @@ export function TimeEntryForm() {
     setDateError('');
     setClientSearch('');
     setLeaveDocument(null);
+    setLeaveDocumentError('');
   };
 
   const createRequestBody = (): any => {
@@ -568,6 +570,14 @@ export function TimeEntryForm() {
     } else if (activeTab === 'vacations') {
       if (!selectedLeaveType || !hours) {
         toast.error('Please fill in all required fields');
+        return;
+      }
+      if (!leaveDocument) {
+        setLeaveDocumentError('Supporting document is required');
+        return;
+      }
+      if (leaveDocumentError) {
+        toast.error('Please fix the document error before submitting');
         return;
       }
     }
@@ -1360,29 +1370,40 @@ export function TimeEntryForm() {
 
             {/* Поле для загрузки PDF файла */}
             <div className="space-y-2">
-              <Label htmlFor="leaveDocument">Supporting Document (PDF)</Label>
+              <Label htmlFor="leaveDocument">Supporting Document (PDF) *</Label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Input
                     id="leaveDocument"
                     type="file"
                     accept=".pdf,application/pdf"
+                    className={`flex-1 ${leaveDocumentError ? 'border-red-500' : ''}`}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) {
-                        if (file.type === 'application/pdf') {
-                          if (file.size <= 10 * 1024 * 1024) { // 10MB limit
-                            setLeaveDocument(file);
-                            toast.success(`File "${file.name}" selected`);
-                          } else {
-                            toast.error('File size must be less than 10MB');
-                            e.target.value = '';
-                          }
-                        } else {
-                          toast.error('Please select a PDF file');
-                          e.target.value = '';
-                        }
+                      setLeaveDocumentError('');
+
+                      if (!file) return;
+
+                      if (file.type !== 'application/pdf') {
+                        setLeaveDocumentError('Only PDF files are allowed');
+                        e.target.value = '';
+                        return;
                       }
+
+                      if (file.size > 10 * 1024 * 1024) {
+                        setLeaveDocumentError('File size must be less than 10MB');
+                        e.target.value = '';
+                        return;
+                      }
+
+                      if (file.name.length > 255) {
+                        setLeaveDocumentError('File name is too long');
+                        e.target.value = '';
+                        return;
+                      }
+
+                      setLeaveDocument(file);
+                      toast.success(`File "${file.name}" selected`);
                     }}
                     className="flex-1"
                   />
@@ -1394,6 +1415,7 @@ export function TimeEntryForm() {
                     size="sm"
                     onClick={() => {
                       setLeaveDocument(null);
+                      setLeaveDocumentError('');
                       const input = document.getElementById('leaveDocument') as HTMLInputElement;
                       if (input) input.value = '';
                       toast.info('File removed');
@@ -1402,14 +1424,18 @@ export function TimeEntryForm() {
                     <X className="w-4 h-4" />
                   </Button>
                 )}
+                {leaveDocumentError && (
+                  <p className="text-sm text-red-500 flex items-center gap-1 mt-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {leaveDocumentError}
+                  </p>
+                )}
               </div>
               {leaveDocument && (
                 <p className="text-sm text-green-600 flex items-center gap-1">
                   <FileText className="w-3 h-3" />
-                  Selected: {leaveDocument.name} ({(leaveDocument.size / 1024).toFixed(2)} KB)
                 </p>
               )}
-              <p className="text-xs text-gray-500">Upload a PDF file (max 10MB)</p>
             </div>
 
             <div className="flex items-center justify-between pt-2">
