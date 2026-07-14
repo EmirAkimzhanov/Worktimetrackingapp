@@ -1067,7 +1067,7 @@ export function TimeEntryForm() {
             <div className="flex items-center justify-between pt-2">
               <div className="text-sm text-gray-500">Fields marked with * are required</div>
               <Button type="submit" style={{ backgroundColor: '#1F4E78' }} disabled={isSubmitDisabled()} className="px-6">
-                {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> Add Time Entry{inputMode === 'range' ? 's' : ''} </>}
+                {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> {inputMode === 'range' ? 'Add Time Entries' : 'Add Time Entry'} </>}
               </Button>
             </div>
           </form>
@@ -1223,7 +1223,7 @@ export function TimeEntryForm() {
             <div className="flex items-center justify-between pt-2">
               <div className="text-sm text-gray-500">Fields marked with * are required</div>
               <Button type="submit" style={{ backgroundColor: '#1F4E78' }} disabled={isSubmitDisabled()} className="px-6">
-                {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> Add Time Entry{inputMode === 'range' ? 's' : ''} </>}
+                {isSubmitting ? 'Adding...' : <> <Plus className="w-4 h-4 mr-2" /> {inputMode === 'range' ? 'Add Time Entries' : 'Add Time Entry'} </>}
               </Button>
             </div>
           </form>
