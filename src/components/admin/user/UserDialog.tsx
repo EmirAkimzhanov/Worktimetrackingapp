@@ -72,6 +72,7 @@ export function UserDialog({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const isInitializedRef = useRef(false);
     const isUserChangingRole = useRef(false);
+    const changedFields = useRef<Set<keyof UserFormData>>(new Set());
 
     const { mutate: getAccountsStatuses } = useGetAccountsStatuses();
     const accounts_statuses = useUserStore((state) => state.accounts_statuses) as AccountStatus[];
@@ -115,7 +116,6 @@ export function UserDialog({
         return [];
     }, [positions]);
 
-    // Get grades filtered by selected position
     const filteredGrades = useMemo(() => {
         if (!positions || !userForm.position_id) return [];
 
@@ -226,17 +226,16 @@ export function UserDialog({
     useEffect(() => {
         if (editingUser && open && !isInitializedRef.current) {
             isInitializedRef.current = true;
+            changedFields.current = new Set();
 
             const roleId = getRoleIdFromEditingUser();
             const accountStatusId = getAccountStatusIdFromEditingUser();
 
-            // Get the position to find its grades
             const editingPosition = store_positions.find(pos =>
                 pos.id === editingUser.position_id ||
                 pos.name === editingUser.position
             );
 
-            // Find the grade in the position's grades
             let gradeId = editingUser.grade_id;
             if (!gradeId && editingPosition && editingUser.grade) {
                 const foundGrade = editingPosition.grades?.find(g =>
@@ -271,6 +270,7 @@ export function UserDialog({
             });
         } else if (!open) {
             isInitializedRef.current = false;
+            changedFields.current = new Set();
             resetForm();
         }
     }, [editingUser, open, store_positions, store_departments, department_roles, countries, roles, accounts_statuses, filteredGrades]);
@@ -298,10 +298,8 @@ export function UserDialog({
         }
     }, [open]);
 
-    // Reset grade when position changes
     useEffect(() => {
         if (userForm.position_id && filteredGrades.length > 0) {
-            // Check if current grade belongs to the selected position
             const currentGradeBelongsToPosition = filteredGrades.some(g => g.id === userForm.grade_id);
             if (!currentGradeBelongsToPosition) {
                 setUserForm(prev => ({
@@ -332,6 +330,7 @@ export function UserDialog({
             status_started_at: ''
         });
         setErrors({});
+        changedFields.current = new Set();
     };
 
     const handleClose = () => {
@@ -394,7 +393,7 @@ export function UserDialog({
     const handleSaveUser = useCallback(() => {
         if (!validateForm()) return;
 
-        const userBody: UserBody = {
+        const fullBody: UserBody = {
             email: userForm.email,
             first_name: userForm.first_name,
             last_name: userForm.last_name,
@@ -409,19 +408,9 @@ export function UserDialog({
             ...(editingUser && { status: userForm.account_status_id })
         };
 
-        if (editingUser) {
-            editUser({ body: userBody, user_id: editingUser.id }, {
-                onSuccess: () => {
-                    reloadUsersWithFilters();
-                    handleClose();
-                    if (onSave) onSave();
-                },
-                onError: (error) => {
-                    console.error('Error editing user:', error);
-                }
-            });
-        } else {
-            sendUser(userBody, {
+        // Для создания отправляем всё
+        if (!editingUser) {
+            sendUser(fullBody, {
                 onSuccess: () => {
                     reloadUsersWithFilters();
                     handleClose();
@@ -431,10 +420,52 @@ export function UserDialog({
                     console.error('Error creating user:', error);
                 }
             });
+            return;
         }
+
+        // Для редактирования — только изменённые поля
+        const fieldMap: Partial<Record<keyof UserFormData, keyof UserBody>> = {
+            email: 'email',
+            first_name: 'first_name',
+            last_name: 'last_name',
+            grade_id: 'grade',
+            grade_started_at: 'grade_started_at',
+            position_id: 'position',
+            department_id: 'department',
+            department_role_id: 'department_role',
+            role_id: 'role',
+            country_id: 'country',
+            status_started_at: 'status_started_at',
+            account_status_id: 'status',
+        };
+
+        const partialBody: Partial<UserBody> = {};
+        changedFields.current.forEach((field) => {
+            const bodyKey = fieldMap[field];
+            if (bodyKey) {
+                (partialBody as any)[bodyKey] = (fullBody as any)[bodyKey];
+            }
+        });
+
+        if (Object.keys(partialBody).length === 0) {
+            handleClose();
+            return;
+        }
+
+        editUser({ body: partialBody, user_id: editingUser.id }, {
+            onSuccess: () => {
+                reloadUsersWithFilters();
+                handleClose();
+                if (onSave) onSave();
+            },
+            onError: (error) => {
+                console.error('Error editing user:', error);
+            }
+        });
     }, [validateForm, userForm, editingUser, editUser, sendUser, reloadUsersWithFilters, handleClose, onSave]);
 
     const handleEmailChange = useCallback((value: string) => {
+        changedFields.current.add('email');
         setUserForm({ ...userForm, email: value });
         if (errors.email) {
             setErrors(prev => {
@@ -446,6 +477,7 @@ export function UserDialog({
     }, [userForm, setUserForm, errors.email]);
 
     const handleTextChange = useCallback((field: keyof UserFormData, value: string) => {
+        changedFields.current.add(field);
         setUserForm({ ...userForm, [field]: value });
         if (errors[field]) {
             setErrors(prev => {
@@ -457,6 +489,7 @@ export function UserDialog({
     }, [userForm, setUserForm, errors]);
 
     const handleDateChange = useCallback((field: keyof UserFormData, value: string) => {
+        changedFields.current.add(field);
         setUserForm({ ...userForm, [field]: value });
 
         if (errors[field]) {
@@ -480,6 +513,11 @@ export function UserDialog({
             }
         }
     }, [userForm, setUserForm, errors, editingUser, validateDateForEdit]);
+
+    const handleSelectChange = useCallback((field: keyof UserFormData, value: any) => {
+        changedFields.current.add(field);
+        setUserForm({ ...userForm, [field]: value });
+    }, [userForm, setUserForm]);
 
     const isLoading = isCreating || isEditing;
 
@@ -518,7 +556,7 @@ export function UserDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-5xl" style={{ width: '900px' }}>
                 <DialogHeader>
-                    <DialogTitle> {editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+                    <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
                     <DialogDescription>
                         {editingUser ? 'Update user details' : 'Create a new user account'}
                     </DialogDescription>
@@ -576,7 +614,7 @@ export function UserDialog({
                                 <Select
                                     value={safeToString(userForm.country_id)}
                                     onValueChange={(value: string) =>
-                                        setUserForm({ ...userForm, country_id: parseInt(value) })
+                                        handleSelectChange('country_id', parseInt(value))
                                     }
                                     disabled={isLoading || countries.length === 0}
                                 >
@@ -603,8 +641,7 @@ export function UserDialog({
                                 <Select
                                     value={safeToString(userForm.position_id)}
                                     onValueChange={(value: string) => {
-                                        const positionId = parseInt(value);
-                                        setUserForm({ ...userForm, position_id: positionId });
+                                        handleSelectChange('position_id', parseInt(value));
                                     }}
                                     disabled={isLoading || store_positions.length === 0}
                                 >
@@ -625,7 +662,7 @@ export function UserDialog({
                                 <Select
                                     value={safeToString(userForm.grade_id)}
                                     onValueChange={(value: string) =>
-                                        setUserForm({ ...userForm, grade_id: parseInt(value) })
+                                        handleSelectChange('grade_id', parseInt(value))
                                     }
                                     disabled={isLoading || filteredGrades.length === 0}
                                 >
@@ -667,7 +704,7 @@ export function UserDialog({
                                 <Select
                                     value={safeToString(userForm.department_id)}
                                     onValueChange={(value: string) =>
-                                        setUserForm({ ...userForm, department_id: parseInt(value) })
+                                        handleSelectChange('department_id', parseInt(value))
                                     }
                                     disabled={isLoading || store_departments.length === 0}
                                 >
@@ -684,7 +721,7 @@ export function UserDialog({
                                 <Select
                                     value={safeToString(userForm.department_role_id)}
                                     onValueChange={(value: string) =>
-                                        setUserForm({ ...userForm, department_role_id: parseInt(value) })
+                                        handleSelectChange('department_role_id', parseInt(value))
                                     }
                                     disabled={isLoading || department_roles.length === 0}
                                 >
@@ -704,7 +741,7 @@ export function UserDialog({
                                         isUserChangingRole.current = true;
                                         const parsedValue = parseInt(value);
                                         if (!isNaN(parsedValue)) {
-                                            setUserForm(prev => ({ ...prev, role_id: parsedValue }));
+                                            handleSelectChange('role_id', parsedValue);
                                         }
                                     }}
                                     disabled={isLoading || !roles || roles.length === 0}
@@ -759,7 +796,7 @@ export function UserDialog({
                                         value={safeToString(userForm.account_status_id)}
                                         onValueChange={(value: string) => {
                                             const parsedValue = value === 'null' || value === '' ? null : parseInt(value);
-                                            setUserForm({ ...userForm, account_status_id: parsedValue });
+                                            handleSelectChange('account_status_id', parsedValue);
                                         }}
                                         disabled={isLoading || !accounts_statuses || accounts_statuses.length === 0}
                                     >
