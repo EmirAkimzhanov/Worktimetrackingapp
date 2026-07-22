@@ -147,6 +147,21 @@ export interface TimeEntriesStats {
   total_records: number;
 }
 
+// Тип для attendance
+export interface AttendanceData {
+  // Определите структуру ваших данных attendance
+  // Например:
+  id: number;
+  user_id: number;
+  user_name: string;
+  date: string;
+  check_in?: string;
+  check_out?: string;
+  hours?: number;
+  status?: string;
+  // добавьте другие поля по необходимости
+}
+
 interface User {
   id: number;
   username: string;
@@ -178,13 +193,15 @@ interface UserState {
 
   leaves: LeaveArray | null;
   leaves_reports: LeaveTasks[] | null;
-  leave_tasks: any[] | null; // 👈 ДОБАВЛЕНО
+  leave_tasks: any[] | null;
 
   time_entries: TimeEntry[] | null;
 
   time_entry: TimeEntry | null;
 
   time_entries_stats: TimeEntriesStats | null;
+
+  attendance: AttendanceData[] | null; // 👈 ДОБАВЛЕНО
 
   departments: Department[] | null;
 
@@ -258,6 +275,8 @@ interface UserState {
 
   setTimeEntriesStats: (time_entries_stats: TimeEntriesStats | null) => void;
 
+  setAttendance: (attendance: AttendanceData[] | null) => void; // 👈 ДОБАВЛЕНО
+
   setCountries: (countries: Countries) => void;
   setSelectedCountry: (country: CountryWithClients | null) => void;
 
@@ -272,7 +291,7 @@ interface UserState {
 
   setLeaves: (leaves: LeaveArray | null) => void;
   setLeavesReports: (leaves_reports: LeaveReportsData[] | null) => void;
-  setLeaveTasks: (leave_tasks: any[] | null) => void; // 👈 ДОБАВЛЕНО
+  setLeaveTasks: (leave_tasks: any[] | null) => void;
 
   setCurrentMonth: (currentMonth: string | null) => void;
   setCurrentYear: (currentYear: string | null) => void;
@@ -329,24 +348,20 @@ interface UserState {
 
   setMonitoring: (monitoring: Monitoring[] | null) => void;
 
-  // ✅ ОДНА ФУНКЦИЯ ДЛЯ ОТЧЕТОВ
   setReports: (reports: ReportsData | null) => void;
 
-  // ✅ Хелпер функции для работы с tasks
   getTaskById: (taskId: number) => Task | undefined;
   getTasksByType: (taskType: string) => Task[];
   addTask: (task: Task) => void;
   updateTask: (taskId: number, updates: Partial<Task>) => void;
   removeTask: (taskId: number) => void;
 
-  // ✅ Хелпер функции для работы с roles
   getRoleById: (roleId: number) => Role | undefined;
   getRoleByName: (roleName: string) => Role | undefined;
   addRole: (role: Role) => void;
   updateRole: (roleId: number, updates: Partial<Role>) => void;
   removeRole: (roleId: number) => void;
 
-  // ✅ Хелпер функции для работы с отчетами
   getTimeReportById: (reportId: number) => TimeReport | undefined;
   getProjectReportById: (projectId: number) => ProjectReport | undefined;
   getUserReportByUserId: (userId: number) => UserReport | undefined;
@@ -382,10 +397,11 @@ export const useUserStore = create<UserState>()(
       internal_tasks: null,
       leaves: null,
       leaves_reports: null,
-      leave_tasks: null, // 👈 ДОБАВЛЕНО
+      leave_tasks: null,
       time_entries: null,
       time_entry: null,
       time_entries_stats: null,
+      attendance: null, // 👈 ДОБАВЛЕНО
       accounts_statuses: null,
 
       managers: null,
@@ -474,7 +490,7 @@ export const useUserStore = create<UserState>()(
 
       setLeavesReports: (leaves_reports) => set({ leaves_reports }),
 
-      setLeaveTasks: (leave_tasks) => set({ leave_tasks }), // 
+      setLeaveTasks: (leave_tasks) => set({ leave_tasks }),
 
       setCalendarHolidays: (calendar_holidays) => set({ calendar_holidays }),
 
@@ -483,6 +499,8 @@ export const useUserStore = create<UserState>()(
       setTimeEntry: (timeEntry) => set({ time_entry: timeEntry }),
 
       setTimeEntriesStats: (stats) => set({ time_entries_stats: stats }),
+
+      setAttendance: (attendance) => set({ attendance }), // 👈 ДОБАВЛЕНО
 
       setDepartments: (departments) => set({ departments }),
 
@@ -816,10 +834,11 @@ export const useUserStore = create<UserState>()(
           internal_tasks: null,
           leaves: null,
           leaves_reports: null,
-          leave_tasks: null, // 👈 ДОБАВЛЕНО
+          leave_tasks: null,
           time_entries: null,
           time_entry: null,
           time_entries_stats: null,
+          attendance: null, // 👈 ДОБАВЛЕНО
           departments: null,
           department_members: null,
           accounts_statuses: null,
@@ -868,6 +887,7 @@ export const useUserStore = create<UserState>()(
         workingWeekends: state.workingWeekends,
         time_entry: state.time_entry,
         time_entries_stats: state.time_entries_stats,
+        attendance: state.attendance, // 👈 ДОБАВЛЕНО
         projectsPagination: state.projectsPagination,
         managers: state.managers,
         selectedCountry: state.selectedCountry,
@@ -876,7 +896,7 @@ export const useUserStore = create<UserState>()(
         internal_tasks: state.internal_tasks,
         leaves: state.leaves,
         leaves_reports: state.leaves_reports,
-        leave_tasks: state.leave_tasks, // 👈 ДОБАВЛЕНО
+        leave_tasks: state.leave_tasks,
         time_entries: state.time_entries,
         departments: state.departments,
         department_members: state.department_members,

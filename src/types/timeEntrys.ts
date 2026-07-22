@@ -87,3 +87,22 @@ export interface TimeEntryStats {
     total_working_days: number;
     total_records: number;
 }
+
+export interface TimeEntryWrite {
+    id: string;
+    weekends_included: boolean;
+    holidays_included: boolean;
+    start_date: string;
+    end_date: string;
+    country: number | null;
+    client: number | null;
+    project_code: number | null;
+    task_type: number;
+    task: number;
+    readonly leave_document: string | null;
+    date: string | null;
+    hours: string;
+    description: string;
+    readonly created_at: string;
+    readonly updated_at: string;
+}

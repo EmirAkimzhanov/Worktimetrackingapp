@@ -297,6 +297,53 @@ export const getTimeEntriesStats = async (year: string | number, month: string |
     return res.data;
 }
 
+export const getTimeEntriesAttendance = async (params: {
+    page?: number;
+    pageSize?: number;
+    start_date?: string;
+    end_date?: string;
+    date?: string;
+    user_department?: string;
+    user_country_code?: string;
+    position?: string;
+    detailed_grade?: string;
+    task_type?: string;
+    status?: string;
+    user_email?: string;
+    user_name?: string;
+    description?: string;
+    country_id: string | number;
+}) => {
+    const token = useUserStore.getState().access_token;
+
+    if (!token) {
+        throw new Error("No access token available");
+    }
+
+    const { page = 1, pageSize = 20, ...rest } = params;
+
+    const urlParams = new URLSearchParams();
+    urlParams.append('page', String(page));
+    urlParams.append('page_size', String(pageSize));
+
+    Object.entries(rest).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            urlParams.append(key, String(value));
+        }
+    });
+
+    const res = await axios(
+        `${api}api/calendars/time-entries/attendance/?${urlParams.toString()}`,
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    return res.data;
+};
+
 
 // В services/timeEntry.ts
 export const getLeaves = async (params?: {

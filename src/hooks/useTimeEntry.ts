@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, getWorkingWeekends, sendCalendar, sendLetter, sendReminder, sendTimeEntry, getTimeEntriesStats, getLeaves } from "../services/timeEntry";
+import { deleteCalendar, deleteTimeEntry, editCalendar, editTimeEntry, getCalendar, getHolidayCalendar, getTimeEntry, getWorkingWeekends, sendCalendar, sendLetter, sendReminder, sendTimeEntry, getTimeEntriesStats, getLeaves, getTimeEntriesAttendance } from "../services/timeEntry";
 import { EditDate, LetterBody, ReminderBody, TimeBody } from '../types/timeEntrys';
 import { useUserStore } from '../store/UsersStore';
 import { CalendarEvent } from '../types/calendar';
@@ -14,10 +14,11 @@ let holidayCalendarCache: { data: any; timestamp: number } | null = null;
 let timeEntriesStatsCache: { data: any; timestamp: number; year: string; month: string } | null = null;
 let workingWeekendsCache: { data: any; timestamp: number } | null = null;
 let leavesCache: { data: any; timestamp: number } | null = null;
-
+let attendanceCache: { data: any; timestamp: number; page: number; pageSize: number } | null = null;
 
 const CACHE_DURATION = 30 * 60 * 1000; // 30 минут
 const STATS_CACHE_DURATION = 5 * 60 * 1000; // 5 минут для статистики
+const ATTENDANCE_CACHE_DURATION = 30 * 60 * 1000; // 30 минут для attendance
 
 // Функции очистки кэша
 const clearTimeEntriesCache = () => {
@@ -50,6 +51,11 @@ const clearLeavesCache = () => {
     console.log('Leaves cache cleared');
 };
 
+const clearAttendanceCache = () => {
+    attendanceCache = null;
+    console.log('Attendance cache cleared');
+};
+
 const clearAllTimeCaches = () => {
     clearTimeEntriesCache();
     clearCalendarCache();
@@ -57,6 +63,7 @@ const clearAllTimeCaches = () => {
     clearTimeEntriesStatsCache();
     clearWorkingWeekendsCache();
     clearLeavesCache();
+    clearAttendanceCache();
     console.log('All time-related caches cleared');
 };
 
@@ -97,6 +104,18 @@ const getCachedLeaves = () => {
     return null;
 };
 
+const getCachedAttendance = (page: number, pageSize: number) => {
+    const now = Date.now();
+    if (attendanceCache &&
+        attendanceCache.page === page &&
+        attendanceCache.pageSize === pageSize &&
+        (now - attendanceCache.timestamp) < ATTENDANCE_CACHE_DURATION) {
+        console.log('Returning cached attendance data');
+        return attendanceCache.data;
+    }
+    return null;
+};
+
 // ========== ХУКИ С КЭШИРОВАНИЕМ ==========
 export const useSendTimeEntrys = () => {
     return useMutation({
@@ -104,18 +123,14 @@ export const useSendTimeEntrys = () => {
             let body: TimeBody;
             let file: File | undefined;
 
-            // Определяем тип переданного параметра
             if (params && typeof params === 'object' && 'body' in params) {
-                // Передан объект с полями body и опционально file
                 body = params.body;
                 file = params.file;
             } else {
-                // Передан直接的 body
                 body = params as TimeBody;
                 file = undefined;
             }
 
-            // Валидация body
             if (!body || typeof body !== 'object') {
                 throw new Error('Invalid time entry data: body is required');
             }
@@ -125,13 +140,12 @@ export const useSendTimeEntrys = () => {
                 throw new Error('Missing required fields: start_date and end_date are required');
             }
 
-            // Автоматически определяем single_date если start_date равен end_date
             const isSingleDate = body.start_date === body.end_date;
             const result = await sendTimeEntry(body, isSingleDate, file);
 
-            // Очищаем кэш при создании новой записи времени
             clearTimeEntriesCache();
             clearTimeEntriesStatsCache();
+            clearAttendanceCache();
 
             return result;
         },
@@ -153,10 +167,8 @@ export const useGetTimeEntrys = () => {
             const start_date = params?.start_date;
             const end_date = params?.end_date;
 
-            // Создаем ключ кэша на основе параметров
             const cacheKey = `${start_date || 'all'}_${end_date || 'all'}`;
 
-            // Если forceRefresh = true, игнорируем кэш
             if (!forceRefresh && timeEntriesCache[cacheKey]) {
                 const isCacheValid = Date.now() - timeEntriesCache[cacheKey].timestamp < CACHE_DURATION;
                 if (isCacheValid) {
@@ -168,7 +180,6 @@ export const useGetTimeEntrys = () => {
             console.log(forceRefresh ? 'Force refreshing time entries' : 'Fetching fresh time entries', { start_date, end_date });
             const data = await getTimeEntry(start_date, end_date);
 
-            // Сохраняем в кэш с ключом
             timeEntriesCache[cacheKey] = { data, timestamp: Date.now() };
 
             return data;
@@ -187,9 +198,9 @@ export const useEditTimeEntry = () => {
     return useMutation({
         mutationFn: async ({ day_id, body }: { day_id: string, body: EditDate }) => {
             const result = await editTimeEntry(day_id, body);
-            // Очищаем кэш при редактировании
             clearTimeEntriesCache();
-            clearTimeEntriesStatsCache(); // Очищаем кэш статистики
+            clearTimeEntriesStatsCache();
+            clearAttendanceCache();
             return result;
         },
         onSuccess: (data) => {
@@ -205,9 +216,9 @@ export const useDeleteTimeEntry = () => {
     return useMutation({
         mutationFn: async (day_id: string) => {
             const result = await deleteTimeEntry(day_id);
-            // Очищаем кэш при удалении
             clearTimeEntriesCache();
-            clearTimeEntriesStatsCache(); // Очищаем кэш статистики
+            clearTimeEntriesStatsCache();
+            clearAttendanceCache();
             return result;
         },
         onSuccess: (data) => {
@@ -277,7 +288,6 @@ export const useSendCalendar = () => {
     return useMutation({
         mutationFn: async (body: CalendarEvent) => {
             const result = await sendCalendar(body);
-            // Очищаем кэш календаря при создании события
             clearCalendarCache();
             return result;
         },
@@ -406,64 +416,30 @@ export const useSendLetter = () => {
 // ========== ХУК ДЛЯ LEAVES ==========
 
 export const useGetLeaves = () => {
-    const setLeavesReports = useUserStore((state) => state.setLeavesReports);
+    const setLeaves = useUserStore((state) => state.setLeaves);
 
     return useMutation({
-        mutationFn: async (params?: {
-            page?: number;
-            page_size?: number;
-            start_date?: string;
-            end_date?: string;
-            date?: string;
-            user_email?: string;
-            user_country_code?: string;
-            user_department?: string;
-            position?: string;
-            detailed_grade?: string;
-            description?: string;
-            task_name?: string;
-            country_code?: string;
-            leave_type?: string;
-            status?: string;
-            forceRefresh?: boolean;
-        }) => {
-            const forceRefresh = params?.forceRefresh;
-
-            // Создаем ключ кэша на основе параметров
-            const cacheKey = JSON.stringify(params);
-
-            // Проверяем кэш
-            if (!forceRefresh && leavesCache && leavesCache.data) {
-                const isCacheValid = Date.now() - leavesCache.timestamp < CACHE_DURATION;
-                if (isCacheValid) {
-                    console.log('Returning cached leaves data');
-                    return leavesCache.data;
+        mutationFn: async (forceRefresh?: boolean) => {
+            if (!forceRefresh) {
+                const cached = getCachedLeaves();
+                if (cached) {
+                    return cached;
                 }
             }
 
-            console.log(forceRefresh ? 'Force refreshing leaves' : 'Fetching fresh leaves', params);
-
-            const data = await getLeaves(params);
+            console.log(forceRefresh ? 'Force refreshing leaves' : 'Fetching fresh leaves');
+            const data = await getLeaves();
             leavesCache = { data, timestamp: Date.now() };
             return data;
         },
         onSuccess: (data) => {
-            if (setLeavesReports && data) {
-                setLeavesReports({
-                    leaves: data.results || [],
-                    total_count: data.count || 0,
-                    total_days: data.total_days || 0,
-                    approved_days: data.approved_days || 0,
-                    pending_days: data.pending_days || 0,
-                    rejected_days: data.rejected_days || 0,
-                    cancelled_days: data.cancelled_days || 0,
-                });
+            if (setLeaves) {
+                setLeaves(data);
             }
             console.log('Leaves loaded:', data);
         },
         onError: (error) => {
             console.error("Get leaves error:", error);
-            toast.error(error.message);
         },
     });
 };
@@ -475,7 +451,6 @@ export const useGetTimeEntriesStats = () => {
 
     return useMutation({
         mutationFn: async ({ year, month, forceRefresh }: { year: string; month: string; forceRefresh?: boolean }) => {
-            // Проверяем кэш
             if (!forceRefresh && timeEntriesStatsCache &&
                 timeEntriesStatsCache.year === year &&
                 timeEntriesStatsCache.month === month) {
@@ -487,7 +462,6 @@ export const useGetTimeEntriesStats = () => {
             }
 
             console.log(forceRefresh ? 'Force refreshing stats' : 'Fetching fresh stats');
-            // Используем существующую функцию из сервиса (которая использует вашу константу api)
             const data = await getTimeEntriesStats(year, month);
             timeEntriesStatsCache = { data, timestamp: Date.now(), year, month };
             return data;
@@ -502,6 +476,42 @@ export const useGetTimeEntriesStats = () => {
     });
 };
 
+// ========== ХУК ДЛЯ ATTENDANCE ==========
+export const useGetTimeEntriesAttendance = () => {
+    const setAttendance = useUserStore((state) => state.setAttendance);
+
+    return useMutation({
+        mutationFn: async (params: {
+            page?: number;
+            pageSize?: number;
+            forceRefresh?: boolean;
+            start_date?: string;
+            end_date?: string;
+            date?: string;
+            user_department?: string;
+            user_country_code?: string;
+            position?: string;
+            detailed_grade?: string;
+            task_type?: string;
+            status?: string;
+            user_email?: string;
+            user_name?: string;
+            description?: string;
+            country_id?: string;
+        }) => {
+            const { page = 1, pageSize = 20, forceRefresh, ...rest } = params;
+            const data = await getTimeEntriesAttendance({ page, pageSize, ...rest });
+            return data;
+        },
+        onSuccess: (data) => {
+            if (setAttendance) setAttendance(data);
+        },
+        onError: (error) => {
+            console.error("Get attendance error:", error);
+        },
+    });
+};
+
 // ========== ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ==========
 
 export const timeCacheUtils = {
@@ -511,6 +521,7 @@ export const timeCacheUtils = {
     clearTimeEntriesStatsCache,
     clearWorkingWeekendsCache,
     clearLeavesCache,
+    clearAttendanceCache,
     clearAll: clearAllTimeCaches,
 
     isTimeEntriesCacheValid: (cacheKey?: string) => {
@@ -545,6 +556,16 @@ export const timeCacheUtils = {
         if (!leavesCache) return false;
         const now = Date.now();
         return (now - leavesCache.timestamp) < CACHE_DURATION;
+    },
+
+    isAttendanceCacheValid: (page?: number, pageSize?: number) => {
+        if (!attendanceCache) return false;
+        if (page !== undefined && pageSize !== undefined &&
+            (attendanceCache.page !== page || attendanceCache.pageSize !== pageSize)) {
+            return false;
+        }
+        const now = Date.now();
+        return (now - attendanceCache.timestamp) < ATTENDANCE_CACHE_DURATION;
     },
 
     isTimeEntriesStatsCacheValid: (year?: string, month?: string) => {
@@ -590,6 +611,12 @@ export const timeCacheUtils = {
         return Math.floor((now - leavesCache.timestamp) / 1000);
     },
 
+    getAttendanceCacheAge: () => {
+        if (!attendanceCache) return null;
+        const now = Date.now();
+        return Math.floor((now - attendanceCache.timestamp) / 1000);
+    },
+
     getTimeEntriesStatsCacheAge: () => {
         if (!timeEntriesStatsCache) return null;
         const now = Date.now();
@@ -630,6 +657,12 @@ export const timeCacheUtils = {
         return Math.floor((now - leavesCache.timestamp) / 60000);
     },
 
+    getAttendanceCacheAgeInMinutes: () => {
+        if (!attendanceCache) return null;
+        const now = Date.now();
+        return Math.floor((now - attendanceCache.timestamp) / 60000);
+    },
+
     getTimeEntriesStatsCacheAgeInMinutes: () => {
         if (!timeEntriesStatsCache) return null;
         const now = Date.now();
@@ -657,6 +690,10 @@ export const timeCacheUtils = {
 
     getLeavesCacheData: () => {
         return leavesCache ? leavesCache.data : null;
+    },
+
+    getAttendanceCacheData: () => {
+        return attendanceCache ? attendanceCache.data : null;
     },
 
     getTimeEntriesStatsCacheData: () => {
@@ -696,6 +733,13 @@ export const timeCacheUtils = {
         const data = await getLeaves();
         leavesCache = { data, timestamp: Date.now() };
         console.log('Leaves cache refreshed');
+        return data;
+    },
+
+    refreshAttendanceCache: async (page: number = 1, pageSize: number = 20) => {
+        const data = await getTimeEntriesAttendance(page, pageSize);
+        attendanceCache = { data, timestamp: Date.now(), page, pageSize };
+        console.log('Attendance cache refreshed');
         return data;
     },
 
@@ -748,6 +792,15 @@ export const timeCacheUtils = {
             ageInMinutes: Math.floor((now - leavesCache.timestamp) / 60000)
         };
 
+        const attendanceInfo = !attendanceCache ? { exists: false } : {
+            exists: true,
+            page: attendanceCache.page,
+            pageSize: attendanceCache.pageSize,
+            isValid: (now - attendanceCache.timestamp) < ATTENDANCE_CACHE_DURATION,
+            ageInSeconds: Math.floor((now - attendanceCache.timestamp) / 1000),
+            ageInMinutes: Math.floor((now - attendanceCache.timestamp) / 60000)
+        };
+
         const statsInfo = !timeEntriesStatsCache ? { exists: false } : {
             exists: true,
             year: timeEntriesStatsCache.year,
@@ -763,9 +816,11 @@ export const timeCacheUtils = {
             holidayCalendar: holidayInfo,
             workingWeekends: workingWeekendsInfo,
             leaves: leavesInfo,
+            attendance: attendanceInfo,
             timeEntriesStats: statsInfo,
             cacheDurationMinutes: CACHE_DURATION / 60000,
-            statsCacheDurationMinutes: STATS_CACHE_DURATION / 60000
+            statsCacheDurationMinutes: STATS_CACHE_DURATION / 60000,
+            attendanceCacheDurationMinutes: ATTENDANCE_CACHE_DURATION / 60000
         };
     }
 };
