@@ -276,20 +276,18 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                             const isS = isStartDay(date);
                             const isE = isEndDay(date);
 
-                            let className = 'h-8 w-full text-xs flex items-center justify-center rounded transition-colors';
+                            // Определяем стиль через inline style — Tailwind не пурджит динамические классы
+                            let bgColor = '';
+                            let textColor = '';
 
-                            if (isS && isE) {
-                                className += ' bg-blue-600 text-white hover:bg-blue-700';
-                            } else if (isS) {
-                                className += ' bg-blue-600 text-white rounded-l-full hover:bg-blue-700';
-                            } else if (isE) {
-                                className += ' bg-blue-600 text-white rounded-r-full hover:bg-blue-700';
+                            if (isS || isE) {
+                                bgColor = '#2563eb';   // blue-600
+                                textColor = '#ffffff';
                             } else if (inRange) {
-                                className += ' bg-blue-100 text-blue-800 hover:bg-blue-200';
+                                bgColor = '#dbeafe';   // blue-100
+                                textColor = '#1e40af'; // blue-800
                             } else if (weekend) {
-                                className += ' text-red-400 hover:bg-red-50';
-                            } else {
-                                className += ' text-gray-900 hover:bg-gray-100';
+                                textColor = '#ef4444'; // red-400
                             }
 
                             return (
@@ -299,7 +297,8 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                                     onClick={() => handleDayClick(date)}
                                     onMouseEnter={() => selecting === 'end' && setHoverDate(date)}
                                     onMouseLeave={() => setHoverDate(null)}
-                                    className={className}
+                                    style={{ backgroundColor: bgColor || undefined, color: textColor || undefined }}
+                                    className="h-8 w-full text-xs flex items-center justify-center rounded transition-colors hover:opacity-80"
                                 >
                                     {format(date, 'd')}
                                 </button>
