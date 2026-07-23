@@ -33,6 +33,17 @@ interface AttendanceRecord {
     department: string;
     position: string;
     grade: string;
+    working_days: number;
+    worked_days: number;
+    worked_hours: number;
+    weekends_holidays: number;
+    paid_leaves: number;
+    non_paid_leaves: number;
+    business_trips: number;
+    sick_leaves: number;
+    day_offs: number;
+    maternity_leave_days: number;
+    skipped_days: number;
     [key: string]: string | number;
 }
 
@@ -41,6 +52,7 @@ interface Country {
     name: string;
     code: string;
 }
+
 // ========== DATE RANGE PICKER ==========
 
 interface DateRangePickerProps {
@@ -169,36 +181,66 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
             </button>
 
             {isOpen && (
-                <div className="absolute top-11 left-0 z-50 bg-white border rounded-xl shadow-xl p-4 w-[320px]">
-                    {/* Навигация по году и месяцу */}
+                <div
+                    className="absolute top-11 left-0 z-50 bg-white border rounded-xl shadow-xl p-4 w-[320px]"
+                    onClick={(e) => e.stopPropagation()}
+                >
                     <div className="flex items-center gap-2 mb-3">
-                        <Select value={String(getYear(viewMonth))} onValueChange={handleYearChange}>
-                            <SelectTrigger className="h-8 text-sm flex-1">
+                        <Select
+                            value={String(getYear(viewMonth))}
+                            onValueChange={handleYearChange}
+                        >
+                            <SelectTrigger
+                                className="h-8 text-sm flex-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 {yearOptions.map((year) => (
-                                    <SelectItem key={year} value={String(year)}>
+                                    <SelectItem
+                                        key={year}
+                                        value={String(year)}
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
                                         {year}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
 
-                        <Select value={String(getMonth(viewMonth))} onValueChange={handleMonthChange}>
-                            <SelectTrigger className="h-8 text-sm flex-1">
+                        <Select
+                            value={String(getMonth(viewMonth))}
+                            onValueChange={handleMonthChange}
+                        >
+                            <SelectTrigger
+                                className="h-8 text-sm flex-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 {monthOptions.map((month) => (
-                                    <SelectItem key={month.value} value={month.value}>
+                                    <SelectItem
+                                        key={month.value}
+                                        value={month.value}
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
                                         {month.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
 
-                        <Button variant="outline" size="sm" onClick={() => setViewMonth(new Date())} className="h-8 text-xs">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setViewMonth(new Date());
+                            }}
+                            className="h-8 text-xs"
+                        >
                             Today
                         </Button>
                     </div>
@@ -216,28 +258,20 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                             const inRange = isInRange(date);
                             const isS = isStartDay(date);
                             const isE = isEndDay(date);
-                            const isSelected = isS || isE;
 
-                            // Базовые стили
                             let className = 'h-8 w-full text-xs flex items-center justify-center rounded transition-colors';
 
                             if (isS && isE) {
-                                // Только одна дата выбрана
                                 className += ' bg-blue-600 text-white hover:bg-blue-700';
                             } else if (isS) {
-                                // Начальная дата
                                 className += ' bg-blue-600 text-white rounded-l-full hover:bg-blue-700';
                             } else if (isE) {
-                                // Конечная дата
                                 className += ' bg-blue-600 text-white rounded-r-full hover:bg-blue-700';
                             } else if (inRange) {
-                                // Промежуточные даты в диапазоне
                                 className += ' bg-blue-100 text-blue-800 hover:bg-blue-200';
                             } else if (weekend) {
-                                // Выходные за пределами диапазона
                                 className += ' text-red-400 hover:bg-red-50';
                             } else {
-                                // Обычные дни
                                 className += ' text-gray-900 hover:bg-gray-100';
                             }
 
@@ -260,13 +294,37 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-1">
-                        <button onClick={() => applyPreset(startOfMonth(new Date()), endOfMonth(new Date()))} className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                applyPreset(startOfMonth(new Date()), endOfMonth(new Date()));
+                            }}
+                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+                        >
                             This month
                         </button>
-                        <button onClick={() => { const last = subMonths(new Date(), 1); applyPreset(startOfMonth(last), endOfMonth(last)); }} className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const last = subMonths(new Date(), 1);
+                                applyPreset(startOfMonth(last), endOfMonth(last));
+                            }}
+                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+                        >
                             Last month
                         </button>
-                        <button onClick={() => { const today = new Date(); const day = getDay(today); const diff = day === 0 ? 6 : day - 1; const s = new Date(today); s.setDate(today.getDate() - diff); applyPreset(startOfDay(s), startOfDay(today)); }} className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                const today = new Date();
+                                const day = getDay(today);
+                                const diff = day === 0 ? 6 : day - 1;
+                                const s = new Date(today);
+                                s.setDate(today.getDate() - diff);
+                                applyPreset(startOfDay(s), startOfDay(today));
+                            }}
+                            className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded"
+                        >
                             This week
                         </button>
                     </div>
@@ -315,6 +373,8 @@ const LEGEND = [
     { code: 'К', label: 'Business Trip', color: 'bg-purple-100' },
     { code: 'А', label: 'Unpaid Social Leave', color: 'bg-gray-100' },
     { code: 'ОБС', label: 'Unpaid Leave', color: 'bg-orange-100' },
+    { code: 'УР', label: 'Childcare Leave', color: 'bg-indigo-100' },
+    { code: 'У', label: 'Study/Training', color: 'bg-teal-100' },
     { code: 'ДО', label: 'Extra Leave', color: 'bg-blue-100' },
     { code: 'ПР', label: 'Public Holiday', color: 'bg-blue-200' },
 ];
@@ -398,6 +458,21 @@ export function AttendanceReports() {
         }
         return pages;
     };
+
+    // Колонки агрегации
+    const aggregationColumns = [
+        { key: 'working_days', label: 'Working Days' },
+        { key: 'worked_days', label: 'Worked Days' },
+        { key: 'worked_hours', label: 'Worked Hours' },
+        { key: 'weekends_holidays', label: 'Weekends & Holidays' },
+        { key: 'paid_leaves', label: 'Paid Leaves' },
+        { key: 'non_paid_leaves', label: 'Non-Paid Leaves' },
+        { key: 'business_trips', label: 'Business Trips' },
+        { key: 'sick_leaves', label: 'Sick Leaves' },
+        { key: 'day_offs', label: 'Day Offs' },
+        { key: 'maternity_leave_days', label: 'Maternity Leave' },
+        { key: 'skipped_days', label: 'Skipped Days' },
+    ];
 
     return (
         <div className="space-y-6">
@@ -513,6 +588,11 @@ export function AttendanceReports() {
                                                     </div>
                                                 </TableHead>
                                             ))}
+                                            {aggregationColumns.map((col) => (
+                                                <TableHead key={col.key} className="text-xs text-center min-w-[80px] bg-gray-50">
+                                                    {col.label}
+                                                </TableHead>
+                                            ))}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -545,6 +625,11 @@ export function AttendanceReports() {
                                                         </TableCell>
                                                     );
                                                 })}
+                                                {aggregationColumns.map((col) => (
+                                                    <TableCell key={`${record.id}-${col.key}`} className="text-xs text-center font-medium">
+                                                        {record[col.key] !== undefined && record[col.key] !== null ? record[col.key] : '-'}
+                                                    </TableCell>
+                                                ))}
                                             </TableRow>
                                         ))}
                                     </TableBody>
