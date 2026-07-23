@@ -69,6 +69,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
     const [tempStart, setTempStart] = useState<Date | null>(startDate);
     const [tempEnd, setTempEnd] = useState<Date | null>(endDate);
     const pickerRef = useRef<HTMLDivElement>(null);
+    const isSelectingRef = useRef(false);
 
     const yearOptions = useMemo(() => {
         const currentYear = new Date().getFullYear();
@@ -78,7 +79,9 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
+                if (!isSelectingRef.current) {
+                    setIsOpen(false);
+                }
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -183,15 +186,22 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
             {isOpen && (
                 <div
                     className="absolute top-11 left-0 z-50 bg-white border rounded-xl shadow-xl p-4 w-[320px]"
-                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => {
+                        // Предотвращаем закрытие при клике внутри календаря
+                        e.stopPropagation();
+                    }}
                 >
                     <div className="flex items-center gap-2 mb-3">
                         <Select
                             value={String(getYear(viewMonth))}
                             onValueChange={handleYearChange}
+                            onOpenChange={(open) => {
+                                isSelectingRef.current = open;
+                            }}
                         >
                             <SelectTrigger
                                 className="h-8 text-sm flex-1"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <SelectValue />
@@ -201,6 +211,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                                     <SelectItem
                                         key={year}
                                         value={String(year)}
+                                        onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         {year}
@@ -212,9 +223,13 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                         <Select
                             value={String(getMonth(viewMonth))}
                             onValueChange={handleMonthChange}
+                            onOpenChange={(open) => {
+                                isSelectingRef.current = open;
+                            }}
                         >
                             <SelectTrigger
                                 className="h-8 text-sm flex-1"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <SelectValue />
@@ -224,6 +239,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                                     <SelectItem
                                         key={month.value}
                                         value={month.value}
+                                        onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         {month.label}
@@ -235,6 +251,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                         <Button
                             variant="outline"
                             size="sm"
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setViewMonth(new Date());
@@ -278,6 +295,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                             return (
                                 <button
                                     key={date.toISOString()}
+                                    onMouseDown={(e) => e.stopPropagation()}
                                     onClick={() => handleDayClick(date)}
                                     onMouseEnter={() => selecting === 'end' && setHoverDate(date)}
                                     onMouseLeave={() => setHoverDate(null)}
@@ -295,6 +313,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
 
                     <div className="mt-2 flex flex-wrap gap-1">
                         <button
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 applyPreset(startOfMonth(new Date()), endOfMonth(new Date()));
@@ -304,6 +323,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                             This month
                         </button>
                         <button
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 const last = subMonths(new Date(), 1);
@@ -314,6 +334,7 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
                             Last month
                         </button>
                         <button
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 const today = new Date();
@@ -459,7 +480,6 @@ export function AttendanceReports() {
         return pages;
     };
 
-    // Колонки агрегации
     const aggregationColumns = [
         { key: 'working_days', label: 'Working Days' },
         { key: 'worked_days', label: 'Worked Days' },
