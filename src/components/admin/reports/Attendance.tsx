@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
@@ -9,14 +9,22 @@ import { useGetTimeEntriesAttendance } from '../../../hooks/useTimeEntry';
 import { useUserStore } from '../../../store/UsersStore';
 import {
     format,
-    startOfWeek,
-    endOfWeek,
     startOfMonth,
     endOfMonth,
     eachDayOfInterval,
     isWeekend,
-    startOfYear,
-    endOfYear
+    addMonths,
+    subMonths,
+    startOfDay,
+    differenceInDays,
+    isSameDay,
+    isAfter,
+    isBefore,
+    getDay,
+    setMonth,
+    setYear,
+    getMonth,
+    getYear,
 } from 'date-fns';
 
 interface AttendanceRecord {
@@ -25,7 +33,7 @@ interface AttendanceRecord {
     department: string;
     position: string;
     grade: string;
-    [key: string]: string | number; // для динамических полей 1, 2, 3, ...
+    [key: string]: string | number;
 }
 
 interface Country {
@@ -33,83 +41,314 @@ interface Country {
     name: string;
     code: string;
 }
+// ========== DATE RANGE PICKER ==========
 
-type PeriodType = 'month' | 'week';
+interface DateRangePickerProps {
+    startDate: Date | null;
+    endDate: Date | null;
+    onChange: (start: Date, end: Date) => void;
+}
+
+function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [viewMonth, setViewMonth] = useState(startDate || new Date());
+    const [hoverDate, setHoverDate] = useState<Date | null>(null);
+    const [selecting, setSelecting] = useState<'start' | 'end'>('start');
+    const [tempStart, setTempStart] = useState<Date | null>(startDate);
+    const [tempEnd, setTempEnd] = useState<Date | null>(endDate);
+    const pickerRef = useRef<HTMLDivElement>(null);
+
+    const yearOptions = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        return Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const daysInMonth = useMemo(() => {
+        const start = startOfMonth(viewMonth);
+        const end = endOfMonth(viewMonth);
+        return eachDayOfInterval({ start, end });
+    }, [viewMonth]);
+
+    const firstDayOffset = useMemo(() => {
+        const day = getDay(startOfMonth(viewMonth));
+        return day === 0 ? 6 : day - 1;
+    }, [viewMonth]);
+
+    const handleDayClick = (date: Date) => {
+        if (selecting === 'start') {
+            setTempStart(date);
+            setTempEnd(null);
+            setSelecting('end');
+        } else {
+            if (tempStart) {
+                let start = tempStart;
+                let end = date;
+                if (isBefore(end, start)) [start, end] = [end, start];
+                if (differenceInDays(end, start) > 31) {
+                    toast.error('Date range cannot exceed one month');
+                    return;
+                }
+                setTempStart(start);
+                setTempEnd(end);
+                onChange(start, end);
+                setSelecting('start');
+                setIsOpen(false);
+            }
+        }
+    };
+
+    const isInRange = (date: Date) => {
+        const s = tempStart;
+        const e = tempEnd || hoverDate;
+        if (!s || !e) return false;
+        const [from, to] = isBefore(s, e) ? [s, e] : [e, s];
+        return isAfter(date, from) && isBefore(date, to);
+    };
+
+    const isStartDay = (date: Date) => tempStart ? isSameDay(date, tempStart) : false;
+    const isEndDay = (date: Date) => tempEnd ? isSameDay(date, tempEnd) : false;
+
+    const getDisplayValue = () => {
+        if (startDate && endDate) {
+            return `${format(startDate, 'dd.MM.yyyy')} – ${format(endDate, 'dd.MM.yyyy')}`;
+        }
+        return 'Select date range';
+    };
+
+    const applyPreset = (start: Date, end: Date) => {
+        onChange(start, end);
+        setTempStart(start);
+        setTempEnd(end);
+        setIsOpen(false);
+    };
+
+    const handleYearChange = (year: string) => {
+        const newDate = setYear(viewMonth, parseInt(year));
+        setViewMonth(newDate);
+    };
+
+    const handleMonthChange = (month: string) => {
+        const newDate = setMonth(viewMonth, parseInt(month));
+        setViewMonth(newDate);
+    };
+
+    const weekDays = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+    const monthOptions = useMemo(() => {
+        return Array.from({ length: 12 }, (_, i) => ({
+            value: String(i),
+            label: format(new Date(2000, i, 1), 'MMM')
+        }));
+    }, []);
+
+    return (
+        <div className="relative" ref={pickerRef}>
+            <button
+                onClick={() => {
+                    setIsOpen(!isOpen);
+                    setSelecting('start');
+                    setTempStart(startDate);
+                    setTempEnd(endDate);
+                    if (startDate) setViewMonth(startDate);
+                }}
+                className="flex items-center gap-2 h-9 px-3 text-sm border rounded-md bg-white hover:bg-gray-50 w-full text-left"
+            >
+                <CalendarIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className={startDate ? 'text-gray-900' : 'text-gray-400'}>
+                    {getDisplayValue()}
+                </span>
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-11 left-0 z-50 bg-white border rounded-xl shadow-xl p-4 w-[320px]">
+                    {/* Навигация по году и месяцу */}
+                    <div className="flex items-center gap-2 mb-3">
+                        <Select value={String(getYear(viewMonth))} onValueChange={handleYearChange}>
+                            <SelectTrigger className="h-8 text-sm flex-1">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {yearOptions.map((year) => (
+                                    <SelectItem key={year} value={String(year)}>
+                                        {year}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={String(getMonth(viewMonth))} onValueChange={handleMonthChange}>
+                            <SelectTrigger className="h-8 text-sm flex-1">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {monthOptions.map((month) => (
+                                    <SelectItem key={month.value} value={month.value}>
+                                        {month.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Button variant="outline" size="sm" onClick={() => setViewMonth(new Date())} className="h-8 text-xs">
+                            Today
+                        </Button>
+                    </div>
+
+                    <div className="grid grid-cols-7 mb-1">
+                        {weekDays.map(d => (
+                            <div key={d} className="text-center text-[11px] text-gray-400 font-medium py-1">{d}</div>
+                        ))}
+                    </div>
+
+                    <div className="grid grid-cols-7">
+                        {Array.from({ length: firstDayOffset }).map((_, i) => <div key={`e-${i}`} />)}
+                        {daysInMonth.map((date) => {
+                            const weekend = isWeekend(date);
+                            const inRange = isInRange(date);
+                            const isS = isStartDay(date);
+                            const isE = isEndDay(date);
+                            const isSelected = isS || isE;
+
+                            // Базовые стили
+                            let className = 'h-8 w-full text-xs flex items-center justify-center rounded transition-colors';
+
+                            if (isS && isE) {
+                                // Только одна дата выбрана
+                                className += ' bg-blue-600 text-white hover:bg-blue-700';
+                            } else if (isS) {
+                                // Начальная дата
+                                className += ' bg-blue-600 text-white rounded-l-full hover:bg-blue-700';
+                            } else if (isE) {
+                                // Конечная дата
+                                className += ' bg-blue-600 text-white rounded-r-full hover:bg-blue-700';
+                            } else if (inRange) {
+                                // Промежуточные даты в диапазоне
+                                className += ' bg-blue-100 text-blue-800 hover:bg-blue-200';
+                            } else if (weekend) {
+                                // Выходные за пределами диапазона
+                                className += ' text-red-400 hover:bg-red-50';
+                            } else {
+                                // Обычные дни
+                                className += ' text-gray-900 hover:bg-gray-100';
+                            }
+
+                            return (
+                                <button
+                                    key={date.toISOString()}
+                                    onClick={() => handleDayClick(date)}
+                                    onMouseEnter={() => selecting === 'end' && setHoverDate(date)}
+                                    onMouseLeave={() => setHoverDate(null)}
+                                    className={className}
+                                >
+                                    {format(date, 'd')}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t text-xs text-gray-400 text-center">
+                        {selecting === 'start' ? 'Click to select start date' : 'Click to select end date (max 1 month)'}
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-1">
+                        <button onClick={() => applyPreset(startOfMonth(new Date()), endOfMonth(new Date()))} className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">
+                            This month
+                        </button>
+                        <button onClick={() => { const last = subMonths(new Date(), 1); applyPreset(startOfMonth(last), endOfMonth(last)); }} className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">
+                            Last month
+                        </button>
+                        <button onClick={() => { const today = new Date(); const day = getDay(today); const diff = day === 0 ? 6 : day - 1; const s = new Date(today); s.setDate(today.getDate() - diff); applyPreset(startOfDay(s), startOfDay(today)); }} className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">
+                            This week
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ========== HELPERS ==========
+
+const getCellStyle = (value: string) => {
+    const map: Record<string, string> = {
+        'Е': 'bg-green-100 text-green-800',
+        'Б': 'bg-red-100 text-red-800',
+        'О': 'bg-yellow-100 text-yellow-800',
+        'П': 'bg-red-200 text-red-900',
+        'Р': 'bg-pink-100 text-pink-800',
+        'К': 'bg-purple-100 text-purple-800',
+        'А': 'bg-gray-100 text-gray-800',
+        'ОБС': 'bg-orange-100 text-orange-800',
+        'УР': 'bg-indigo-100 text-indigo-800',
+        'У': 'bg-teal-100 text-teal-800',
+        'ДО': 'bg-blue-100 text-blue-800',
+        'ПР': 'bg-blue-200 text-blue-900',
+    };
+    return map[value] || 'bg-gray-50 text-gray-600';
+};
+
+const getStatusText = (value: string) => {
+    const map: Record<string, string> = {
+        'Е': 'Weekends & Holidays', 'Б': 'Sick Leave', 'О': 'Vacation',
+        'П': 'Absenteeism', 'Р': 'Maternity Leave', 'К': 'Business Trip',
+        'А': 'Unpaid Social Leave', 'ОБС': 'Unpaid Leave', 'УР': 'Childcare Leave',
+        'У': 'Study/Training', 'ДО': 'Extra Leave', 'ПР': 'Public Holiday',
+    };
+    return map[value] || value;
+};
+
+const LEGEND = [
+    { code: 'Е', label: 'Weekends & Holidays', color: 'bg-green-100' },
+    { code: 'Б', label: 'Sick Leave', color: 'bg-red-100' },
+    { code: 'О', label: 'Vacation', color: 'bg-yellow-100' },
+    { code: 'П', label: 'Absenteeism', color: 'bg-red-200' },
+    { code: 'Р', label: 'Maternity Leave', color: 'bg-pink-100' },
+    { code: 'К', label: 'Business Trip', color: 'bg-purple-100' },
+    { code: 'А', label: 'Unpaid Social Leave', color: 'bg-gray-100' },
+    { code: 'ОБС', label: 'Unpaid Leave', color: 'bg-orange-100' },
+    { code: 'ДО', label: 'Extra Leave', color: 'bg-blue-100' },
+    { code: 'ПР', label: 'Public Holiday', color: 'bg-blue-200' },
+];
+
+// ========== MAIN COMPONENT ==========
 
 export function AttendanceReports() {
-    // Состояния для периода
-    const [periodType, setPeriodType] = useState<PeriodType>('month');
-    const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
-    const [selectedWeek, setSelectedWeek] = useState<string>(() => {
-        const now = new Date();
-        const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-        return format(weekStart, 'yyyy-MM-dd');
-    });
-    const [selectedYear, setSelectedYear] = useState<string>(format(new Date(), 'yyyy'));
-
-    // Выбор страны
+    const [startDate, setStartDate] = useState<Date | null>(startOfMonth(new Date()));
+    const [endDate, setEndDate] = useState<Date | null>(endOfMonth(new Date()));
     const [selectedCountryId, setSelectedCountryId] = useState<string>('');
-
-    // Пагинация
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [rowsPerPage] = useState<number>(50);
 
     const attendance = useUserStore((state) => state.attendance);
     const attendanceCount = useUserStore((state) => state.attendance_count) || 0;
     const countries = useUserStore((state) => state.countries);
-
     const countriesArray: Country[] = Array.isArray(countries) ? countries : [];
 
-    // Получение параметров для API
-    const getDateParamsForAPI = useCallback(() => {
-        const today = new Date();
-        let start: Date;
-        let end: Date;
-
-        switch (periodType) {
-            case 'month': {
-                const [year, month] = selectedMonth.split('-').map(Number);
-                start = new Date(year, month - 1, 1);
-                end = new Date(year, month, 0);
-                break;
-            }
-            case 'week': {
-                const weekStart = new Date(selectedWeek);
-                start = startOfWeek(weekStart, { weekStartsOn: 1 });
-                end = endOfWeek(weekStart, { weekStartsOn: 1 });
-                break;
-            }
-            case 'year': {
-                const year = parseInt(selectedYear);
-                start = startOfYear(new Date(year, 0, 1));
-                end = endOfYear(new Date(year, 0, 1));
-                break;
-            }
-            default:
-                start = startOfMonth(today);
-                end = endOfMonth(today);
-        }
-
-        return {
-            start_date: format(start, 'yyyy-MM-dd'),
-            end_date: format(end, 'yyyy-MM-dd')
-        };
-    }, [periodType, selectedMonth, selectedWeek, selectedYear]);
-
-    const dateParams = useMemo(() => getDateParamsForAPI(), [getDateParamsForAPI]);
+    const dateParams = useMemo(() => ({
+        start_date: startDate ? format(startDate, 'yyyy-MM-dd') : '',
+        end_date: endDate ? format(endDate, 'yyyy-MM-dd') : '',
+    }), [startDate, endDate]);
 
     const canSendRequest = useMemo(() => {
-        return selectedCountryId !== '' && selectedCountryId !== 'all';
-    }, [selectedCountryId]);
+        return selectedCountryId !== '' && selectedCountryId !== 'all' && !!startDate && !!endDate;
+    }, [selectedCountryId, startDate, endDate]);
 
-    const { mutate, isLoading, data } = useGetTimeEntriesAttendance();
+    const { mutate, isPending: isLoading, data } = useGetTimeEntriesAttendance();
 
     const loadAttendance = useCallback(() => {
         if (!canSendRequest) {
-            toast.info('Please select a country to view attendance data');
+            toast.info('Please select a country and date range');
             return;
         }
-
         mutate({
             page: currentPage,
             pageSize: rowsPerPage,
@@ -120,168 +359,59 @@ export function AttendanceReports() {
     }, [mutate, currentPage, rowsPerPage, dateParams, selectedCountryId, canSendRequest]);
 
     useEffect(() => {
-        if (canSendRequest) {
-            loadAttendance();
-        }
+        if (canSendRequest) loadAttendance();
     }, [loadAttendance, canSendRequest]);
 
-    // Получение данных - теперь это массив объектов с полями 1, 2, 3, ...
-    const rawData: AttendanceRecord[] = data?.results || attendance || [];
+    const rawData: AttendanceRecord[] = data?.results || (Array.isArray(attendance) ? attendance : []) || [];
 
-    // Получение списка дней в периоде
-    const getDaysInPeriod = useCallback(() => {
-        const start = new Date(dateParams.start_date);
-        const end = new Date(dateParams.end_date);
-        return eachDayOfInterval({ start, end });
-    }, [dateParams]);
+    const daysInPeriod = useMemo(() => {
+        if (!startDate || !endDate) return [];
+        return eachDayOfInterval({ start: startDate, end: endDate });
+    }, [startDate, endDate]);
 
-    const daysInPeriod = getDaysInPeriod();
-
-    // Получение выбранной страны
-    const selectedCountry = useMemo(() => {
-        return countriesArray.find(c => String(c.id) === selectedCountryId);
-    }, [countriesArray, selectedCountryId]);
-
+    const selectedCountry = useMemo(() => countriesArray.find(c => String(c.id) === selectedCountryId), [countriesArray, selectedCountryId]);
     const totalPages = Math.ceil(attendanceCount / rowsPerPage);
 
-    // Экспорт в Excel
-    const handleExportExcel = () => {
-        toast.success('Exporting attendance reports...');
+    const handleDateRangeChange = (start: Date, end: Date) => {
+        setStartDate(start);
+        setEndDate(end);
+        setCurrentPage(1);
     };
 
-    // Рендер страниц пагинации
     const renderPageNumbers = () => {
         const pages = [];
-        const maxVisiblePages = 5;
-        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+        const maxVisible = 5;
+        let sp = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let ep = Math.min(totalPages, sp + maxVisible - 1);
+        if (ep - sp + 1 < maxVisible) sp = Math.max(1, ep - maxVisible + 1);
 
-        if (endPage - startPage + 1 < maxVisiblePages) {
-            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        if (sp > 1) {
+            pages.push(<Button key="1" variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={isLoading} className="min-w-[32px] h-8">1</Button>);
+            if (sp > 2) pages.push(<span key="e1" className="px-1 text-muted-foreground">...</span>);
         }
-
-        if (startPage > 1) {
-            pages.push(
-                <Button key="page-1" variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={isLoading} className="min-w-[32px] h-8 hidden sm:inline-flex">
-                    1
-                </Button>
-            );
-            if (startPage > 2) {
-                pages.push(<span key="ellipsis-start" className="px-1 text-muted-foreground hidden sm:inline">...</span>);
-            }
+        for (let i = sp; i <= ep; i++) {
+            pages.push(<Button key={i} variant={currentPage === i ? 'default' : 'outline'} size="sm" onClick={() => setCurrentPage(i)} disabled={isLoading} className="min-w-[32px] h-8">{i}</Button>);
         }
-
-        for (let i = startPage; i <= endPage; i++) {
-            pages.push(
-                <Button
-                    key={`page-${i}`}
-                    variant={currentPage === i ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(i)}
-                    disabled={isLoading}
-                    className="min-w-[32px] h-8"
-                >
-                    {i}
-                </Button>
-            );
+        if (ep < totalPages) {
+            if (ep < totalPages - 1) pages.push(<span key="e2" className="px-1 text-muted-foreground">...</span>);
+            pages.push(<Button key={totalPages} variant="outline" size="sm" onClick={() => setCurrentPage(totalPages)} disabled={isLoading} className="min-w-[32px] h-8">{totalPages}</Button>);
         }
-
-        if (endPage < totalPages) {
-            if (endPage < totalPages - 1) {
-                pages.push(<span key="ellipsis-end" className="px-1 text-muted-foreground hidden sm:inline">...</span>);
-            }
-            pages.push(
-                <Button
-                    key={`page-${totalPages}`}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={isLoading}
-                    className="min-w-[32px] h-8 hidden sm:inline-flex"
-                >
-                    {totalPages}
-                </Button>
-            );
-        }
-
         return pages;
-    };
-
-    const getPeriodLabel = () => {
-        switch (periodType) {
-            case 'month': {
-                const [year, month] = selectedMonth.split('-').map(Number);
-                return format(new Date(year, month - 1, 1), 'MMMM yyyy');
-            }
-            case 'week': {
-                const weekStart = new Date(selectedWeek);
-                const start = startOfWeek(weekStart, { weekStartsOn: 1 });
-                const end = endOfWeek(weekStart, { weekStartsOn: 1 });
-                return `${format(start, 'dd MMM')} - ${format(end, 'dd MMM yyyy')}`;
-            }
-            case 'year': {
-                return selectedYear;
-            }
-            default:
-                return '';
-        }
-    };
-
-    const isDayWeekend = (date: Date) => {
-        return isWeekend(date);
-    };
-
-    // Проверка, есть ли значение в ячейке
-    const hasValue = (value: any) => {
-        return value !== '' && value !== null && value !== undefined;
-    };
-
-    // Получение цвета для ячейки
-    const getCellStyle = (value: string) => {
-        if (!hasValue(value)) {
-            return 'bg-white text-gray-300';
-        }
-        if (value === 'Е') {
-            return 'bg-green-100 text-green-800 font-bold';
-        }
-        if (value === 'Б') {
-            return 'bg-red-100 text-red-800 font-bold';
-        }
-        if (value === 'О') {
-            return 'bg-yellow-100 text-yellow-800 font-bold';
-        }
-        if (value === 'П') {
-            return 'bg-blue-100 text-blue-800 font-bold';
-        }
-        return 'bg-gray-50 text-gray-600';
-    };
-
-    // Получение текста для статуса
-    const getStatusText = (value: string) => {
-        if (value === 'Е') return 'Present';
-        if (value === 'Б') return 'Absent';
-        if (value === 'О') return 'Vacation';
-        if (value === 'П') return 'Holiday';
-        return value;
     };
 
     return (
         <div className="space-y-6">
-            {/* Заголовок */}
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Attendance Reports</h2>
-                    <p className="text-muted-foreground">View attendance records by period and country</p>
+                    <p className="text-muted-foreground">View attendance records by date range and country</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={loadAttendance} disabled={isLoading || !canSendRequest}>
-                        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                        Refresh
-                    </Button>
-                </div>
+                <Button variant="outline" size="sm" onClick={loadAttendance} disabled={isLoading || !canSendRequest}>
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                    Refresh
+                </Button>
             </div>
 
-            {/* Карточка с фильтрами */}
             <Card>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -290,138 +420,45 @@ export function AttendanceReports() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs text-muted-foreground mb-1 block">Period Type</label>
-                            <div className="flex gap-1">
-                                <Button
-                                    variant={periodType === 'month' ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setPeriodType('month')}
-                                    className="flex-1"
-                                >
-                                    Month
-                                </Button>
-                                <Button
-                                    variant={periodType === 'week' ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setPeriodType('week')}
-                                    className="flex-1"
-                                >
-                                    Week
-                                </Button>
-
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-xs text-muted-foreground mb-1 block">
-                                {periodType === 'month' && 'Month'}
-                                {periodType === 'week' && 'Week'}
-                                {periodType === 'year' && 'Year'}
-                            </label>
-                            {periodType === 'month' && (
-                                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                    <SelectTrigger className="h-9 text-sm">
-                                        <SelectValue placeholder="Select month" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Array.from({ length: 12 }, (_, i) => {
-                                            const date = new Date(new Date().getFullYear(), i, 1);
-                                            return {
-                                                value: format(date, 'yyyy-MM'),
-                                                label: format(date, 'MMMM yyyy')
-                                            };
-                                        }).map((month) => (
-                                            <SelectItem key={month.value} value={month.value}>
-                                                {month.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            {periodType === 'week' && (
-                                <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-                                    <SelectTrigger className="h-9 text-sm">
-                                        <SelectValue placeholder="Select week" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Array.from({ length: 52 }, (_, i) => {
-                                            const date = new Date();
-                                            date.setDate(date.getDate() - (i * 7));
-                                            const weekStart = startOfWeek(date, { weekStartsOn: 1 });
-                                            const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
-                                            return {
-                                                value: format(weekStart, 'yyyy-MM-dd'),
-                                                label: `${format(weekStart, 'dd MMM')} - ${format(weekEnd, 'dd MMM yyyy')}`
-                                            };
-                                        }).map((week) => (
-                                            <SelectItem key={week.value} value={week.value}>
-                                                {week.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            {periodType === 'year' && (
-                                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                                    <SelectTrigger className="h-9 text-sm">
-                                        <SelectValue placeholder="Select year" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {Array.from({ length: 5 }, (_, i) => {
-                                            const year = new Date().getFullYear() - i;
-                                            return {
-                                                value: String(year),
-                                                label: String(year)
-                                            };
-                                        }).map((year) => (
-                                            <SelectItem key={year.value} value={year.value}>
-                                                {year.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <label className="text-xs text-muted-foreground mb-1 block">Date Range * (max 1 month)</label>
+                            <DateRangePicker startDate={startDate} endDate={endDate} onChange={handleDateRangeChange} />
+                            {startDate && endDate && (
+                                <p className="text-xs text-gray-500 mt-1">{differenceInDays(endDate, startDate) + 1} days selected</p>
                             )}
                         </div>
 
                         <div>
                             <label className="text-xs text-muted-foreground mb-1 block">Country *</label>
                             <Select value={selectedCountryId} onValueChange={setSelectedCountryId}>
-                                <SelectTrigger className="h-9 text-sm border-red-200">
+                                <SelectTrigger className={`h-9 text-sm ${!selectedCountryId ? 'border-red-300' : ''}`}>
                                     <SelectValue placeholder="Select country" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Countries</SelectItem>
-                                    {countriesArray.map((country: Country) => (
-                                        <SelectItem key={`country-${country.id}`} value={String(country.id)}>
-                                            {country.name} ({country.code})
-                                        </SelectItem>
+                                    {countriesArray.map(c => (
+                                        <SelectItem key={c.id} value={String(c.id)}>{c.name} ({c.code})</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {!selectedCountryId && (
-                                <p className="text-xs text-red-500 mt-1">Please select a country</p>
-                            )}
+                            {!selectedCountryId && <p className="text-xs text-red-500 mt-1">Please select a country</p>}
                         </div>
                     </div>
 
-                    {canSendRequest && selectedCountry && (
+                    {canSendRequest && selectedCountry && startDate && endDate && (
                         <div className="mt-4 p-2 bg-blue-50 rounded-md">
                             <p className="text-sm text-blue-700">
-                                <span className="font-medium">Selected period:</span> {getPeriodLabel()}
-                                <span className="ml-3">
-                                    <span className="font-medium">Country:</span> {selectedCountry.name} ({selectedCountry.code})
-                                </span>
-                                <span className="ml-3">
-                                    <span className="font-medium">Employees:</span> {rawData.length}
-                                </span>
+                                <span className="font-medium">Period:</span> {format(startDate, 'dd.MM.yyyy')} – {format(endDate, 'dd.MM.yyyy')}
+                                <span className="mx-2">·</span>
+                                <span className="font-medium">Country:</span> {selectedCountry.name} ({selectedCountry.code})
+                                <span className="mx-2">·</span>
+                                <span className="font-medium">Employees:</span> {rawData.length}
                             </p>
                         </div>
                     )}
 
                     <div className="flex gap-2 pt-4">
-                        <Button onClick={handleExportExcel} size="sm" className="h-8" disabled={rawData.length === 0 || !canSendRequest}>
+                        <Button size="sm" className="h-8" disabled={rawData.length === 0 || !canSendRequest}>
                             <Download className="w-3 h-3 mr-1" />
                             Export
                         </Button>
@@ -429,7 +466,6 @@ export function AttendanceReports() {
                 </CardContent>
             </Card>
 
-            {/* Результаты */}
             <Card>
                 <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
@@ -439,16 +475,14 @@ export function AttendanceReports() {
                                 ({rawData.length} employees, {daysInPeriod.length} days)
                             </span>
                         </CardTitle>
-                        <div className="text-xs text-muted-foreground">
-                            Showing {rawData.length} employees
-                        </div>
+                        <div className="text-xs text-muted-foreground">Showing {rawData.length} employees</div>
                     </div>
                 </CardHeader>
                 <CardContent>
                     {!canSendRequest ? (
                         <div className="text-center py-8 text-sm text-muted-foreground">
                             <CalendarIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                            Please select a country to view attendance records.
+                            Please select a date range and country to view attendance records.
                         </div>
                     ) : isLoading ? (
                         <div className="flex items-center justify-center py-8">
@@ -472,17 +506,10 @@ export function AttendanceReports() {
                                             <TableHead className="text-xs sticky left-[340px] bg-gray-50 z-10 min-w-[120px]">Position</TableHead>
                                             <TableHead className="text-xs sticky left-[460px] bg-gray-50 z-10 min-w-[100px]">Grade</TableHead>
                                             {daysInPeriod.map((date, index) => (
-                                                <TableHead
-                                                    key={`header-${index}`}
-                                                    className={`text-xs text-center min-w-[36px] ${isDayWeekend(date) ? 'bg-red-50' : ''}`}
-                                                >
+                                                <TableHead key={`h-${index}`} className={`text-xs text-center min-w-[36px] ${isWeekend(date) ? 'bg-red-50' : ''}`}>
                                                     <div className="flex flex-col items-center">
-                                                        <span className="text-[10px] text-muted-foreground">
-                                                            {format(date, 'E')}
-                                                        </span>
-                                                        <span className="font-medium">
-                                                            {format(date, 'dd')}
-                                                        </span>
+                                                        <span className="text-[10px] text-muted-foreground">{format(date, 'E')}</span>
+                                                        <span className="font-medium">{format(date, 'dd')}</span>
                                                     </div>
                                                 </TableHead>
                                             ))}
@@ -491,38 +518,29 @@ export function AttendanceReports() {
                                     <TableBody>
                                         {rawData.map((record: AttendanceRecord, idx) => (
                                             <TableRow key={`row-${record.id}`} className="hover:bg-gray-50">
-                                                <TableCell className="text-xs sticky left-0 bg-white z-10 text-center">
-                                                    {idx + 1}
-                                                </TableCell>
-                                                <TableCell className="text-xs sticky left-[40px] bg-white z-10 font-medium">
-                                                    {record.full_name}
-                                                </TableCell>
-                                                <TableCell className="text-xs sticky left-[220px] bg-white z-10">
-                                                    {record.department || '-'}
-                                                </TableCell>
-                                                <TableCell className="text-xs sticky left-[340px] bg-white z-10">
-                                                    {record.position || '-'}
-                                                </TableCell>
-                                                <TableCell className="text-xs sticky left-[460px] bg-white z-10">
-                                                    {record.grade || '-'}
-                                                </TableCell>
+                                                <TableCell className="text-xs sticky left-0 bg-white z-10 text-center">{idx + 1}</TableCell>
+                                                <TableCell className="text-xs sticky left-[40px] bg-white z-10 font-medium">{record.full_name}</TableCell>
+                                                <TableCell className="text-xs sticky left-[220px] bg-white z-10">{record.department || '-'}</TableCell>
+                                                <TableCell className="text-xs sticky left-[340px] bg-white z-10">{record.position || '-'}</TableCell>
+                                                <TableCell className="text-xs sticky left-[460px] bg-white z-10">{record.grade || '-'}</TableCell>
                                                 {daysInPeriod.map((date, dayIdx) => {
                                                     const dayNumber = format(date, 'd');
-                                                    const value = record[dayNumber] || '';
-                                                    const isWeekend = isDayWeekend(date);
+                                                    const value = String(record[dayNumber] || '');
+                                                    const weekend = isWeekend(date);
+                                                    const hasVal = value !== '' && value !== 'undefined';
 
                                                     return (
                                                         <TableCell
-                                                            key={`cell-${record.id}-${dayIdx}`}
-                                                            className={`text-xs text-center p-1 ${isWeekend ? 'bg-red-50' : ''}`}
-                                                            title={hasValue(value) ? getStatusText(value as string) : ''}
+                                                            key={`c-${record.id}-${dayIdx}`}
+                                                            className={`text-xs text-center p-1 ${weekend ? 'bg-red-50' : ''}`}
+                                                            title={hasVal ? getStatusText(value) : ''}
                                                         >
-                                                            {hasValue(value) ? (
-                                                                <span className={`font-bold ${getCellStyle(value as string)} px-1 rounded`}>
+                                                            {hasVal ? (
+                                                                <span className={`font-bold text-[11px] px-1 py-0.5 rounded ${getCellStyle(value)}`}>
                                                                     {value}
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-gray-300">-</span>
+                                                                <span className="text-gray-300 text-[11px]">-</span>
                                                             )}
                                                         </TableCell>
                                                     );
@@ -533,74 +551,33 @@ export function AttendanceReports() {
                                 </Table>
                             </div>
 
-                            <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-                                <div className="flex items-center gap-4 flex-wrap">
-                                    <span>Legend:</span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="inline-block w-4 h-4 bg-green-100 rounded border"></span>
-                                        <span>Е - Present</span>
+                            <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                <span className="font-medium">Legend:</span>
+                                {LEGEND.map(item => (
+                                    <span key={item.code} className="flex items-center gap-1">
+                                        <span className={`inline-block w-4 h-4 ${item.color} rounded border`}></span>
+                                        <span>{item.code} — {item.label}</span>
                                     </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="inline-block w-4 h-4 bg-red-100 rounded border"></span>
-                                        <span>Б - Absent</span>
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="inline-block w-4 h-4 bg-yellow-100 rounded border"></span>
-                                        <span>О - Vacation</span>
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="inline-block w-4 h-4 bg-blue-100 rounded border"></span>
-                                        <span>П - Holiday</span>
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="inline-block w-4 h-4 bg-red-50 rounded border"></span>
-                                        <span>Weekend</span>
-                                    </span>
-                                </div>
-                                <div>
-                                    Showing {rawData.length} employees
-                                </div>
+                                ))}
                             </div>
 
                             {totalPages > 1 && (
                                 <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-4">
-                                    <div className="text-xs text-muted-foreground">
-                                        Page {currentPage} of {totalPages}
-                                    </div>
+                                    <div className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</div>
                                     <div className="flex items-center gap-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                            disabled={currentPage === 1 || isLoading}
-                                            className="h-7 text-xs px-2"
-                                        >
+                                        <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1 || isLoading} className="h-7 px-2">
                                             <ChevronLeft className="w-3 h-3" />
                                         </Button>
                                         <div className="flex gap-1">{renderPageNumbers()}</div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                            disabled={currentPage === totalPages || isLoading}
-                                            className="h-7 text-xs px-2"
-                                        >
+                                        <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages || isLoading} className="h-7 px-2">
                                             <ChevronRight className="w-3 h-3" />
                                         </Button>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <span className="text-xs">Go to:</span>
                                         <input
-                                            type="number"
-                                            min={1}
-                                            max={totalPages}
-                                            value={currentPage}
-                                            onChange={(e) => {
-                                                const page = parseInt(e.target.value);
-                                                if (!isNaN(page) && page >= 1 && page <= totalPages) {
-                                                    setCurrentPage(page);
-                                                }
-                                            }}
+                                            type="number" min={1} max={totalPages} value={currentPage}
+                                            onChange={(e) => { const p = parseInt(e.target.value); if (!isNaN(p) && p >= 1 && p <= totalPages) setCurrentPage(p); }}
                                             className="w-14 h-7 px-1 text-xs border rounded text-center"
                                             disabled={isLoading}
                                         />
