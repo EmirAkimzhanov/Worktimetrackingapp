@@ -297,6 +297,9 @@ export const getTimeEntriesStats = async (year: string | number, month: string |
     return res.data;
 }
 
+
+
+
 export const getTimeEntriesAttendance = async (params: {
     page?: number;
     pageSize?: number;
@@ -344,6 +347,37 @@ export const getTimeEntriesAttendance = async (params: {
     return res.data;
 };
 
+export const exportAttendanceExcel = async (params: {
+    start_date: string;
+    end_date: string;
+    country_id?: string;
+}): Promise<Blob> => {
+    const token = useUserStore.getState().access_token;
+
+    if (!token) throw new Error('No access token available');
+
+    const { start_date, end_date, ...rest } = params;
+    const urlParams = new URLSearchParams();
+    urlParams.append('export', 'excel');
+    urlParams.append('start_date', start_date);
+    urlParams.append('end_date', end_date);
+
+    Object.entries(rest).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            urlParams.append(key, String(value));
+        }
+    });
+
+    const res = await axios.get(
+        `${api}api/calendars/time-entries/attendance/?${urlParams.toString()}`,
+        {
+            headers: { Authorization: `Bearer ${token}` },
+            responseType: 'blob',
+        }
+    );
+
+    return res.data;
+};
 
 // В services/timeEntry.ts
 export const getLeaves = async (params?: {

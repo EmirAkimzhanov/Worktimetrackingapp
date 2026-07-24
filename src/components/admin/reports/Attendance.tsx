@@ -26,6 +26,8 @@ import {
     getMonth,
     getYear,
 } from 'date-fns';
+import { api } from '../../../consts/api';
+import axios from 'axios';
 
 interface AttendanceRecord {
     id: number;
@@ -121,6 +123,8 @@ function DateRangePicker({ startDate, endDate, onChange }: DateRangePickerProps)
             }
         }
     };
+
+
 
     const isInRange = (date: Date) => {
         const s = tempStart;
@@ -478,6 +482,45 @@ export function AttendanceReports() {
         }
         return pages;
     };
+    const handleExportExcel = async () => {
+        if (!canSendRequest) return;
+
+        try {
+            const token = useUserStore.getState().access_token;
+            if (!token) {
+                toast.error('No access token available');
+                return;
+            }
+
+            const urlParams = new URLSearchParams();
+            urlParams.append('export', 'excel');
+            urlParams.append('start_date', dateParams.start_date);
+            urlParams.append('end_date', dateParams.end_date);
+            urlParams.append('country_id', selectedCountryId);
+
+            const res = await axios.get(
+                `${api}api/calendars/time-entries/attendance/?${urlParams.toString()}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: 'blob',
+                }
+            );
+
+            const url = window.URL.createObjectURL(res.data);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `attendance_${dateParams.start_date}_${dateParams.end_date}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success('Report exported successfully');
+        } catch (error) {
+            console.error('Export error:', error);
+            toast.error('Failed to export report');
+        }
+    };
 
     const aggregationColumns = [
         { key: 'working_days', label: 'Working Days' },
@@ -552,7 +595,7 @@ export function AttendanceReports() {
                     )}
 
                     <div className="flex gap-2 pt-4">
-                        <Button size="sm" className="h-8" disabled={rawData.length === 0 || !canSendRequest}>
+                        <Button size="sm" className="h-8" disabled={rawData.length === 0 || !canSendRequest} onClick={handleExportExcel}>
                             <Download className="w-3 h-3 mr-1" />
                             Export
                         </Button>
