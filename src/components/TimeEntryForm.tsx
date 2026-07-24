@@ -480,8 +480,9 @@ export function TimeEntryForm() {
     }
     setDateError('');
   };
-
+  const leaveDocumentInputRef = useRef<HTMLInputElement>(null);
   const resetForm = () => {
+    if (leaveDocumentInputRef.current) leaveDocumentInputRef.current.value = '';
     setSelectedTask('');
     setSelectedLeaveType('');
     setDescription('');
@@ -1378,10 +1379,12 @@ export function TimeEntryForm() {
                     type="file"
                     accept=".pdf,application/pdf"
                     className={`flex-1 ${leaveDocumentError ? 'border-red-500' : ''}`}
+                    onClick={(e) => {
+                      (e.target as HTMLInputElement).value = '';
+                    }}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       setLeaveDocumentError('');
-
                       if (!file) return;
 
                       if (file.type !== 'application/pdf') {
